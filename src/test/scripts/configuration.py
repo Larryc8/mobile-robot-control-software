@@ -12,84 +12,87 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSlider,
-    QGroupBox
+    QGroupBox,
+    QTabWidget,
 )
 from PyQt5.QtCore import Qt, pyqtSlot
+from config_model import ConfigModel
 
 
 class ConfigPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
-        config_labels_mapping = [
-            "maximo",
-            "minimo",
-            "cambiar algo",
-            "cambiar otra cosa harold andres riascos manyoma",
-        ]
+        test_conf = [10 * str(i) for i in range(5)]
 
-        config_labels_navigation = [
-            "navegacion maximo navgation",
-            "navegacion minimo navigation",
-            "navegacion cambiar algo",
-            "navegacion cambiar otra cosa harold andres riascos manyoma",
-        ]
+        config = ConfigModel()
 
         self.layout = QVBoxLayout()
-        self.main_panel = QHBoxLayout()
-        panel = QVBoxLayout()
-        panel2 = QVBoxLayout()
-        # panel3 = QVBoxLayout()
+        self.tabs = QTabWidget()
+        self.mapping_tab = Panel(config.get_params())
+        self.nav_tab = Panel(config.get_params())
+        self.tabs.addTab(self.mapping_tab, "mapping")
+        self.tabs.addTab(self.nav_tab, "navigation")
 
         self.save_config_button = QPushButton("save me")
         self.save_config_button.clicked.connect(self.clickHandler)
         self.layout.addWidget(self.save_config_button)
+        self.layout.addWidget(self.tabs)
 
-        self.config_inputs_mapping = [
-            ConfigInput(input_label) for input_label in config_labels_mapping
-        ]
-        self.config_inputs_navigation = [
-            ConfigInput(input_label) for input_label in config_labels_navigation
-        ]
-
-        label1 = QLabel()
-        label2 = QLabel()
-        label1.setText("--MAPEO--")
-        label2.setText("--NAVEGACION--")
-
-        panel.addWidget(label1)
-        [panel.addWidget(input) for input in self.config_inputs_mapping]
-        panel2.addWidget(label2)
-        [panel2.addWidget(input) for input in self.config_inputs_navigation]
-
-        self.main_panel.addLayout(panel)
-        self.main_panel.addLayout(panel2)
-        self.layout.addLayout(self.main_panel)
         self.setLayout(self.layout)
 
     @pyqtSlot()
     def clickHandler(self) -> None:
         print("start ")
-        [print(input.value()) for input in self.config_inputs_mapping]
+        [print(input.value()) for input in self.mapping_tab.getInputs()]
         print("ddd")
+        print('navigation')
+        a = [input.value()  for input in self.nav_tab.getInputs()]
+
+
+class Panel(QWidget):
+    def __init__(self, configs: dict) -> None:
+        super().__init__()
+        self.MAX_ELEMENT_BY_COLUMN = 6
+        self.BLACK_LIST = ["map_frame"]
+        self.layout = QGridLayout()
+
+        self.config_inputs = []
+        for name, value in configs.items():
+            self.config_inputs.append(ConfigInput(name, default_value=50.3))
+
+        for index, input in enumerate(self.config_inputs):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            self.layout.addWidget(input, row, column)
+
+        self.setLayout(self.layout)
+
+    def getInputs(self) -> list:
+        return self.config_inputs
+
+    def update(self):
+        pass
 
 
 class ConfigInput(QGroupBox):
-    def __init__(self, label_text: str) -> None:
+    def __init__(self, label_text: str, default_value: float = 23.4) -> None:
         super().__init__()
+        self.setFixedHeight(110)
+
         self.layout = QVBoxLayout()
         self.label = QLabel()
         self.label.setText(label_text)
+        self.value_lebel = QLabel()
+        self.value_lebel.setText(str(default_value))
         self.slider = QSlider(Qt.Horizontal)
-        self.slider.valueChanged.connect(self.eventHandler)
+        self.slider.valueChanged.connect(self.changeEventHandler)
 
-        self.layout.addWidget(self.label)
-        self.layout.addWidget(self.slider)
+        [self.layout.addWidget(element) for element in (self.label, self.value_lebel, self.slider)]
         self.setLayout(self.layout)
 
     @pyqtSlot(int)
-    def eventHandler(self, slider_value):
-        # print("valor del slider cambio", slider_value)
-        pass
+    def changeEventHandler(self, slider_value):
+        self.value_lebel.setText(str(slider_value))
 
     def value(self) -> int:
         return self.slider.value()
@@ -97,7 +100,6 @@ class ConfigInput(QGroupBox):
 
 if __name__ == "__main__":
     app = QApplication([])
-    # ex = ConfigInput()
     ex = ConfigPanel()
     ex.show()
     app.exec()

@@ -1,0 +1,33 @@
+angularUpdate: 0.5    # Minimum angular change to process new scan (radians)
+astep: 0.05          # Angular step size for scan matching (radians)
+base_frame: "base_footprint"  # Robot's base frame
+delta: 0.05          # Map resolution (meters/pixel)
+iterations: 5        # Number of scan matching iterations
+kernelSize: 1        # Kernel size for scan matching
+lasamplerange: 0.005 # Linear range for likelihood sampling
+lasamplestep: 0.005  # Linear step size for likelihood sampling
+linearUpdate: 1.0    # Minimum linear change to process new scan (meters)
+llsamplerange: 0.01  # Linear range for likelihood sampling
+llsamplestep: 0.01   # Linear step size for likelihood sampling
+lsigma: 0.075        # Sigma for likelihood field
+lskip: 0             # Skip scans for likelihood calculation
+lstep: 0.05          # Translation step size for scan matching (meters)
+map_frame: "map"     # Map frame
+map_update_interval: 5.0  # Time between map updates (seconds)
+maxUrange: 12.0      # Maximum usable laser range (meters)
+minimumScore: 50     # Minimum score for valid scan matching
+odom_frame: "odom"   # Odometry frame
+ogain: 3.0           # Gain for smoothing likelihood
+particles: 30        # Number of particles in filter
+resampleThreshold: 0.5  # Threshold for resampling particles
+sigma: 0.05          # Sigma for scan matching
+srr: 0.1             # Odometry linear->linear noise
+srt: 0.2             # Odometry linear->angular noise
+str: 0.1             # Odometry angular->linear noise
+stt: 0.2             # Odometry angular->angular noise
+temporalUpdate: -1.0 # Time-based update threshold (seconds, -1=disabled)
+xmax: 20.0           # Maximum x-coordinate for map (meters)
+xmin: -20.0          # Minimum x-coordinate for map (meters)
+ymax: 20.0           # Maximum y-coordinate for map (meters)
+ymin: -20.0          # Minimum y-coordinate for map (meters)
+

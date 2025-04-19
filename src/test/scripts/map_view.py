@@ -52,7 +52,7 @@ class VisualizationPanel(QWidget):
                 # QPushButton("crear punto de intere"),
             )
         ]
-        map = MyViz(configfile="./test2.rviz")
+        map = MyViz(configfile="./test_mapping.rviz")
         self.layout.addWidget(map, 0, 0)
         self.layout.addLayout(self.buttons_layout, 1, 0)
         self.setLayout(self.layout)

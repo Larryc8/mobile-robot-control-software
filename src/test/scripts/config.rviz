@@ -37,22 +37,23 @@ Visualization Manager:
     - Class: rviz/SetGoal
       Topic: /move_base_simple/goal
   Value: true
-  Views:
+  Views:    
     Current:
-      Class: rviz/Orbit
-      Distance: 23.7169
-      Focal Point:
-        Value: 2.265e-06; 3.8147e-06; -3.8147e-06
-        X: 2.26498e-06
-        Y: 3.8147e-06
-        Z: -3.8147e-06
+      Angle: 0
+      Class: rviz/TopDownOrtho
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.01
-      Pitch: 0.349797
+      Near Clip Distance: 0.009999999776482582
+      Scale: 52.410972595214844
       Target Frame: <Fixed Frame>
-      Value: Orbit (rviz)
-      Yaw: 2.6004
-    Saved:
+      X: 0
+      Y: 0
+     Saved:
       - Class: rviz/Orbit
         Distance: 23.7169
         Focal Point:

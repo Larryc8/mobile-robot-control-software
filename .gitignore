@@ -21,4 +21,4 @@ test_gui.py
 test_lay.py
 test_layout.py
 test_picture.py
-test_tab.py
+# test_tab.py
