@@ -1,4 +1,5 @@
 import sys
+import rospy
 from PyQt5.QtWidgets import (
     QMainWindow,
     QApplication,
@@ -11,6 +12,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSlider,
+    QGroupBox
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
@@ -36,19 +38,23 @@ class ConfigPanel(QWidget):
         self.main_panel = QHBoxLayout()
         panel = QVBoxLayout()
         panel2 = QVBoxLayout()
-        panel3 = QVBoxLayout()
+        # panel3 = QVBoxLayout()
 
         self.save_config_button = QPushButton("save me")
         self.save_config_button.clicked.connect(self.clickHandler)
         self.layout.addWidget(self.save_config_button)
 
-        self.config_inputs_mapping = [ConfigInput(input_label) for input_label in config_labels_mapping]
-        self.config_inputs_navigation = [ConfigInput(input_label) for input_label in config_labels_navigation]
+        self.config_inputs_mapping = [
+            ConfigInput(input_label) for input_label in config_labels_mapping
+        ]
+        self.config_inputs_navigation = [
+            ConfigInput(input_label) for input_label in config_labels_navigation
+        ]
+
         label1 = QLabel()
         label2 = QLabel()
-
-        label1.setText('--MAPEO--')
-        label2.setText('--NAVEGACION--')
+        label1.setText("--MAPEO--")
+        label2.setText("--NAVEGACION--")
 
         panel.addWidget(label1)
         [panel.addWidget(input) for input in self.config_inputs_mapping]
@@ -62,22 +68,23 @@ class ConfigPanel(QWidget):
 
     @pyqtSlot()
     def clickHandler(self) -> None:
-        print('start ')
+        print("start ")
         [print(input.value()) for input in self.config_inputs_mapping]
         print("ddd")
 
 
-class ConfigInput(QWidget):
-    def __init__(self, label_text="hola") -> None:
+class ConfigInput(QGroupBox):
+    def __init__(self, label_text: str) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
         self.label = QLabel()
-        self.slider = QSlider(Qt.Horizontal)
         self.label.setText(label_text)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.valueChanged.connect(self.eventHandler)
+
         self.layout.addWidget(self.label)
         self.layout.addWidget(self.slider)
         self.setLayout(self.layout)
-        self.slider.valueChanged.connect(self.eventHandler)
 
     @pyqtSlot(int)
     def eventHandler(self, slider_value):
