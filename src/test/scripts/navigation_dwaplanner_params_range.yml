@@ -1,0 +1,47 @@
+# Kinematic Limits
+acc_lim_x: 0.5       # Maximum translational acceleration (m/s²)
+acc_lim_theta: 1.0   # Maximum rotational acceleration (rad/s²)
+max_vel_x: 0.5       # Maximum forward velocity (m/s)
+min_vel_x: 0.1       # Minimum forward velocity (m/s)
+max_vel_theta: 1.5   # Maximum rotational velocity (rad/s)
+min_vel_theta: -1.5  # Minimum rotational velocity (rad/s)
+
+# Goal Tolerance
+xy_goal_tolerance: 0.1    # Position tolerance (meters)
+yaw_goal_tolerance: 0.2   # Orientation tolerance (radians)
+latch_xy_goal_tolerance: false  # Strict goal position adherence
+
+# Trajectory Simulation
+sim_time: 1.5               # Planning horizon (seconds)
+sim_granularity: 0.025       # Step size between trajectory points (m)
+angular_sim_granularity: 0.025  # Angular step size (rad)
+vx_samples: 20              # Forward velocity samples
+vth_samples: 40             # Rotational velocity samples
+
+# Obstacle Avoidance
+path_distance_bias: 0.8    # Weight for path following
+goal_distance_bias: 1.0    # Weight for goal heading
+occdist_scale: 0.3         # Obstacle avoidance aggression (higher = more avoidance)
+publish_cost_grid_pc: true # Publish cost grid for visualization
+
+# Oscillation Prevention
+oscillation_reset_dist: 0.2   # Distance to reset oscillation flags (m)
+oscillation_reset_angle: 0.3  # Angular change to reset oscillation (rad)
+
+# Stopping Conditions
+trans_stopped_vel: 0.01   # Threshold to consider stopped (m/s)
+theta_stopped_vel: 0.01   # Threshold to consider stopped (rad/s)
+stop_time_buffer: 0.3     # Time buffer before declaring full stop (sec)
+
+# Differential Drive Settings
+holonomic_robot: false     # Set to true for omnidirectional robots
+y_vels: 0.0               # Disable lateral motion
+acc_lim_y: 0.0
+max_vel_y: 0.0
+min_vel_y: 0.0
+
+# General Configuration
+controller_frequency: 10  # Control loop rate (Hz)
+prune_plan: true           # Focus on immediate path segment
+use_dwa: true             # Enable DWA algorithm
+publish_traj_pc: true     # Publish trajectory for visualization

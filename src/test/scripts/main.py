@@ -54,7 +54,6 @@ class MyTableWidget(QWidget):
         for i, _ in enumerate(self.tab_widget):
             self.tab_widget[i].layout = QVBoxLayout()
 
-        # [tab_widget.layout.addWidget() in 
         self.tab_widget[0].layout.addWidget(HomePanel())
         self.tab_widget[1].layout.addWidget(ConfigPanel())
         # self.tab_widget[2].layout.addWidget(MappingPanel())

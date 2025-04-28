@@ -1,0 +1,7 @@
+# Global Planner (commonly used defaults)
+base_global_planner: navfn/NavfnROS
+
+# Local Planner Configuration
+base_local_planner: DWAPlannerROS
+aggressive_reset/reset_distance: 0.1  # Reset costmaps after moving 0.1m from obstacles
+clearing_rotation_allowed: true  # Allow rotations to clear space
