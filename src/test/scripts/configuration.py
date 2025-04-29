@@ -42,7 +42,7 @@ class ConfigPanel(QWidget):
             "planeacion": self.config_dwa_planner,
         }
 
-        StaticParamsConfigLoader("./navigation_move_base_params.yml", "/move_base/")
+        StaticParamsConfigLoader("./navigation_move_base_static_params.yml", "/move_base/")
 
         self.nodes_manager = NodesManager()
         self.nodes = [

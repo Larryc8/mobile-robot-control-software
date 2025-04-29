@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 
+from config_model import NodesManager
+
 from rvizgui import MyViz
 from navbar import TopBar
 from home_view import HomePanel  

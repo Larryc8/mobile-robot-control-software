@@ -16,12 +16,15 @@ from PyQt5.QtWidgets import (
     QGroupBox,
     QScrollArea,
 )
+
+from test_patrol_tree_view import pannel
+
 from PyQt5.QtCore import Qt, pyqtSlot
 from rview import MyViz
 
 
 class HomePanel(QWidget):
-    def __init__(self):
+    def __init__(self, nodes_manager = None):
         super().__init__()
         # self.resize(900, 900)
         self.layout = QGridLayout()
@@ -30,20 +33,22 @@ class HomePanel(QWidget):
         # [self.layout.addWidget(element) for element in (VisualizationPanel(), PatrolsPanel())]
 
         visualization_panel, patrol_panel, select_mode_panel = (
-            VisualizationPanel(),
+            VisualizationPanel(nodes_manager=nodes_manager),
             PatrolsPanel(),
+            # pannel(self),
             SelectModePanel(),
         )
-        self.layout.addWidget(visualization_panel, 0, 0, -1, 1)
-        self.layout.addWidget(select_mode_panel, 0, 2)
-        self.layout.addWidget(patrol_panel, 1, 2, 1, -1)
-        self.layout.setColumnStretch(0, 1)
+
+        self.layout.addWidget(visualization_panel, 0, 0, 1, 1)
+        # self.layout.addWidget(select_mode_panel, 0, 2)
+        self.layout.addWidget(patrol_panel, 1, 2, 2, 1)
+        # self.layout.setColumnStretch(2, 2)
 
         self.setLayout(self.layout)
 
 
 class VisualizationPanel(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, nodes_manager=None) -> None:
         super().__init__()
         self.layout = QGridLayout()
         self.buttons_layout = QHBoxLayout()
@@ -63,18 +68,18 @@ class VisualizationPanel(QWidget):
 
 
 class SelectModePanel(QGroupBox):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, nodes_manager = None) -> None:
+        super().__init__("select operation mode")
         self.layout = QGridLayout()
-        self.name = QLabel()
-        self.name.setText("Modo de operacion")
+        # self.name = QLabel()
+        # self.name.setText("Modo de operacion")
 
         auto_mode_button, manual_mode_button = (
             QPushButton("auto"),
             QPushButton("manual"),
         )
 
-        self.layout.addWidget(self.name, 0, 0, 1, -1)
+        # self.layout.addWidget(self.name, 0, 0, 1, -1)
         self.layout.addWidget(auto_mode_button, 1, 0)
         self.layout.addWidget(manual_mode_button, 1, 1)
 
@@ -82,16 +87,16 @@ class SelectModePanel(QGroupBox):
 
 
 class PatrolsPanel(QGroupBox):
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, nodes_manager = None) -> None:
+        super().__init__("Patrols")
         self.scroll_area = QScrollArea()
         self.patrols_panel = QWidget()
         self.patrols_panel.layout = QVBoxLayout()
         self.layout = QVBoxLayout()
-        self.name = QLabel()
-        self.name.setText("Patrullaje")
+        # self.name = QLabel()
+        # self.name.setText("Patrullaje")
 
-        self.layout.addWidget(self.name)
+        # self.layout.addWidget(self.name)
         self.control_panel_buttons = QHBoxLayout()
         [
             self.control_panel_buttons.addWidget(button)
@@ -105,7 +110,7 @@ class PatrolsPanel(QGroupBox):
         ]
 
         patrols_data = {}
-        [patrols_data.update({str(i): "harold"}) for i in range(4)]
+        [patrols_data.update({str(i)*30: "harold"}) for i in range(4)]
 
         patrols = PatrolsContainer(patrols_data)
 
@@ -147,11 +152,11 @@ class Patrol(QGroupBox):
 
         self.layout.addWidget(self.patrol_name, 1, 3)
         # self.layout.addWidget(self.patrol_name)
-        self.layout.addWidget(delete_botton, 3, 0)
-        self.layout.addWidget(exec_botton, 3, 2)
+        # self.layout.addWidget(delete_botton, 3, 0)
+        # self.layout.addWidget(exec_botton, 3, 2)
         # self.layout.addWidget(repeate_patrol_botton, 1, 1)
         self.layout.addWidget(checkbox, 1, 0, alignment=Qt.AlignLeft)
-        self.layout.addWidget(time_select, 1, 2, alignment=Qt.AlignRight)
+        # self.layout.addWidget(time_select, 1, 2, alignment=Qt.AlignRight)
         self.setLayout(self.layout)
 
 
