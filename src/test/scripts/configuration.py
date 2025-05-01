@@ -25,7 +25,7 @@ from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 inputsHasChanged = False
 
 class ConfigPanel(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, nodes_manager) -> None:
         super().__init__()
         # self.inputsHasChanged = False
         self.config_mapping = ConfigModel(workspace="/turtlebot3_slam_gmapping/")
@@ -44,7 +44,7 @@ class ConfigPanel(QWidget):
 
         StaticParamsConfigLoader("./navigation_move_base_static_params.yml", "/move_base/")
 
-        self.nodes_manager = NodesManager()
+        self.nodes_manager = nodes_manager 
         self.nodes = [
             {
                 "package": "gmapping",

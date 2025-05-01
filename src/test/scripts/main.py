@@ -7,16 +7,17 @@ from PyQt5.QtWidgets import (
     QWidget,
     QTabWidget,
     QVBoxLayout,
+    QLabel
 )
 
 from config_model import NodesManager
 
-from rvizgui import MyViz
+# from rvizgui import MyViz
 from navbar import TopBar
 from home_view import HomePanel  
 from configuration import ConfigPanel
 from map_view import MappingPanel
-
+from test_better_image_display import ImageViewer
 
 class App(QMainWindow):
     def __init__(self):
@@ -32,40 +33,63 @@ class App(QMainWindow):
         self.table_widget = MyTableWidget(self)
         self.setCentralWidget(self.table_widget)
 
-        # self.show()
-
 
 class MyTableWidget(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.tabs_names = ["Home", "Configuracion", "Crear mapa", "Log system"]
+        self.nodes_manager = NodesManager()
+        # self.tabs_names = ["Home", "Configuracion", "Log system"]
+        self.tabs_names = ["Home", "Configuracion"]
+        self.parent = parent
+        self.parent.w = None
 
         self.tabs = QTabWidget()
-        self.tab_widget = [QWidget() for _ in self.tabs_names]
+        self.tab_widget = {name: QWidget() for name in self.tabs_names}
 
         [
             self.tabs.addTab(tab, name)
-            for name, tab in zip(self.tabs_names, self.tab_widget)
+            for name, tab in  self.tab_widget.items()
         ]
 
         topbar = TopBar()
 
         # Create  tab
-        for i, _ in enumerate(self.tab_widget):
-            self.tab_widget[i].layout = QVBoxLayout()
+        for name in self.tab_widget.keys():
+            self.tab_widget[name].layout = QVBoxLayout()
 
-        self.tab_widget[0].layout.addWidget(HomePanel())
-        self.tab_widget[1].layout.addWidget(ConfigPanel())
-        # self.tab_widget[2].layout.addWidget(MappingPanel())
+        self.tab_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager))
+        self.tab_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
 
-        [tab.setLayout(tab.layout) for tab in self.tab_widget]
+        [tab.setLayout(tab.layout) for tab in self.tab_widget.values()]
+        self.button = QPushButton("Push for Window")
+        self.button.clicked.connect(self.show_new_window)
         
         self.layout.addWidget(topbar)
+        self.layout.addWidget(self.button)
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)
 
+    def show_new_window(self, checked):
+        self.parent.w = None
+        if self.parent.w is None:
+            self.parent.w = ImageViewer()
+            print('None ;; multiwindows')
+        self.parent.w.show()
+
+class AnotherWindow(QWidget):
+    """
+    This "window" is a QWidget. If it has no parent, it
+    will appear as a free-floating window as we want.
+    """
+    def __init__(self):
+        super().__init__()
+        # self.setGeometry(400, 400, 400, 400)
+        layout = QVBoxLayout()
+        self.label = QLabel("Another Window tem amo Harold, lindo")
+        layout.addWidget(self.label)
+        self.setLayout(layout)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

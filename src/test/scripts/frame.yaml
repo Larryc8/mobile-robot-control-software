@@ -1,0 +1,11 @@
+Frame: base_footprint published by unknown_publisher Average Delay: 0.001019 Max Delay: 0.007,
+Frame: base_link published by unknown_publisher(static) Average Delay: 0 Max Delay: 0,
+Frame: base_scan published by unknown_publisher(static) Average Delay: 0 Max Delay: 0,
+Frame: caster_back_link published by unknown_publisher(static) Average Delay: 0 Max Delay: 0
+Frame: imu_link published by unknown_publisher(static) Average Delay: 0 Max Delay: 0
+Frame: odom published by unknown_publisher Average Delay: -0.049835 Max Delay: 0
+Frame: wheel_left_link published by unknown_publisher Average Delay: 0.002396 Max Delay: 0.013
+Frame: wheel_right_link published by unknown_publisher Average Delay: 0.002399 Max Delay: 0.013
+
+roslaunch turtlebot3_bringup turtlebot3_remote.launch
+roslaunch turtlebot3_slam turtlebot3_gmapping.launch

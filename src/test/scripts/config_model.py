@@ -80,18 +80,6 @@ class NodesManager:
         return node_instances
 
     def startNodes(self, node_instances: dict = {}) -> dict:
-        # rospy.init_node("harold_start_launch", anonymous=True)
-
-        # uuid = rlutil.get_or_generate_uuid(None, False)
-        # configure_logging(uuid)
-        # self.bringup = parent.ROSLaunchParent(
-        #     uuid,
-        #     [
-        #         "/pico-sdk/harold_ws/src/turtlebot3/turtlebot3_bringup/launch/turtlebot3_remote.launch"
-        #     ],
-        # )
-        # self.bringup.start()
-        # rospy.loginfo("started")
 
         self._launcher.start()
         # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}

@@ -1,4 +1,4 @@
-angularUpdate: 0.5
+angularUpdate: 0.3
 astep: 0.05
 base_frame: base_footprint
 delta: 0.05
@@ -26,7 +26,7 @@ srt: 0.2
 str: 0.1
 stt: 0.2
 temporalUpdate: -1.0
-xmax: 20.0
-xmin: -20.0
-ymax: 20.0
-ymin: -20.0
+xmax: 39.6
+xmin: -40.0
+ymax: 39.6
+ymin: -40.0
