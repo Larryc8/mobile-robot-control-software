@@ -17,7 +17,7 @@ from navbar import TopBar
 from home_view import HomePanel  
 from configuration import ConfigPanel
 from map_view import MappingPanel
-from test_better_image_display import ImageViewer
+from better_image_display import ImageViewer
 
 class App(QMainWindow):
     def __init__(self):

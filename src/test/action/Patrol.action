@@ -1,0 +1,8 @@
+uint16 id
+string patrol_date
+bool looped_patrol
+---
+bool patrol_completed
+---
+uint8 points_checked
+

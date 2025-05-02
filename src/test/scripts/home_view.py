@@ -23,7 +23,7 @@ from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtCore import Qt, pyqtSlot
 from rview import MyViz
 #from points_manager import PointsGenerator
-from   test_better_image_display import ImageViewer
+from   better_image_display import ImageViewer
 
 
 class HomePanel(QWidget):
