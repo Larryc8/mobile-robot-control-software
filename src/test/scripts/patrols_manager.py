@@ -2,52 +2,63 @@
 
 import rospy
 import actionlib
-from actionlib_tutorials.msg import CountdownAction, CountdownGoal, CountdownResult, CountdownFeedback
+from test.msg import (
+    PatrolAction,
+    PatrolGoal,
+    PatrolResult,
+    PatrolFeedback,
+)
+from geometry_msgs.msg import Pose
+# import asyncio
+# import datetime
 
 class PatrolsServer:
     def __init__(self):
-        self.server = actionlib.SimpleActionServer('countdown', CountdownAction, self.execute, False)
+        rospy.init_node("patrol_server")
+        self.server = actionlib.SimpleActionServer(
+            "patrols_server", PatrolAction, self.execute, False
+        )
         self.server.start()
         rospy.loginfo("Countdown Action Server started")
 
+
     def execute(self, goal):
-        rospy.loginfo("Received goal: countdown from %d", goal.target_number)
-        
         # Check if the goal is valid
-        if goal.target_number <= 0:
-            result = CountdownResult()
-            result.final_count = 0
-            self.server.set_aborted(result, "Target number must be positive")
+        date = goal.date
+        id = goal.id
+        if len(date) <= 1:
+            result = PatrolResult()
+            self.server.set_aborted(result, "String vacio en date")
             return
-        
-        # Initialize feedback
-        feedback = CountdownFeedback()
-        
-        # Perform the countdown
-        for i in range(goal.target_number, -1, -1):
+
+        feedback = PatrolFeedback()
+
+        for i in range(id, -1, -1): ## this for loop rpresent every point covered
             # Check for preemption
             if self.server.is_preempt_requested():
-                rospy.loginfo("Countdown preempted")
-                result = CountdownResult()
-                result.final_count = i
+                rospy.loginfo("Goal preempted")
+                result = PatrolResult()
                 self.server.set_preempted(result)
                 return
-            
-            # Publish feedback
-            feedback.current_count = i
+
+            feedback.points_checked = i
             self.server.publish_feedback(feedback)
-            
+
             # Sleep for demonstration purposes
             rospy.sleep(1.0)
-        
-        # Return the result when done
-        result = CountdownResult()
-        result.final_count = 0
-        self.server.set_succeeded(result, "Countdown completed successfully")
 
-if __name__ == '__main__':
-    rospy.init_node('countdown_server')
+        # Return the result when done
+        result = PatrolResult()
+        pose = Pose()
+        pose.position.x = 1
+        pose.position.y = 1
+        pose.position.z = 1
+        result.points_pose_array = [pose]
+        print(result)
+        self.server.set_succeeded(result, "Todo bien, dicel el pibe")
+
+
+if __name__ == "__main__":
+    # rospy.init_node("countdown_server")
     server = PatrolsServer()
     rospy.spin()
-
-

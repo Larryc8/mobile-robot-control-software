@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QGraphicsItem,
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPainterPath
 from PyQt5.QtCore import Qt, QRectF
 import random
 from PyQt5.QtCore import Qt, QPoint, QRect, QSize
@@ -55,26 +55,26 @@ class ImageViewer(QMainWindow):
         self.load_button.clicked.connect(self.load_image)
         layout.addWidget(self.load_button)
 
-        self.zoom_in_button = QPushButton("Zoom In (+)")
-        self.zoom_in_button.clicked.connect(self.zoom_in)
-        layout.addWidget(self.zoom_in_button)
+        # self.zoom_in_button = QPushButton("Zoom In (+)")
+        # self.zoom_in_button.clicked.connect(self.zoom_in)
+        # layout.addWidget(self.zoom_in_button)
 
-        self.zoom_out_button = QPushButton("Zoom Out (-)")
-        self.zoom_out_button.clicked.connect(self.zoom_out)
-        layout.addWidget(self.zoom_out_button)
+        # self.zoom_out_button = QPushButton("Zoom Out (-)")
+        # self.zoom_out_button.clicked.connect(self.zoom_out)
+        # layout.addWidget(self.zoom_out_button)
 
-        self.reset_button = QPushButton("Reset View")
-        self.reset_button.clicked.connect(self.reset_view)
-        layout.addWidget(self.reset_button)
+        # self.reset_button = QPushButton("Reset View")
+        # self.reset_button.clicked.connect(self.reset_view)
+        # layout.addWidget(self.reset_button)
 
         central_widget.setLayout(layout)
 
     def load_image(self):
         # Open file dialog to select image
-        # file_path, _ = QFileDialog.getOpenFileName(
-        #     self, "Open Image File", "",
-        #     "Image Files ( *.pgm)"
-        # )
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Image File", "",
+            "Image Files ( *.pgm)"
+        )
         file_path = "./map2.pgm"
 
         if file_path:
@@ -103,14 +103,16 @@ class ImageViewer(QMainWindow):
         self.reset_view()
 
     def zoom_in(self):
-        self.graphics_view.scale(1.2, 1.2)
-        self.zoom_factor *= 1.2
-        self.update()
+        # self.graphics_view.scale(1.2, 1.2)
+        # self.zoom_factor *= 1.2
+        # self.update()
+        pass
 
     def zoom_out(self):
-        self.graphics_view.scale(1 / 1.2, 1 / 1.2)
-        self.zoom_factor /= 1.2
-        self.update()
+        # self.graphics_view.scale(1 / 1.2, 1 / 1.2)
+        # self.zoom_factor /= 1.2
+        # self.update()
+        pass
 
     def reset_view(self):
         if self.scene.items():
@@ -129,6 +131,8 @@ class Example(QGraphicsView):
         self.squares = []  # Store square positions and sizes
         self.square_size = 10  # Size of the square to draw
         self.wheel_delta = 0
+        self.points_path = []
+        self.zoom_factor = 1
 
         self.setGeometry(300, 300, 350, 300)
         self.setWindowTitle("Shapes")
@@ -138,6 +142,15 @@ class Example(QGraphicsView):
         # self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # self.loadImage("./map2.pgm")
         
+    def zoom_in(self):
+        self.scale(1.1, 1.1)
+        self.zoom_factor *= 1.1
+        self.update()
+
+    def zoom_out(self):
+        self.scale(1 / 1.1, 1 / 1.1)
+        self.zoom_factor /= 1.1
+        self.update()
 
     def wheelEvent(self, event):
         # Get the wheel delta (positive for up, negative for down)
@@ -145,9 +158,12 @@ class Example(QGraphicsView):
         
         # Accumulate the total wheel movement
         self.wheel_delta += delta
+
+        if delta > 0 and self.zoom_factor > 0.8:
+            self.zoom_out()
+        if delta < 0:
+            self.zoom_in()
         
-        # Update the label
-                
         # You can also print the raw delta for debugging
         print(f"Wheel moved: {delta} (total: {self.wheel_delta})")
         
@@ -158,6 +174,7 @@ class Example(QGraphicsView):
         x = event.pos().x()
         y = event.pos().y()
         point = self.mapToScene(x, y)
+        self.points_path.append(point)
         print(f"PUNTOS CON RESPECTO A LA VISTA X:{point.x()} X:{point.y()}")
         print(f"PUNTOS CON RESPECTO A LA VISTA X:{point.x()*0.05} X:{point.y()*0.05} en metros")
 
@@ -190,10 +207,11 @@ class Example(QGraphicsView):
             # self.updateScene()
 
     def drawForeground(self, painter, rect):
+        painter.drawLine(0,0, 20, 20)
         for square in self.squares:
             self.setForegroundBrush(square['color'])  #     for square in self.squares:
             super().drawForeground(painter, square["object"])
-            self.update()
+        self.update()
 
 
 class SimpleItem(QGraphicsItem):

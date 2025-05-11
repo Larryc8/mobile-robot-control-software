@@ -15,15 +15,19 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QGroupBox,
     QScrollArea,
+    QStackedLayout,
+    QMenu,
 )
 from PyQt5.QtGui import QPalette, QColor
 
-#from test_patrol_tree_view import pannel
+# from test_patrol_tree_view import pannel
 
 from PyQt5.QtCore import Qt, pyqtSlot
 from rview import MyViz
-#from points_manager import PointsGenerator
-from   better_image_display import ImageViewer
+
+# from points_manager import PointsGenerator
+from better_image_display import ImageViewer
+from joystick import Joypad
 
 
 class HomePanel(QWidget):
@@ -35,21 +39,38 @@ class HomePanel(QWidget):
         # self.layout = QHBoxLayout()
         # [self.layout.addWidget(element) for element in (VisualizationPanel(), PatrolsPanel())]
 
-        visualization_panel, patrol_panel, select_mode_panel = (
+        visualization_panel, patrol_panel, select_mode_panel, joypad = (
             VisualizationPanel(nodes_manager=nodes_manager),
             PatrolsPanel(),
             # pannel(self),
             SelectModePanel(),
+            Joypad(),
             # PointsGenerator()
             # ImageViewer()
         )
+        joypad.setEnabled(True)
+        btn1, btn2  = QPushButton("<"), QPushButton(">")
+        self.c = Color('red')
+
+        btn1.pressed.connect(self.activate1)
 
         self.layout.addWidget(visualization_panel, 0, 0, -1, 1)
-        self.layout.addWidget(select_mode_panel, 0, 2)
-        self.layout.addWidget(patrol_panel, 1, 2, 2, 1)
+        self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
+
+        self.layout.addWidget(patrol_panel, 1, 2, 1, 1)
+        # self.layout.addWidget(Color('red'), 1, 2, 1, 1)
+
+        self.layout.addWidget(joypad, 2, 2)
+        self.layout.addWidget(btn1, 3, 2)
         # self.layout.setColumnStretch(2, 2)
 
         self.setLayout(self.layout)
+    def activate1(self):
+        self.layout.addWidget(self.c, 1, 3, 1, 1)
+        # self.raise_()
+        self.update()
+        # self.c.update()
+
 
 
 class VisualizationPanel(QWidget):
@@ -69,6 +90,7 @@ class VisualizationPanel(QWidget):
         ]
         self.save_button.clicked.connect(self.saveMapClickHandler)
         self.load_button.clicked.connect(self.loadMapClickHandler)
+        self.save_button.setEnabled(False)
 
         map = MyViz(configfile="./config_navigation.rviz")
         self.layout.addWidget(map, 0, 0)
@@ -85,6 +107,7 @@ class VisualizationPanel(QWidget):
 class SelectModePanel(QGroupBox):
     def __init__(self, nodes_manager=None) -> None:
         super().__init__("select operation mode")
+        self.setMaximumHeight(80)
         self.layout = QGridLayout()
         # self.name = QLabel()
         # self.name.setText("Modo de operacion")
@@ -100,13 +123,30 @@ class SelectModePanel(QGroupBox):
         self.setLayout(self.layout)
 
 
+class Color(QWidget):
+    def __init__(self, color):
+        super().__init__()
+        self.setAutoFillBackground(True)
+        self.setMaximumHeight(200)
+        self.setMaximumWidth(100)
+        palette = self.palette()
+        palette.setColor(QPalette.Window, QColor(color))
+        self.setPalette(palette)
+
 class PatrolsPanel(QGroupBox):
     def __init__(self, nodes_manager=None) -> None:
         super().__init__("Patrols")
+        # self.setMaximumHeight(500)
+        # self.setMaximumWidth(300)
         self.scroll_area = QScrollArea()
         self.patrols_panel = QWidget()
         self.patrols_panel.layout = QVBoxLayout()
         self.layout = QVBoxLayout()
+        # self.stack = QStackedLayout()
+        # self.panel = QWidget()
+        # self.panel.setLayout(self.layout)
+        # self.stack.addWidget(self.panel)
+        # self.stack.addWidget(Color('red'))
         # self.name = QLabel()
         # self.name.setText("Patrullaje")
 
@@ -118,15 +158,23 @@ class PatrolsPanel(QGroupBox):
         ]
 
         self.navigation_buttons = QHBoxLayout()
+        btn1, btn2  = QPushButton("<"), QPushButton(">")
+
         [
             self.navigation_buttons.addWidget(button)
-            for button in (QPushButton("<"), QPushButton(">"))
+            for button in (btn1, btn2)
         ]
 
         patrols_data = {}
-        [patrols_data.update({str(i) * i: "harold"}) for i in range(1, 3)]
+        [
+            patrols_data.update(
+                {str(i) * i: "Lun Mar Mier Jue Vier Sab Dom 24:00 activo"}
+            )
+            for i in range(1, 8)
+        ]
 
         patrols = PatrolsContainer(patrols_data)
+        btn1.pressed.connect(self.activate_tab_1)
 
         self.layout.addLayout(self.control_panel_buttons)
         self.layout.addLayout(self.navigation_buttons)
@@ -135,6 +183,11 @@ class PatrolsPanel(QGroupBox):
 
         self.setLayout(self.layout)
 
+    def activate_tab_1(self):
+        # self.stack.setCurrentIndex(1)
+        pass
+
+
 
 class PatrolsContainer(QWidget):
     def __init__(self, patrols_data: dict) -> None:
@@ -142,7 +195,7 @@ class PatrolsContainer(QWidget):
         self.layout = QVBoxLayout()
         self.layout.setAlignment(Qt.AlignTop)
         self.layout.setSpacing(0)
-        patrols = [Patrol(id=index) for index, _ in patrols_data.items()]
+        patrols = [Patrol(id=name) for index, name in patrols_data.items()]
 
         [self.layout.addWidget(patrol) for patrol in patrols]
         self.setLayout(self.layout)
@@ -151,12 +204,12 @@ class PatrolsContainer(QWidget):
 class Patrol(QWidget):
     def __init__(self, name: str = "harold lo mas lindo", id: str = "999"):
         super().__init__()
-        # self.setStyleSheet("border-color: gray")
+        self.setStyleSheet("border-color: gray")
         # palette = self.palette()
         # bg_color = QColor('lightblue')  # Using a predefined color name
         # palette.setColor(QPalette.Background, bg_color)
         # self.setAutoFillBackground(True)
-        # self.setPalette(palette) 
+        # self.setPalette(palette)
 
         self.layout = QGridLayout()
         # self.layout = QVBoxLayout()
@@ -174,7 +227,7 @@ class Patrol(QWidget):
 
         self.layout.addWidget(self.patrol_name, 1, 3)
         # self.layout.addWidget(self.patrol_name)
-        self.layout.addWidget(delete_botton, 1, 5)
+        # self.layout.addWidget(delete_botton, 1, 5)
         self.layout.addWidget(exec_botton, 1, 4)
         # self.layout.addWidget(repeate_patrol_botton, 1, 1)
         self.layout.addWidget(checkbox, 1, 0, alignment=Qt.AlignLeft)

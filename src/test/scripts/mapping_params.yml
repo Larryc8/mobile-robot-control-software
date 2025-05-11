@@ -26,7 +26,7 @@ srt: 0.2
 str: 0.1
 stt: 0.2
 temporalUpdate: -1.0
-xmax: 39.6
-xmin: -40.0
-ymax: 39.6
-ymin: -40.0
+xmax: 20.0
+xmin: -20.0
+ymax: 20.0
+ymin: -20.4

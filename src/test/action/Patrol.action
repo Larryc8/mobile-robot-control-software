@@ -1,8 +1,9 @@
 uint16 id
-string patrol_date
-bool looped_patrol
+string[] date
 ---
-bool patrol_completed
+geometry_msgs/Pose[] points_pose_array
 ---
+uint16 point_id
 uint8 points_checked
+geometry_msgs/Pose pose
 

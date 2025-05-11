@@ -14,10 +14,14 @@ from python_qt_binding.QtGui import *
 from python_qt_binding.QtCore import *
 
 from python_qt_binding.QtWidgets import *
+import rospy
 
 
 ## Finally import the RViz bindings themselves.
 from rviz import bindings as rviz
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from tf.transformations import euler_from_quaternion
 
 
 # try:
@@ -37,6 +41,9 @@ class MyViz(QWidget):
     def __init__(self, configfile: str, parent=None):
         super().__init__(parent)  # Pasa `parent` al constructor de QWidget
         # QWidget.__init__(self)
+        self.past_point = QPoint(0,0)
+        self.frame_position = QPoint(0,0)
+        # rospy.init_node('harolsito')
 
         ## rviz.VisualizationFrame is the main container widget of the
         ## regular RViz application, with menus, a toolbar, a status
@@ -79,15 +86,31 @@ class MyViz(QWidget):
         ## to other manager objects and is generally required to make
         ## any changes in an rviz instance.
         self.manager = self.frame.getManager()
+        self.view_man = self.manager.getViewManager()
+        # print('view: ', self.view_man.getCurrent().subProp( "Angle" ).setValue(-5), self.view_man.getNumViews()) 
+        rospy.Subscriber('/odom', Odometry, self.callback)
 
         # self.grid_display = self.manager.getRootDisplayGroup().getDisplayAt(0)
 
         ## Here we create the layout and other widgets in the usual Qt way.
         layout = QVBoxLayout()
         layout.addWidget(self.frame)
-
         self.setLayout(layout)
 
+    def callback(self, msg):
+        orientation = msg.pose.pose.orientation
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        present_point = QPoint(x,y)
+        delta_movement = present_point - self.past_point 
+        self.past_point = present_point
+
+        (roll, pitch, yaw) = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
+        self.view_man.getCurrent().subProp( "Angle" ).setValue(yaw  -1.55678) 
+        self.view_man.getCurrent().subProp( "X" ).setValue(self.frame_position.x())
+        self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
+        self.frame_position = self.frame_position + delta_movement
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

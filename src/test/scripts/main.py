@@ -72,24 +72,13 @@ class MyTableWidget(QWidget):
         self.setLayout(self.layout)
 
     def show_new_window(self, checked):
-        self.parent.w = None
+        # self.parent.w = None
         if self.parent.w is None:
             self.parent.w = ImageViewer()
             print('None ;; multiwindows')
         self.parent.w.show()
 
-class AnotherWindow(QWidget):
-    """
-    This "window" is a QWidget. If it has no parent, it
-    will appear as a free-floating window as we want.
-    """
-    def __init__(self):
-        super().__init__()
-        # self.setGeometry(400, 400, 400, 400)
-        layout = QVBoxLayout()
-        self.label = QLabel("Another Window tem amo Harold, lindo")
-        layout.addWidget(self.label)
-        self.setLayout(layout)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -42,9 +42,9 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
-        Line Width: 0.029999999329447746
+        Line Width: 0.019999999329447746
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -54,7 +54,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 20
-      Reference Frame: <Fixed Frame>
+      Reference Frame: base_footprint
       Value: true
     - Alpha: 1
       Class: rviz/RobotModel
@@ -318,7 +318,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: map
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -347,9 +347,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 87.6160659790039
+      Scale: 90.6160659790039
       Target Frame: <Fixed Frame>
-      X: 1.8744581937789917
+      X: 0.8744581937789917
       Y: -0.10356125235557556
     Saved: ~
 Window Geometry:
