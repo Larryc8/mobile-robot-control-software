@@ -19,19 +19,18 @@ from PyQt5.QtWidgets import (
     QMenu,
     QProgressBar,
 )
-from PyQt5.QtGui import QPalette, QColor
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
+from datetime import datetime
 
 # from test_patrol_tree_view import pannel
 
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
-from rview import MyViz
-from patrol_menu import PatrolsMenu
 
 # from points_manager import PointsGenerator
 from better_image_display import ImageViewer
 from joystick import Joypad
 from patrols_scheduler import PatrolsEscheduler
 from patrol_menu import PatrolsMenu
+from rview import MyViz
 
 
 class HomePanel(QWidget):
@@ -123,21 +122,13 @@ class PatrolsPanel(QGroupBox):
     def __init__(self, nodes_manager=None, parent=None) -> None:
         super().__init__("Patrols")
         # self.setMaximumHeight(500)
-        # self.setMaximumWidth(300)
+        self.setMaximumWidth(300)
         # self.scroll_area = QScrollArea()
         self.patrols_panel = QWidget()
         self.patrols_panel.layout = QVBoxLayout()
         self.layout = QVBoxLayout()
         self.patrols_scheduler = PatrolsEscheduler()
         self.parent = parent
-        # self.panel = QWidget()
-        # self.panel.setLayout(self.layout)
-        # self.stack.addWidget(self.panel)
-        # self.stack.addWidget(Color('red'))
-        # self.name = QLabel()
-        # self.name.setText("Patrullaje")
-        # self.popup.show()
-        # self.stack = QStackedLayout()
 
         # self.layout.addWidget(self.name)
         self.create_btn, self.delete_btn, self.start_patrols_btn, self.stop_patrols_btn = (
@@ -174,14 +165,11 @@ class PatrolsPanel(QGroupBox):
         self.setLayout(self.layout)
 
     def add_patrol(self, check):
-        self.popup = PatrolsMenu(self.parent, selected_days=[], patrolid=3)
+        self.popup = PatrolsMenu(self.parent, selected_days=[], patrolid=datetime.now().timestamp())
         self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
-        # popup_x = self.parent.x() + (self.parent.width() - self.popup.width()) // 2
-        # popup_y = self.parent.y() + (self.parent.height() - self.popup.height()) // 2
-        # print("popup", popup_x, popup_y)
-        # self.popup.move(popup_x, popup_y)
         self.popup.show_popup()
         pass
+
     def start_patrols(self):
         self.patrols_scheduler.start_patrols()
         self.start_patrols_btn.setEnabled(False)

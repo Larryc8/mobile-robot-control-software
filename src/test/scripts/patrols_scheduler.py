@@ -1,31 +1,27 @@
 #!/usr/bin/env python
-
-import rospy
+import rospy 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
-
-# Import your action message, for example:
-from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
-import datetime
-# import asyncio
+# Import your action message, for example: from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from datetime import datetime
+import time
 
 
 class ScheduleChecker(QThread):
     progress_updated = pyqtSignal(int)
     task_completed = pyqtSignal(str)
 
-    def __init__(self, task_id=1):
+    def __init__(self, task_id=1, patrols=None):
         super().__init__()
         self.task_id = task_id
 
     def run(self):
         try:
-            for i in range(1, 101):
+            for i in range(1, 10):
                 # Simulate work
-                time.sleep(0.05)
+                time.sleep(1)
 
                 # Update progress
                 self.progress_updated.emit(i)
@@ -44,7 +40,6 @@ class ScheduleChecker(QThread):
 class PatrolsEscheduler(QObject):
     compelted_patrols = []
     looped_patrols = []
-    schedule_checker = ScheduleChecker()
     update_patrols_view = pyqtSignal(dict)
     add_patrol_view = pyqtSignal(dict)
 
@@ -55,27 +50,29 @@ class PatrolsEscheduler(QObject):
         self.id = id
         self.date = date
         self.patrols = []
+        self.scheduler = None
 
-        self.patrols_data = {
-            "0": {
-                "days": {
-                    "Lun": {"day": "Lun", "time": 20205, "finished": False},
-                    "Mar": {"day": "Mar", "time": 20202, "finished": False},
-                    "Mie": {"day": "Mar", "time": 20207, "finished": False},
-                },
-                "time": 200,
-                "state": "encurso",
-            },
-            "1": {
-                "days": {
-                    "Lun": {"day": "Lun", "time": 20200, "finished": False},
-                    "Mar": {"day": "Mar", "time": 20209, "finished": False},
-                    "Mie": {"day": "Mar", "time": 20203, "finished": False},
-                },
-                "time": 200,
-                "state": "encurso",
-            },
-        }
+        # self.patrols_data = {
+        #     "0": {
+        #         "days": {
+        #             "Lun": {"day": "Lun", "time": 20205, "finished": False},
+        #             "Mar": {"day": "Mar", "time": 20202, "finished": False},
+        #             "Mie": {"day": "Mar", "time": 20207, "finished": False},
+        #         },
+        #         "time": 200,
+        #         "state": "encurso",
+        #     },
+        #     "1": {
+        #         "days": {
+        #             "Lun": {"day": "Lun", "time": 20200, "finished": False},
+        #             "Mar": {"day": "Mar", "time": 20209, "finished": False},
+        #             "Mie": {"day": "Mar", "time": 20203, "finished": False},
+        #         },
+        #         "time": 200,
+        #         "state": "encurso",
+        #     },
+        # }
+        self.patrols_data = {}
         self.patrols_for_scheduling = self.patrols.copy()
         self.scheduled_patrols = []
         self.isScheduling = True
@@ -86,13 +83,36 @@ class PatrolsEscheduler(QObject):
         # self.client.wait_for_server()
         rospy.loginfo("Action server found!")
 
+    def start_patrols_scheduling(self):
+        if self.scheduler and self.scheduler.isRunning():
+            return
+
+        self.scheduler = ScheduleChecker()
+        # self.worker_thread = WorkerThread(task_id=1)
+        self.scheduler.progress_updated.connect(self.update_progress)
+        self.scheduler.task_completed.connect(self.task_finished)
+        self.scheduler.start()
+
+    def update_progress(self, k):
+        print(f'updated {k}')
+
+    def cancel_task(self):
+        if self.scheduler and self.scheduler.isRunning():
+            self.scheduler.requestInterruption()
+
+    def task_finished(self, message):
+        print(message)
+        # self.start_button.setEnabled(True)
+        # self.cancel_button.setEnabled(False)
+        if self.scheduler:
+            self.scheduler.quit()
+            self.scheduler.wait()
+            self.scheduler = None
+
     def update_patrol(self, x):
         self.patrols_data.update(x)
         print("Hola Soy el scheduler patrol", x)
         self.update_patrols_view.emit(self.patrols_data)
-
-    def schedule_all_patrols(self):
-        pass
 
     def sort_key(self, patrol):
         days_shortname = [ "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
@@ -112,52 +132,47 @@ class PatrolsEscheduler(QObject):
         print(self.patrols)
         self.patrols.sort(key=self.sort_key)
         print(self.patrols)
+        self.start_patrols_scheduling()
 
-    def stop(self):
-        pass
+    # def getTimeDifference(self, date, current_date):
+    #     return 0
 
-    def update(self):
-        pass
+    # def send_goal(self, patrol, done_callback=None):
+    #     goal = PatrolGoal()
+    #     goal.date = self.date
+    #     goal.id = self.id
 
-    def getTimeDifference(self, date, current_date):
-        return 0
+    #     if done_callback:
+    #         done_cb = done_callback
+    #     else:
+    #         done_cb = self.done_callback
 
-    def send_goal(self, patrol, done_callback=None):
-        goal = PatrolGoal()
-        goal.date = self.date
-        goal.id = self.id
+    #     self.client.send_goal(
+    #         goal,
+    #         done_cb=done_cb,
+    #         active_cb=self.active_callback,
+    #         feedback_cb=self.feedback_callback,
+    #     )
 
-        if done_callback:
-            done_cb = done_callback
-        else:
-            done_cb = self.done_callback
+    #     rospy.loginfo("Goal sent!")
 
-        self.client.send_goal(
-            goal,
-            done_cb=done_cb,
-            active_cb=self.active_callback,
-            feedback_cb=self.feedback_callback,
-        )
+    # def active_callback(self):
+    #     rospy.loginfo("Goal is now active")
 
-        rospy.loginfo("Goal sent!")
+    # def feedback_callback(self, feedback):
+    #     rospy.loginfo("Received feedback: {} complete".format(feedback.points_checked))
 
-    def active_callback(self):
-        rospy.loginfo("Goal is now active")
+    # def done_callback(self, state, result):
+    #     if state == GoalStatus.SUCCEEDED:
+    #         rospy.loginfo("Goal succeeded! Result: {}")
+    #         rospy.loginfo(self.client.get_goal_status_text())
+    #     else:
+    #         rospy.loginfo(self.client.get_goal_status_text())
+    #         rospy.logerr("somthing just happends!!")
 
-    def feedback_callback(self, feedback):
-        rospy.loginfo("Received feedback: {} complete".format(feedback.points_checked))
-
-    def done_callback(self, state, result):
-        if state == GoalStatus.SUCCEEDED:
-            rospy.loginfo("Goal succeeded! Result: {}")
-            rospy.loginfo(self.client.get_goal_status_text())
-        else:
-            rospy.loginfo(self.client.get_goal_status_text())
-            rospy.logerr("somthing just happends!!")
-
-    def cancel_goal(self):
-        self.client.cancel_goal()
-        rospy.loginfo("Goal canceled")
+    # def cancel_goal(self):
+    #     self.client.cancel_goal()
+    #     rospy.loginfo("Goal canceled")
 
 
 if __name__ == "__main__":
