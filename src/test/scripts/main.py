@@ -59,7 +59,8 @@ class MyTableWidget(QWidget):
         for name in self.tab_widget.keys():
             self.tab_widget[name].layout = QVBoxLayout()
 
-        self.tab_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager))
+        print('main', parent)
+        self.tab_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
         self.tab_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
 
         [tab.setLayout(tab.layout) for tab in self.tab_widget.values()]

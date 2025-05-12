@@ -19,7 +19,8 @@ from PyQt5.QtCore import Qt, QPoint, QRect, QSize
 class ImageViewer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Image Viewer with QGraphicsView")
+        # self.setWindowTitle("Image Viewer with QGraphicsView")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.setGeometry(100, 100, 384, 384)
 
         # Initialize UI
