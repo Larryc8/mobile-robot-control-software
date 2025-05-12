@@ -30,6 +30,7 @@ class PatrolsMenu(QWidget):
         # print(parent)
         # self.setFixedSize(300, 150)
         self.patrolid = patrolid
+        self.parent = parent
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.days_labels = DaySelect(selected_days=selected_days)
         self.time = TimeSelect(menu=None)
@@ -43,6 +44,13 @@ class PatrolsMenu(QWidget):
         save_btn.clicked.connect(self.save)
         self.setLayout(layout)
 
+    def show_popup(self):
+        popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
+        popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
+        # print("popup", popup_x, popup_y)
+        self.move(popup_x, popup_y)
+        self.show()
+
     def save(self):
         time = self.time.getTime()
         days = self.days_labels.get_selected_days()
@@ -53,7 +61,7 @@ class PatrolsMenu(QWidget):
         }
         a = {'days': x, 'time': time}
         # x['time'] = time
-        print("A MA, FUNCIONA", x)
+        print("A MA, FUNCIONA patrool menu", x)
         # self.update_date.emit('ww')
         self.update_date.emit({self.patrolid: a})
         self.hide()

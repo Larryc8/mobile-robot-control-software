@@ -10,6 +10,7 @@ import datetime
 # import asyncio
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
+from datetime import datetime
 
 
 class ScheduleChecker(QThread):
@@ -45,6 +46,7 @@ class PatrolsEscheduler(QObject):
     looped_patrols = []
     schedule_checker = ScheduleChecker()
     update_patrols_view = pyqtSignal(dict)
+    add_patrol_view = pyqtSignal(dict)
 
     def __init__(self, id=5, date=None):
         super().__init__()
@@ -57,58 +59,23 @@ class PatrolsEscheduler(QObject):
         self.patrols_data = {
             "0": {
                 "days": {
-                    "Lun": {"day": "Lun", "time": 20202, "finished": False},
+                    "Lun": {"day": "Lun", "time": 20205, "finished": False},
                     "Mar": {"day": "Mar", "time": 20202, "finished": False},
-                    "Mie": {"day": "Mar", "time": 20202, "finished": False},
-                }, 
-                "time": 200, 
-                "state": 'encurso'
+                    "Mie": {"day": "Mar", "time": 20207, "finished": False},
+                },
+                "time": 200,
+                "state": "encurso",
             },
             "1": {
                 "days": {
-                    "Lun": {"day": "Lun", "time": 20202, "finished": False},
-                    "Mar": {"day": "Mar", "time": 20202, "finished": False},
-                    "Mie": {"day": "Mar", "time": 20202, "finished": False},
-                }, 
-                "time": 200, 
-                "state": 'encurso'
+                    "Lun": {"day": "Lun", "time": 20200, "finished": False},
+                    "Mar": {"day": "Mar", "time": 20209, "finished": False},
+                    "Mie": {"day": "Mar", "time": 20203, "finished": False},
+                },
+                "time": 200,
+                "state": "encurso",
             },
-
         }
-        # self.patrols = [
-        #     {
-        #         "id": 1,
-        #         "days": 'Lun',
-        #         "time": '2223',
-        #         "delayed": False,
-        #         "looped": False,
-        #         "finished": False,
-        #     },
-        #    {
-        #         "id": 1,
-        #         "days": 'Vir',
-        #         "time": '2220',
-        #         "delayed": False,
-        #         "looped": False,
-        #         "finished": False,
-        #     },
-        #     {
-        #         "id": 2,
-        #         "days": 'Jue',
-        #         "time": '2221',
-        #         "delayed": False,
-        #         "looped": False,
-        #         "finished": False,
-        #     },
-        #     {
-        #         "id": 2,
-        #         "days": 'Mie',
-        #         "time": '2224',
-        #         "delayed": False,
-        #         "looped": False,
-        #         "finished": False,
-        #     }
-        # ]
         self.patrols_for_scheduling = self.patrols.copy()
         self.scheduled_patrols = []
         self.isScheduling = True
@@ -119,9 +86,6 @@ class PatrolsEscheduler(QObject):
         # self.client.wait_for_server()
         rospy.loginfo("Action server found!")
 
-    def add_patrol(self, patrol):
-        pass
-
     def update_patrol(self, x):
         self.patrols_data.update(x)
         print("Hola Soy el scheduler patrol", x)
@@ -131,13 +95,23 @@ class PatrolsEscheduler(QObject):
         pass
 
     def sort_key(self, patrol):
-        today = 0
-        days_until = (0 - today) % 7
-        print(int(f'{days_until}{patrol["time"]}'))
+        days_shortname = [ "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+        day = days_shortname.index(patrol['day'])
+        now = datetime.now()
+        today = now.weekday()
+        days_until = (day - today) % 7
+        print(f'{days_until}{patrol["time"]}  day: {day} today: {today} day: {patrol["day"]}')
         return int(f'{days_until}{patrol["time"]}')
 
-    def sort_patrols(self):
-        return sorted(self.patrols, key=self.sort_key)
+    def start_patrols(self):
+        self.patrols = []
+
+        for id, patrol in self.patrols_data.items():
+            for patrol_day in patrol["days"].values():
+                self.patrols.append(patrol_day)
+        print(self.patrols)
+        self.patrols.sort(key=self.sort_key)
+        print(self.patrols)
 
     def stop(self):
         pass

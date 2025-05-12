@@ -23,7 +23,7 @@ from PyQt5.QtGui import QPalette, QColor
 
 # from test_patrol_tree_view import pannel
 
-from PyQt5.QtCore import Qt, pyqtSlot,pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from rview import MyViz
 from patrol_menu import PatrolsMenu
 
@@ -31,6 +31,7 @@ from patrol_menu import PatrolsMenu
 from better_image_display import ImageViewer
 from joystick import Joypad
 from patrols_scheduler import PatrolsEscheduler
+from patrol_menu import PatrolsMenu
 
 
 class HomePanel(QWidget):
@@ -127,6 +128,8 @@ class PatrolsPanel(QGroupBox):
         self.patrols_panel = QWidget()
         self.patrols_panel.layout = QVBoxLayout()
         self.layout = QVBoxLayout()
+        self.patrols_scheduler = PatrolsEscheduler()
+        self.parent = parent
         # self.panel = QWidget()
         # self.panel.setLayout(self.layout)
         # self.stack.addWidget(self.panel)
@@ -137,11 +140,16 @@ class PatrolsPanel(QGroupBox):
         # self.stack = QStackedLayout()
 
         # self.layout.addWidget(self.name)
-        create_btn, delete_btn = QPushButton("delete"), QPushButton("crear")
+        self.create_btn, self.delete_btn, self.start_patrols_btn, self.stop_patrols_btn = (
+            QPushButton("crear"),
+            QPushButton("delete"),
+            QPushButton("start"),
+            QPushButton("stop"),
+        )
         self.control_panel_buttons = QHBoxLayout()
         [
             self.control_panel_buttons.addWidget(button)
-            for button in [create_btn, delete_btn]
+            for button in [self.create_btn, self.delete_btn, self.start_patrols_btn, self.stop_patrols_btn]
         ]
 
         self.navigation_buttons = QHBoxLayout()
@@ -149,11 +157,14 @@ class PatrolsPanel(QGroupBox):
 
         [self.navigation_buttons.addWidget(button) for button in (self.btn1, btn2)]
 
+        self.create_btn.clicked.connect(self.add_patrol)
+        self.start_patrols_btn.clicked.connect(self.start_patrols)
 
-        self.patrols_scheduler = PatrolsEscheduler()
-        # create_btn.clicked.connect(self.patrols_scheduler.update)
-
-        patrols = PatrolsContainer(self.patrols_scheduler.patrols_data, parent, patrols_scheduler=self.patrols_scheduler)
+        patrols = PatrolsContainer(
+            self.patrols_scheduler.patrols_data,
+            parent,
+            patrols_scheduler=self.patrols_scheduler,
+        )
         self.patrols_scheduler.update_patrols_view.connect(patrols.update_patrols)
 
         self.layout.addLayout(self.control_panel_buttons)
@@ -162,9 +173,23 @@ class PatrolsPanel(QGroupBox):
 
         self.setLayout(self.layout)
 
-
+    def add_patrol(self, check):
+        self.popup = PatrolsMenu(self.parent, selected_days=[], patrolid=3)
+        self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
+        # popup_x = self.parent.x() + (self.parent.width() - self.popup.width()) // 2
+        # popup_y = self.parent.y() + (self.parent.height() - self.popup.height()) // 2
+        # print("popup", popup_x, popup_y)
+        # self.popup.move(popup_x, popup_y)
+        self.popup.show_popup()
+        pass
+    def start_patrols(self):
+        self.patrols_scheduler.start_patrols()
+        self.start_patrols_btn.setEnabled(False)
+        self.create_btn.setEnabled(False)
+        self.delete_btn.setEnabled(False)
+        
 class PatrolsContainer(QWidget):
-    def __init__(self, patrols_data: dict, parent, patrols_scheduler ) -> None:
+    def __init__(self, patrols_data: dict, parent, patrols_scheduler) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
         self.layout.setAlignment(Qt.AlignTop)
@@ -179,22 +204,34 @@ class PatrolsContainer(QWidget):
 
     def update_patrols(self, patrols_data):
         [w.setParent(None) for w in self.patrols]
-        [self.layout.removeWidget(w) for w in self.patrols ]
+        [self.layout.removeWidget(w) for w in self.patrols]
         self.patrols = []
         for id, patrol in patrols_data.items():
             print(patrol.keys())
-            days = list(patrol['days'].keys())
+            days = list(patrol["days"].keys())
             time = patrol["time"]
-            self.patrols.append(Patrol(parent=self.parent, id=id, days=days, time=time, patrols_scheduler=self.patrols_scheduler))
+            self.patrols.append(
+                Patrol(
+                    parent=self.parent,
+                    id=id,
+                    days=days,
+                    time=time,
+                    patrols_scheduler=self.patrols_scheduler,
+                )
+            )
 
-        print('hola soy patrolcontainer', len(self.patrols), patrols_data)
+        print("hola soy patrolcontainer", len(self.patrols), patrols_data)
         [self.layout.addWidget(patrol) for patrol in self.patrols]
         self.update()
-    def add_patrol(self,patrol):
+
+    def add_patrol(self, patrol):
         pass
 
+
 class Patrol(QWidget):
-    def __init__(self, parent, id: str = "999", days=[], time=2233, patrols_scheduler=None):
+    def __init__(
+        self, parent, id: str = "999", days=[], time=2233, patrols_scheduler=None
+    ):
         super().__init__()
         self.days = days
         self.id = id
@@ -212,7 +249,7 @@ class Patrol(QWidget):
 
         self.layout = QGridLayout()
         self.patrol_name = QLabel()
-        self.patrol_name.setText(' '.join(days))
+        self.patrol_name.setText(" ".join(days))
 
         (delete_botton, exec_botton, checkbox, repeate_patrol_botton) = (
             QPushButton("exec"),
@@ -236,11 +273,7 @@ class Patrol(QWidget):
     def task(self):
         self.popup = PatrolsMenu(self.parent, selected_days=self.days, patrolid=self.id)
         self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
-        popup_x = self.parent.x() + (self.parent.width() - self.popup.width()) // 2
-        popup_y = self.parent.y() + (self.parent.height() - self.popup.height()) // 2
-        print("popup", popup_x, popup_y)
-        self.popup.move(popup_x, popup_y)
-        self.popup.show()
+        self.popup.show_popup()
 
 
 if __name__ == "__main__":
