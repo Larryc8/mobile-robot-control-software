@@ -45,8 +45,6 @@ class PatrolsEscheduler(QObject):
 
     def __init__(self, id=5, date=None):
         super().__init__()
-        # rospy.init_node("action_client_node", anonymous=True)
-        # self.client = actionlib.SimpleActionClient("patrols_server", PatrolAction)
         self.id = id
         self.date = date
         self.patrols = []
@@ -114,6 +112,11 @@ class PatrolsEscheduler(QObject):
         print("Hola Soy el scheduler patrol", x)
         self.update_patrols_view.emit(self.patrols_data)
 
+    def delete_patrols(self, xs):
+        for x in xs:
+            self.patrols_data.pop(x)
+        self.update_patrols_view.emit(self.patrols_data)
+
     def sort_key(self, patrol):
         days_shortname = [ "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol['day'])
@@ -134,45 +137,6 @@ class PatrolsEscheduler(QObject):
         print(self.patrols)
         self.start_patrols_scheduling()
 
-    # def getTimeDifference(self, date, current_date):
-    #     return 0
-
-    # def send_goal(self, patrol, done_callback=None):
-    #     goal = PatrolGoal()
-    #     goal.date = self.date
-    #     goal.id = self.id
-
-    #     if done_callback:
-    #         done_cb = done_callback
-    #     else:
-    #         done_cb = self.done_callback
-
-    #     self.client.send_goal(
-    #         goal,
-    #         done_cb=done_cb,
-    #         active_cb=self.active_callback,
-    #         feedback_cb=self.feedback_callback,
-    #     )
-
-    #     rospy.loginfo("Goal sent!")
-
-    # def active_callback(self):
-    #     rospy.loginfo("Goal is now active")
-
-    # def feedback_callback(self, feedback):
-    #     rospy.loginfo("Received feedback: {} complete".format(feedback.points_checked))
-
-    # def done_callback(self, state, result):
-    #     if state == GoalStatus.SUCCEEDED:
-    #         rospy.loginfo("Goal succeeded! Result: {}")
-    #         rospy.loginfo(self.client.get_goal_status_text())
-    #     else:
-    #         rospy.loginfo(self.client.get_goal_status_text())
-    #         rospy.logerr("somthing just happends!!")
-
-    # def cancel_goal(self):
-    #     self.client.cancel_goal()
-    #     rospy.loginfo("Goal canceled")
 
 
 if __name__ == "__main__":

@@ -18,13 +18,13 @@ from PyQt5.QtWidgets import (
     QMenu,
     QTimeEdit,
 )
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime
 
 
 class PatrolsMenu(QWidget):
     update_date = pyqtSignal(dict)
 
-    def __init__(self, parent, selected_days, patrolid) -> None:
+    def __init__(self, parent, selected_days, patrolid, time='0000') -> None:
         super().__init__(parent)
         # self.update_date = pyqtSignal(dict)
         # print(parent)
@@ -33,7 +33,8 @@ class PatrolsMenu(QWidget):
         self.parent = parent
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.days_labels = DaySelect(selected_days=selected_days)
-        self.time = TimeSelect(menu=None)
+        self.time = TimeSelect()
+        self.time.setTime(time) 
         close_btn = QPushButton("Close")
         save_btn = QPushButton("Save")
         layout = QVBoxLayout(self.time)
@@ -42,6 +43,7 @@ class PatrolsMenu(QWidget):
         layout.addWidget(close_btn)
         layout.addWidget(save_btn)
         save_btn.clicked.connect(self.save)
+        close_btn.clicked.connect(self.close)
         self.setLayout(layout)
 
     def show_popup(self):
@@ -50,6 +52,9 @@ class PatrolsMenu(QWidget):
         # print("popup", popup_x, popup_y)
         self.move(popup_x, popup_y)
         self.show()
+
+    def close_popup(self):
+        self.hide()
 
     def save(self):
         time = self.time.getTime()
@@ -60,15 +65,13 @@ class PatrolsMenu(QWidget):
             if name
         }
         a = {'days': x, 'time': time}
-        # x['time'] = time
         print("A MA, FUNCIONA patrool menu", x)
-        # self.update_date.emit('ww')
         self.update_date.emit({self.patrolid: a})
         self.hide()
 
 
 class TimeSelect(QGroupBox):
-    def __init__(self, menu) -> None:
+    def __init__(self) -> None:
         super().__init__("Selct the time for patrol")
         self.hours = QTimeEdit()
         self.minutes = QTimeEdit()
@@ -82,13 +85,18 @@ class TimeSelect(QGroupBox):
         self.layout.addWidget(self.minutes)
         self.setLayout(self.layout)
 
-    def setTime(self):
-        pass
+    def setTime(self, time: str):
+        x = [digit for digit in time]
+        hours_value = ''.join(x[:2])
+        minutes_value = ''.join(x[2:])
+        self.hours.setTime(QTime.fromString(hours_value, 'HH'))
+        self.minutes.setTime(QTime.fromString(minutes_value, 'mm'))
 
     def getTime(self):
-        alarm_time = self.hours.time()
-        alarm_str = alarm_time.toString("HH")
-        return alarm_str
+        hours = self.hours.time()
+        minutes = self.minutes.time()
+        time_str = f'{hours.toString("HH")}{minutes.toString("mm")}'
+        return time_str
 
 
 class DaySelect(QGroupBox):

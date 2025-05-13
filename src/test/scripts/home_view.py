@@ -18,6 +18,8 @@ from PyQt5.QtWidgets import (
     QStackedLayout,
     QMenu,
     QProgressBar,
+    QMenu,
+    QAction,
 )
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from datetime import datetime
@@ -131,7 +133,12 @@ class PatrolsPanel(QGroupBox):
         self.parent = parent
 
         # self.layout.addWidget(self.name)
-        self.create_btn, self.delete_btn, self.start_patrols_btn, self.stop_patrols_btn = (
+        (
+            self.create_btn,
+            self.delete_btn,
+            self.start_patrols_btn,
+            self.stop_patrols_btn,
+        ) = (
             QPushButton("crear"),
             QPushButton("delete"),
             QPushButton("start"),
@@ -140,7 +147,12 @@ class PatrolsPanel(QGroupBox):
         self.control_panel_buttons = QHBoxLayout()
         [
             self.control_panel_buttons.addWidget(button)
-            for button in [self.create_btn, self.delete_btn, self.start_patrols_btn, self.stop_patrols_btn]
+            for button in [
+                self.create_btn,
+                self.delete_btn,
+                self.start_patrols_btn,
+                self.stop_patrols_btn,
+            ]
         ]
 
         self.navigation_buttons = QHBoxLayout()
@@ -150,22 +162,28 @@ class PatrolsPanel(QGroupBox):
 
         self.create_btn.clicked.connect(self.add_patrol)
         self.start_patrols_btn.clicked.connect(self.start_patrols)
+        self.delete_btn.clicked.connect(self.delete_patrols)
 
-        patrols = PatrolsContainer(
+        self.patrols_container = PatrolsContainer(
             self.patrols_scheduler.patrols_data,
             parent,
             patrols_scheduler=self.patrols_scheduler,
         )
-        self.patrols_scheduler.update_patrols_view.connect(patrols.update_patrols)
+        self.patrols_scheduler.update_patrols_view.connect(
+            self.patrols_container.update_patrols
+        )
+        # self.patrols_scheduler.
 
         self.layout.addLayout(self.control_panel_buttons)
         self.layout.addLayout(self.navigation_buttons)
-        self.layout.addWidget(patrols)
+        self.layout.addWidget(self.patrols_container)
 
         self.setLayout(self.layout)
 
     def add_patrol(self, check):
-        self.popup = PatrolsMenu(self.parent, selected_days=[], patrolid=datetime.now().timestamp())
+        self.popup = PatrolsMenu(
+            self.parent, selected_days=[], patrolid=datetime.now().timestamp()
+        )
         self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
         self.popup.show_popup()
         pass
@@ -175,7 +193,12 @@ class PatrolsPanel(QGroupBox):
         self.start_patrols_btn.setEnabled(False)
         self.create_btn.setEnabled(False)
         self.delete_btn.setEnabled(False)
-        
+
+    def delete_patrols(self):
+        toDelete = self.patrols_container.get_selected_patrolsid()
+        self.patrols_scheduler.delete_patrols(toDelete)
+
+
 class PatrolsContainer(QWidget):
     def __init__(self, patrols_data: dict, parent, patrols_scheduler) -> None:
         super().__init__()
@@ -187,6 +210,7 @@ class PatrolsContainer(QWidget):
         self.patrols = []
         self.patrols_scheduler = patrols_scheduler
         self.update_patrols(patrols_data)
+        self.pageindex = 0
 
         self.setLayout(self.layout)
 
@@ -212,6 +236,9 @@ class PatrolsContainer(QWidget):
         [self.layout.addWidget(patrol) for patrol in self.patrols]
         self.update()
 
+    def get_selected_patrolsid(self):
+        return [patrol.selected for patrol in self.patrols if patrol.selected]
+
     def add_patrol(self, patrol):
         pass
 
@@ -224,7 +251,7 @@ class Patrol(QWidget):
         self.days = days
         self.id = id
         self.patrols_scheduler = patrols_scheduler
-        self.time = ""
+        self.time = time
         self.setStyleSheet("border-color: gray")
         self.parent = parent
         self.progress = QProgressBar()
@@ -234,34 +261,57 @@ class Patrol(QWidget):
         self.progress.setValue(10)
         self.progress.setMaximumHeight(6)
         self.progress.setEnabled(False)
+        self.checked = False
 
         self.layout = QGridLayout()
         self.patrol_name = QLabel()
         self.patrol_name.setText(" ".join(days))
 
-        (delete_botton, exec_botton, checkbox, repeate_patrol_botton) = (
+        (delete_botton, self.exec_botton, self.checkbox, repeate_patrol_botton) = (
             QPushButton("exec"),
-            QPushButton("..."),
+            QPushButton(),
             QCheckBox(),
             QPushButton("loop"),
         )
-        exec_botton.clicked.connect(self.task)
+        self.exec_botton.clicked.connect(self.task)
+        self.menu = QMenu()
+        edit = self.menu.addAction("editar")
+        edit.triggered.connect(self.edit_patrol)
+
+        force_exec = self.menu.addAction("ejecutar")
+        force_exec.triggered.connect(self.force_execution)
+        self.exec_botton.setMenu(self.menu)
+
+        self.checkbox.stateChanged.connect(self.select)
 
         self.layout.addWidget(self.patrol_name, 1, 3)
-        # self.layout.addWidget(self.patrol_name)
-        # self.layout.addWidget(delete_botton, 1, 5)
-        self.layout.addWidget(exec_botton, 1, 4)
+        self.layout.addWidget(self.exec_botton, 1, 4)
         self.layout.addWidget(self.progress, 2, 0, 1, 4)
         self.layout.addWidget(self.points_checked_label, 2, 4, 1, 1)
-        # self.layout.addWidget(repeate_patrol_botton, 1, 1)
-        self.layout.addWidget(checkbox, 1, 0, alignment=Qt.AlignLeft)
-        # self.layout.addWidget(time_select, 1, 2, alignment=Qt.AlignRight)
+        self.layout.addWidget(self.checkbox, 1, 0, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
 
     def task(self):
-        self.popup = PatrolsMenu(self.parent, selected_days=self.days, patrolid=self.id)
+        self.popup = PatrolsMenu(self.parent, selected_days=self.days, patrolid=self.id, time=self.time)
         self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
         self.popup.show_popup()
+
+    def edit_patrol(self):
+        # print("Option 1 selected")
+        self.task()
+
+    def force_execution(self):
+        print("Option 2 selected")
+
+    def select(self):
+        self.checked = self.checkbox.isChecked()
+
+    @property
+    def selected(self):
+        if self.checked:
+            return self.id
+        else:
+            return None
 
 
 if __name__ == "__main__":
