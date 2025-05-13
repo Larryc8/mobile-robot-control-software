@@ -117,6 +117,9 @@ class PatrolsEscheduler(QObject):
             self.patrols_data.pop(x)
         self.update_patrols_view.emit(self.patrols_data)
 
+    def get_current_patrols(self):
+        self.update_patrols_view.emit(self.patrols_data)
+
     def sort_key(self, patrol):
         days_shortname = [ "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol['day'])
