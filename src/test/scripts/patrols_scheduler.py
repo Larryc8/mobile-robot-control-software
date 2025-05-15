@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import rospy 
+import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
 # Import your action message, for example: from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
@@ -8,23 +8,45 @@ from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from datetime import datetime
 import time
 
+from points_scheduler import PointsScheduler
+
 
 class ScheduleChecker(QThread):
     progress_updated = pyqtSignal(int)
     task_completed = pyqtSignal(str)
 
-    def __init__(self, task_id=1, patrols=None):
+    def __init__(self, task_id=1, patrols=[], currentpatrol={}, points_scheduler=None):
         super().__init__()
         self.task_id = task_id
+        self.patrols = patrols
+        self.index = currentpatrol
+        self.points_scheduler = points_scheduler
+        self.isDispatching = False
+        self.isBusy = False
+        self.wainting_queue = []
 
     def run(self):
         try:
-            for i in range(1, 10):
+            while self.index["currentpatrol_index"] < len(self.patrols):
                 # Simulate work
-                time.sleep(1)
+                scheduled_patrol = self.patrols[self.index["currentpatrol_index"]]
+                # print(f'current index {self.index["currentpatrol_index"]} len: {len(self.patrols)}')
+
+                # time.sleep(6)
+                if not self.isDispatching:
+                    print("worker thread points schedule: ", scheduled_patrol)
+                    self.points_scheduler.setDoneTask(
+                        done_task=self.free_points_dispatcher
+                    )
+                    self.points_scheduler.dispatch()
+                    self.isDispatching = True
+
+                # self.index["currentpatrol_index"] = (
+                #     self.index["currentpatrol_index"] + 1
+                # )
 
                 # Update progress
-                self.progress_updated.emit(i)
+                # self.progress_updated.emit(999)
 
                 # Check if thread should stop
                 if self.isInterruptionRequested():
@@ -36,12 +58,20 @@ class ScheduleChecker(QThread):
         except Exception as e:
             self.task_completed.emit(f"Task {self.task_id} failed: {str(e)}")
 
+    def free_points_dispatcher(self):
+        self.isDispatching = False
+        self.points_scheduler.restart()
+        self.index["currentpatrol_index"] = self.index["currentpatrol_index"] + 1
+        pass
+
 
 class PatrolsEscheduler(QObject):
     compelted_patrols = []
     looped_patrols = []
     update_patrols_view = pyqtSignal(dict)
-    add_patrol_view = pyqtSignal(dict)
+    patrol_finished = pyqtSignal(bool)
+    patrol_progress = pyqtSignal(int)
+    # add_patrol_view = pyqtSignal(dict)
 
     def __init__(self, id=5, date=None):
         super().__init__()
@@ -49,6 +79,9 @@ class PatrolsEscheduler(QObject):
         self.date = date
         self.patrols = []
         self.scheduler = None
+        self.indexKeeper = {"currentpatrol_index": 0}  # to pass as a pointer
+        self._points_to_visit = []
+        self.points_scheduler = PointsScheduler()
 
         # self.patrols_data = {
         #     "0": {
@@ -76,29 +109,34 @@ class PatrolsEscheduler(QObject):
         self.isScheduling = True
         self.isPatrolArrayModified = False
 
-        # Wait for the action server to start
-        rospy.loginfo("Waiting for action server...")
-        # self.client.wait_for_server()
-        rospy.loginfo("Action server found!")
+    # def patrols_schedule_generator(self):
+    # for patrol in self.
 
-    def start_patrols_scheduling(self):
+    def start_patrols_scheduling(self, patrol=None):
         if self.scheduler and self.scheduler.isRunning():
             return
 
-        self.scheduler = ScheduleChecker()
-        # self.worker_thread = WorkerThread(task_id=1)
+        self.scheduler = ScheduleChecker(
+            currentpatrol=self.indexKeeper,
+            patrols=self.patrols,
+            points_scheduler=self.points_scheduler,
+        )
         self.scheduler.progress_updated.connect(self.update_progress)
         self.scheduler.task_completed.connect(self.task_finished)
         self.scheduler.start()
 
     def update_progress(self, k):
-        print(f'updated {k}')
+        a = self.indexKeeper["currentpatrol_index"]
+        self.patrol_progress.emit(a)
+        print(f"updated {a}")
 
     def cancel_task(self):
+        self.indexKeeper["currentpatrol_index"] = 0
         if self.scheduler and self.scheduler.isRunning():
             self.scheduler.requestInterruption()
 
     def task_finished(self, message):
+        self.indexKeeper["currentpatrol_index"] = 0
         print(message)
         # self.start_button.setEnabled(True)
         # self.cancel_button.setEnabled(False)
@@ -106,6 +144,7 @@ class PatrolsEscheduler(QObject):
             self.scheduler.quit()
             self.scheduler.wait()
             self.scheduler = None
+        self.patrol_finished.emit(True)
 
     def update_patrol(self, x):
         self.patrols_data.update(x)
@@ -121,12 +160,14 @@ class PatrolsEscheduler(QObject):
         self.update_patrols_view.emit(self.patrols_data)
 
     def sort_key(self, patrol):
-        days_shortname = [ "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
-        day = days_shortname.index(patrol['day'])
+        days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+        day = days_shortname.index(patrol["day"])
         now = datetime.now()
         today = now.weekday()
         days_until = (day - today) % 7
-        print(f'{days_until}{patrol["time"]}  day: {day} today: {today} day: {patrol["day"]}')
+        print(
+            f'{days_until}{patrol["time"]}  day: {day} today: {today} day: {patrol["day"]}'
+        )
         return int(f'{days_until}{patrol["time"]}')
 
     def start_patrols(self):
@@ -140,6 +181,8 @@ class PatrolsEscheduler(QObject):
         print(self.patrols)
         self.start_patrols_scheduling()
 
+    def pointsToVisit(self, points):
+        self._points_to_visit = points
 
 
 if __name__ == "__main__":

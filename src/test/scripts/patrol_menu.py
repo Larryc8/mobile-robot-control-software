@@ -73,10 +73,11 @@ class PatrolsMenu(QWidget):
 class TimeSelect(QGroupBox):
     def __init__(self) -> None:
         super().__init__("Selct the time for patrol")
+        fontsize = 70
         self.hours = QTimeEdit()
         self.minutes = QTimeEdit()
-        self.hours.setStyleSheet("font-size: 30px;")
-        self.minutes.setStyleSheet("font-size: 30px;")
+        self.hours.setStyleSheet(f"font-size: {fontsize}px;")
+        self.minutes.setStyleSheet(f"font-size: {fontsize}px;")
         self.hours.setDisplayFormat("HH")
         self.minutes.setDisplayFormat("mm")
 
@@ -84,6 +85,32 @@ class TimeSelect(QGroupBox):
         self.layout.addWidget(self.hours)
         self.layout.addWidget(self.minutes)
         self.setLayout(self.layout)
+        style =  ("""
+            QTimeEdit {
+                border: 2px solid #3498db;
+                border-radius: 5px;
+                padding: 5px;
+                background: white;
+                selection-background-color: #3498db;
+                selection-color: white;
+            }
+            
+            QTimeEdit:hover {
+                border-color: #2980b9;
+            }
+            
+            QTimeEdit::up-button, QTimeEdit::down-button {
+                background: #3498db;
+                border: none;
+                width: 40px;
+            }
+            
+            QTimeEdit::up-button:hover, QTimeEdit::down-button:hover {
+                background: blue;
+            } 
+        """)
+        self.hours.setStyleSheet(style)
+        self.minutes.setStyleSheet(style)
 
     def setTime(self, time: str):
         x = [digit for digit in time]

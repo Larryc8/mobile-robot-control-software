@@ -73,7 +73,7 @@ class NodesManager:
         node_instances = {}
         for node in nodes:
             node_values = node.values()
-            package, exec, name = node_values
+            package, exec, name = node['package'], node['exec'], node['name']
             node_instances.update(
                 {name: Node(package=package, node_type=exec, name=name)}
             )

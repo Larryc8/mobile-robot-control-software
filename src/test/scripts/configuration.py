@@ -63,12 +63,12 @@ class ConfigPanel(QWidget):
                 )
             },
             {
-                "localizacion": Panel(
+                "Localizacion": Panel(
                     self.config_acml.get_params(), self.config_acml.get_ranges()
                 )
             },
             {
-                "planeacion": Panel(
+                "Planeacion": Panel(
                     self.config_dwa_planner.get_params(),
                     self.config_dwa_planner.get_ranges(),
                 )
@@ -81,14 +81,14 @@ class ConfigPanel(QWidget):
 
         self.save_config_button = QPushButton("save me")
         self.apply_config_button = QPushButton("apply me")
-        self.start_nodes_button = QPushButton("start nodes")
+        self.start_nodes_button = QPushButton("rese to default")
         self.buttons_layout.addWidget(self.save_config_button)
         self.buttons_layout.addWidget(self.apply_config_button)
         # self.layout.addWidget(self.set_config_button)
 
         self.save_config_button.clicked.connect(self.saveClickHandler)
         self.apply_config_button.clicked.connect(self.applyClickHandler)
-        self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
+        # self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
 
         self.layout.addWidget(self.tabs)
         self.layout.addWidget(self.start_nodes_button)

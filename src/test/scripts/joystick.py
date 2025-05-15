@@ -91,7 +91,8 @@ class Joypad(QGroupBox):
 
     def valueChanged(self, x, y):
         # This can be overridden or connected to by parent widgets
-        print(f"Joypad values - X: {x:.2f}, Y: {y:.2f}")
+        pass
+        # print(f"Joypad values - X: {x:.2f}, Y: {y:.2f}")
 
 
 class JoypadDemo(QWidget):

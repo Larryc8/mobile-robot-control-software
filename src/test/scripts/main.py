@@ -16,7 +16,7 @@ from config_model import NodesManager
 from navbar import TopBar
 from home_view import HomePanel  
 from configuration import ConfigPanel
-from map_view import MappingPanel
+# from map_view import MappingPanel
 from better_image_display import ImageViewer
 
 class App(QMainWindow):
@@ -68,7 +68,7 @@ class MyTableWidget(QWidget):
         self.button.clicked.connect(self.show_new_window)
         
         self.layout.addWidget(topbar)
-        self.layout.addWidget(self.button)
+        # self.layout.addWidget(self.button)
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)
 
