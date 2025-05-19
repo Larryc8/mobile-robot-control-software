@@ -1,6 +1,6 @@
 import sys
 import asyncio
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QGroupBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QGroupBox, QPushButton
 from PyQt5.QtCore import Qt, QPoint, QPointF
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QPainterPath
 
@@ -20,6 +20,7 @@ class Joypad(QGroupBox):
         self.center = QPointF(self.width()/2, self.height()/2 + 15)
         self.thumb_pos = self.center
         self.max_distance = self.joypad_radius - self.thumb_radius
+        self.currentOperationMode = 'manual'
         self.x_value = 0.0
         self.y_value = 0.0
         self.pressed = False
@@ -90,9 +91,12 @@ class Joypad(QGroupBox):
         self.robot_vel_controller.setRobotDynamicPose(self.x_value, self.y_value)
 
     def valueChanged(self, x, y):
-        # This can be overridden or connected to by parent widgets
         pass
-        # print(f"Joypad values - X: {x:.2f}, Y: {y:.2f}")
+
+    def update_operation_mode(self, mode):
+        if mode == 'auto':
+            print('auto joystick')
+        pass
 
 
 class JoypadDemo(QWidget):

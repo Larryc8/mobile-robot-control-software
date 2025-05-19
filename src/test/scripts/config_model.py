@@ -3,6 +3,8 @@ from sys import executable
 from typing import List
 import rospy
 import yaml
+import subprocess
+import time
 
 from roslaunch.core import Node
 from roslaunch import rlutil
@@ -73,9 +75,12 @@ class NodesManager:
         node_instances = {}
         for node in nodes:
             node_values = node.values()
-            package, exec, name = node['package'], node['exec'], node['name']
+            package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
+            if not respawn:
+                respawn = False
+            
             node_instances.update(
-                {name: Node(package=package, node_type=exec, name=name)}
+                {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
             )
         return node_instances
 
@@ -84,8 +89,11 @@ class NodesManager:
         self._launcher.start()
         # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}
         for name, node in node_instances.items():
-            _subprocess = {name: self._launcher.launch(node)}
-            self.nodes_subprocess.update(_subprocess)
+            # time.sleep(7)
+            if not self.nodes_subprocess.get(name):
+                _subprocess = {name: self._launcher.launch(node)}
+                print(_subprocess)
+                self.nodes_subprocess.update(_subprocess)
         return {}
 
     def stopNodes(self, node_names: List[str]) -> None:
@@ -93,14 +101,26 @@ class NodesManager:
         # [subprocess.stop() for name, subprocess in self.nodes_subprocess.items()]
         # subprocess = self.get(node_name)
         # subprocess.stop()
+        nodeToDelete = None
+        nodeToDeleteArray = []
+
         for node_name in node_names:
             for name, _subprocess in self.nodes_subprocess.items():
-                if name == node_names:
+                if name == node_name:
                     _subprocess.stop()
-                    # self.nodes_subprocess.pop(name)
+                    nodeToDeleteArray.append(name) 
+                    nodeToDelete = name
+
+        print('node manager node to stop', nodeToDelete)
+        # if nodeToDelete:
+        #     self.nodes_subprocess.pop(nodeToDelete)
+        for node in nodeToDeleteArray:
+            self.nodes_subprocess.pop(node)
+
+
 
     def bringUpStart(self):
-        rospy.init_node("harold_start_launch", anonymous=True)
+        # rospy.init_node("harold_start_launch", anonymous=True)
 
         uuid = rlutil.get_or_generate_uuid(None, False)
         configure_logging(uuid)
@@ -116,6 +136,16 @@ class NodesManager:
     def bringUpStop(self): 
         if  self.bringup is not None:
             self.bringup.shutdown()
+
+    def save_map(self):
+        subprocess.Popen(['rosrun', 'map_server', 'map_saver', '-f', 'mymap'])
+
+    def topicHasPublisher(self, topic):
+        for available_topic, type in rospy.get_published_topics():
+            if available_topic == topic:
+                return True
+        return False
+
 
 
 if __name__ == "__main__":

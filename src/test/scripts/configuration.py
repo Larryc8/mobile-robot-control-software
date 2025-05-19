@@ -24,6 +24,7 @@ from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 
 inputsHasChanged = False
 
+
 class ConfigPanel(QWidget):
     def __init__(self, nodes_manager) -> None:
         super().__init__()
@@ -38,13 +39,15 @@ class ConfigPanel(QWidget):
         )
         self.configs = {
             "Mapeo": self.config_mapping,
-            "localizacion": self.config_acml,
-            "planeacion": self.config_dwa_planner,
+            "Localizacion": self.config_acml,
+            "Planeacion": self.config_dwa_planner,
         }
 
-        StaticParamsConfigLoader("./navigation_move_base_static_params.yml", "/move_base/")
+        StaticParamsConfigLoader(
+            "./navigation_move_base_static_params.yml", "/move_base/"
+        )
 
-        self.nodes_manager = nodes_manager 
+        self.nodes_manager = nodes_manager
         self.nodes = [
             {
                 "package": "gmapping",
@@ -56,6 +59,25 @@ class ConfigPanel(QWidget):
         self.layout = QVBoxLayout()
         self.buttons_layout = QHBoxLayout()
         self.tabs = QTabWidget()
+
+        # self.tabs.setStyleSheet("""
+        #     QTabWidget::pane { /* The tab content area */
+        #         background: none;
+        #         border: 1px solid black;
+        #     }
+        #     QTabWidget::tab-bar {
+        #         alignment: left; /* Center the tabs */
+        #     }
+        #     QTabBar::tab {
+        #         padding: 5px 15px;
+        #         margin-right: 3px;
+        #     }
+        #     QTabBar::tab:selected {
+        #         background: gray;
+        #     }
+        #     QTabBar::tab:!selected:hover {
+        #         background: lightgray;
+        #     }""")
         self.panels = [
             {
                 "Mapeo": Panel(
@@ -76,7 +98,7 @@ class ConfigPanel(QWidget):
         ]
 
         for panel in self.panels:
-            [(name, tab)] = panel.items() 
+            [(name, tab)] = panel.items()
             self.tabs.addTab(tab, name)
 
         self.save_config_button = QPushButton("save me")

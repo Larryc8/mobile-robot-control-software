@@ -37,9 +37,13 @@ class PatrolsMenu(QWidget):
         self.time.setTime(time) 
         close_btn = QPushButton("Close")
         save_btn = QPushButton("Save")
+        self.empty_days_alert = QLabel('Selecciona almenos un dia')
+        self.empty_days_alert.hide()
         layout = QVBoxLayout(self.time)
         layout.addWidget(self.time)
         layout.addWidget(self.days_labels)
+        layout.addWidget(self.empty_days_alert)
+    
         layout.addWidget(close_btn)
         layout.addWidget(save_btn)
         save_btn.clicked.connect(self.save)
@@ -59,11 +63,16 @@ class PatrolsMenu(QWidget):
     def save(self):
         time = self.time.getTime()
         days = self.days_labels.get_selected_days()
+        # print('patrol menu', days)
         x = {
             f"{name}": {"day": f"{name}", "time": time, "finished": False}
             for name in days
             if name
         }
+        if len(x) == 0:
+            self.empty_days_alert.show()
+            return 
+
         a = {'days': x, 'time': time}
         print("A MA, FUNCIONA patrool menu", x)
         self.update_date.emit({self.patrolid: a})

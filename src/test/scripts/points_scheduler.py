@@ -23,19 +23,22 @@ class PointsScheduler(QObject):
     def __init__(self, points=[], done_task=None, feedback_task=None) -> None:
         super().__init__()
         # rospy.init_node("action_client_move_base")
-        self._goals = [
-            {"x_meters": 1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
-            {"x_meters": 1.7, "y_meters": 1.1, "yaw_degrees": 0, "checked": False},
-            {"x_meters": -1.7, "y_meters": 1.1, "yaw_degrees": 0, "checked": False},
-            {"x_meters": -1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
-        ]
-        self.goals = self._goals.copy()
+        # self._goals = [
+        #     {"x_meters": 1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
+        #     {"x_meters": 1.7, "y_meters": 1.1, "yaw_degrees": 0, "checked": False},
+        #     {"x_meters": -1.7, "y_meters": 1.1, "yaw_degrees": 0, "checked": False},
+        #     {"x_meters": -1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
+        # ]
+        self._goals = {}
+        self.goals = {}
+        # self.goals = self._goals.copy()
         self.done_task = done_task
         self.feedback_task = feedback_task
+        self.cancelled = False
         # actionlib.GoalStatus.SUCCEEDED
 
-    def mapPointsToGoals(self):
-        pass
+    def setGoals(self):
+        self.goals = self._goals.copy()
 
     def configGoal(self, x, y, yaw):
         quaternion = Rotation.from_euler("z", yaw, True).as_quat()
@@ -59,13 +62,16 @@ class PointsScheduler(QObject):
     def cancel_goal(self):
         if self.client.get_state() == GoalStatus.ACTIVE:
             self.client.cancel_goal()
+            self.cancelled = True
             # self.done_task()
             # self.restart()
 
     def dispatch(self):
+        print('points points_scheduler points', self.goals)
         if len(self.goals) > 0:
-            pose = self.goals.pop()
-            goal = self.configGoal(pose["x_meters"], pose["y_meters"], pose["yaw_degrees"])
+            id, pose = self.goals.popitem()
+            x_meters, y_meters, yaw_degrees, check = pose.values()
+            goal = self.configGoal(x_meters, y_meters, yaw_degrees)
             self.client = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
             self.client.wait_for_server()
             self.client.send_goal(goal, self.done_cb, self.active_cb, self.feedback_cb)
@@ -83,7 +89,8 @@ class PointsScheduler(QObject):
                 self.done_task()
             print("TODAS LOS PUNTOS HAN SIDO RECORRIDOS")
             return
-        self.dispatch()
+        if not self.cancelled:
+            self.dispatch()
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
@@ -96,7 +103,9 @@ class PointsScheduler(QObject):
             # self.cancel_goal()
             pass
         # rospy.loginfo(f"Got Feedback: {1}")
-    def update_points(self):
+    def update_points(self, points):
+        self._goals = points
+        self.setGoals()
         print('from points_scheduler POINTS UPDATE')
 
 

@@ -1,7 +1,143 @@
-# Global Planner (commonly used defaults)
-base_global_planner: navfn/NavfnROS
+base_local_planner: dwa_local_planner/DWAPlannerROS
+global_costmap/footprint:  [[-0.105, -0.105], [-0.105, 0.105], [0.041, 0.105], [0.041, -0.105]] 
+global_costmap/global_frame: map
+global_costmap/inflation_radius: 1.0
+global_costmap/map_type: costmap
+global_costmap/observation_sources: scan
+global_costmap/obstacle_range: 3.0
+global_costmap/publish_frequency: 10.0
+global_costmap/raytrace_range: 3.5
+global_costmap/robot_base_frame: base_footprint
+global_costmap/scan/clearing: True
+global_costmap/scan/data_type: LaserScan
+global_costmap/scan/marking: True
+global_costmap/scan/sensor_frame: base_scan
+global_costmap/scan/topic: scan
+global_costmap/static_map: True
+global_costmap/transform_tolerance: 11
+global_costmap/update_frequency: 10.0
+global_costmap/scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+# global_costmap/observation_sources: scan
 
-# Local Planner Configuration
-base_local_planner: DWAPlannerROS
-aggressive_reset/reset_distance: 0.1  # Reset costmaps after moving 0.1m from obstacles
-clearing_rotation_allowed: true  # Allow rotations to clear space
+local_costmap/cost_scaling_factor: 3.0
+local_costmap/footprint:  [[-0.105, -0.105], [-0.105, 0.105], [0.041, 0.105], [0.041, -0.105]]
+local_costmap/global_frame: map
+local_costmap/height: 3
+local_costmap/inflation_radius: 1.0
+local_costmap/map_type: costmap
+local_costmap/observation_sources: scan
+local_costmap/obstacle_range: 3.0
+local_costmap/publish_frequency: 10.0
+local_costmap/raytrace_range: 3.5
+local_costmap/resolution: 0.05
+local_costmap/robot_base_frame: base_footprint
+local_costmap/rolling_window: True
+local_costmap/scan/clearing: True
+local_costmap/scan/data_type: LaserScan
+local_costmap/scan/marking: True
+local_costmap/scan/sensor_frame: base_scan
+local_costmap/scan/topic: scan
+local_costmap/static_map: False
+local_costmap/transform_tolerance: 11
+local_costmap/update_frequency: 10.0
+local_costmap/width: 3
+local_costmap/scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+
+oscillation_distance: 0.2
+oscillation_timeout: 10.0
+planner_frequency: 5.0
+planner_patience: 5.0
+shutdown_costmaps: False
+# /move_base/global_costmap/plugins:
+#   - name: static_layer
+#     type: costmap_2d::StaticLayer
+#   - name: obstacle_layer
+#     type: costmap_2d::ObstacleLayer
+#   - name: inflation_layer
+#     type: costmap_2d::InflationLayer
+# /move_base/local_costmap/plugins:
+# - name: obstacle_layer
+#   type: costmap_2d::ObstacleLayer
+# - name: inflation_layer
+#   type: costmap_2d::InflationLayer
+
+
+
+ # * /move_base/DWAPlannerROS/acc_lim_theta: 3.2
+ # * /move_base/DWAPlannerROS/acc_lim_x: 2.5
+ # * /move_base/DWAPlannerROS/acc_lim_y: 0.0
+ # * /move_base/DWAPlannerROS/controller_frequency: 10.0
+ # * /move_base/DWAPlannerROS/forward_point_distance: 0.325
+ # * /move_base/DWAPlannerROS/goal_distance_bias: 20.0
+ # * /move_base/DWAPlannerROS/latch_xy_goal_tolerance: False
+ # * /move_base/DWAPlannerROS/max_scaling_factor: 0.2
+ # * /move_base/DWAPlannerROS/max_vel_theta: 2.75
+ # * /move_base/DWAPlannerROS/max_vel_trans: 0.22
+ # * /move_base/DWAPlannerROS/max_vel_x: 0.22
+ # * /move_base/DWAPlannerROS/max_vel_y: 0.0
+ # * /move_base/DWAPlannerROS/min_vel_theta: 1.37
+ # * /move_base/DWAPlannerROS/min_vel_trans: 0.11
+ # * /move_base/DWAPlannerROS/min_vel_x: -0.22
+ # * /move_base/DWAPlannerROS/min_vel_y: 0.0
+ # * /move_base/DWAPlannerROS/occdist_scale: 0.02
+ # * /move_base/DWAPlannerROS/oscillation_reset_dist: 0.05
+ # * /move_base/DWAPlannerROS/path_distance_bias: 32.0
+ # * /move_base/DWAPlannerROS/publish_cost_grid_pc: True
+ # * /move_base/DWAPlannerROS/publish_traj_pc: True
+ # * /move_base/DWAPlannerROS/scaling_speed: 0.25
+ # * /move_base/DWAPlannerROS/sim_time: 1.5
+ # * /move_base/DWAPlannerROS/stop_time_buffer: 0.2
+ # * /move_base/DWAPlannerROS/vth_samples: 40
+ # * /move_base/DWAPlannerROS/vx_samples: 20
+ # * /move_base/DWAPlannerROS/vy_samples: 0
+ # * /move_base/DWAPlannerROS/xy_goal_tolerance: 0.05
+ # * /move_base/DWAPlannerROS/yaw_goal_tolerance: 0.17
+ # * /move_base/base_local_planner: dwa_local_planner...
+ # * /move_base/conservative_reset_dist: 3.0
+ # * /move_base/controller_frequency: 10.0
+ # * /move_base/controller_patience: 15.0
+ # * /move_base/global_costmap/cost_scaling_factor: 3.0
+ # * /move_base/global_costmap/footprint: [[-0.105, -0.105]...
+ # * /move_base/global_costmap/global_frame: map
+ # * /move_base/global_costmap/inflation_radius: 1.0
+ # * /move_base/global_costmap/map_type: costmap
+ # * /move_base/global_costmap/observation_sources: scan
+ # * /move_base/global_costmap/obstacle_range: 3.0
+ # * /move_base/global_costmap/publish_frequency: 10.0
+ # * /move_base/global_costmap/raytrace_range: 3.5
+ # * /move_base/global_costmap/robot_base_frame: base_footprint
+ # * /move_base/global_costmap/scan/clearing: True
+ # * /move_base/global_costmap/scan/data_type: LaserScan
+ # * /move_base/global_costmap/scan/marking: True
+ # * /move_base/global_costmap/scan/sensor_frame: base_scan
+ # * /move_base/global_costmap/scan/topic: scan
+ # * /move_base/global_costmap/static_map: True
+ # * /move_base/global_costmap/transform_tolerance: 11
+ # * /move_base/global_costmap/update_frequency: 10.0
+ # * /move_base/local_costmap/cost_scaling_factor: 3.0
+ # * /move_base/local_costmap/footprint: [[-0.105, -0.105]...
+ # * /move_base/local_costmap/global_frame: odom
+ # * /move_base/local_costmap/height: 3
+ # * /move_base/local_costmap/inflation_radius: 1.0
+ # * /move_base/local_costmap/map_type: costmap
+ # * /move_base/local_costmap/observation_sources: scan
+ # * /move_base/local_costmap/obstacle_range: 3.0
+ # * /move_base/local_costmap/publish_frequency: 10.0
+ # * /move_base/local_costmap/raytrace_range: 3.5
+ # * /move_base/local_costmap/resolution: 0.05
+ # * /move_base/local_costmap/robot_base_frame: base_footprint
+ # * /move_base/local_costmap/rolling_window: True
+ # * /move_base/local_costmap/scan/clearing: True
+ # * /move_base/local_costmap/scan/data_type: LaserScan
+ # * /move_base/local_costmap/scan/marking: True
+ # * /move_base/local_costmap/scan/sensor_frame: base_scan
+ # * /move_base/local_costmap/scan/topic: scan
+ # * /move_base/local_costmap/static_map: False
+ # * /move_base/local_costmap/transform_tolerance: 11
+ # * /move_base/local_costmap/update_frequency: 10.0
+ # * /move_base/local_costmap/width: 3
+ # * /move_base/oscillation_distance: 0.2
+ # * /move_base/oscillation_timeout: 10.0
+ # * /move_base/planner_frequency: 5.0
+ # * /move_base/planner_patience: 5.0
+ # * /move_base/shutdown_costmaps: False

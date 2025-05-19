@@ -21,6 +21,8 @@ from PyQt5.QtWidgets import (
     QMenu,
     QAction,
     QFileDialog,
+    QMessageBox,
+    QStyle,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -30,7 +32,10 @@ from PyQt5.QtCore import (
     QParallelAnimationGroup,
     QEasingCurve,
 )
+
+from pyqttoast import Toast, ToastPreset
 from datetime import datetime
+import rospy
 
 # from points_manager import PointsGenerator
 from better_image_display import ImageViewer
@@ -59,8 +64,12 @@ class HomePanel(QWidget):
             # PointsGenerator()
             # ImageViewer()
         )
-        joypad.setEnabled(True)
+
+        # joypad.setEnabled(True)
+        select_mode_panel.set_operation_mode.connect(joypad.update_operation_mode)
+        select_mode_panel.set_operation_mode.connect(visualization_panel.update_operation_mode)
         visualization_panel.update_points.connect(self.patrol_panel.update_points)
+        visualization_panel.enable.connect(select_mode_panel.enable)
 
         self.layout.addWidget(visualization_panel, 0, 0, -1, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
@@ -79,17 +88,21 @@ class HomePanel(QWidget):
 
 
 class VisualizationPanel(QWidget):
-    update_points = pyqtSignal(list)
+    update_points = pyqtSignal(dict)
     map_loaded = pyqtSignal(str)
+    map_change = pyqtSignal(bool)
+    enable = pyqtSignal(str, bool)
 
-    def __init__(self, nodes_manager=None, parent=None) -> None:
+    def __init__(self, nodes_manager=None,parent=None) -> None:
         super().__init__()
         self.layout = QGridLayout()
         self.buttons_layout = QHBoxLayout()
         self.parent = parent
+        self.nodes_manager = nodes_manager
         # ImageViewer()
         # self.parent.pointWindow = None
-        self.parent.pointsWindow = ImageViewer()
+        self.currentOperationMode = 'manual'
+        self.parent.pointsWindow = ImageViewer(nodes_manager=nodes_manager, parent=self.parent)
         self.nodes = [
             {
                 "package": "gmapping",
@@ -98,21 +111,23 @@ class VisualizationPanel(QWidget):
             }
         ]
 
-        self.save_button, self.load_button, self.points_window_btn = (
-            QPushButton("Soy un boton xd"),
+        self.save_button, self.load_button, self.points_window_btn, self.create_map_btn = (
+            QPushButton("Guardar mi mapita"),
             QPushButton("Cargar mapa"),
             QPushButton("puntos de interes"),
+            QPushButton("Crear mapa compa"),
         )
 
         [
             self.buttons_layout.addWidget(button)
-            for button in (self.load_button, self.save_button, self.points_window_btn)
+            for button in (self.load_button, self.save_button, self.points_window_btn, self.create_map_btn)
         ]
         self.save_button.clicked.connect(self.saveMapClickHandler)
         self.load_button.clicked.connect(self.handleLoadMap)
         self.map_loaded.connect(self.parent.pointsWindow.load_map)
+        self.create_map_btn.clicked.connect(self.handleCreateMap)
 
-        self.save_button.setEnabled(False)
+        # self.save_button.setEnabled(False)
         self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
 
@@ -122,65 +137,205 @@ class VisualizationPanel(QWidget):
         self.setLayout(self.layout)
 
     def handleLoadMap(self):
+        self.nodes_manager.stopNodes(["turtlebot3_slam_gmapping"])
+        if self.nodes_manager.topicHasPublisher('/map_metadata'):
+            button = QMessageBox.critical(
+                self,
+                "oh no!",
+                "Ya hay un mapa, CONSERVAR el que tienes?",
+                buttons=QMessageBox.No | QMessageBox.Yes,
+                defaultButton=QMessageBox.Yes,
+            )
+            try:
+                if button == QMessageBox.Yes:
+                    print("OK!")
+                    return
+            except AttributeError as error:
+                print(error)
+
         try:
-            
+            self.nodes_manager.bringUpStop()
             file_path, _ = QFileDialog.getOpenFileName(
-                self, "Open Image File", "",
-                "Image Files (*.yaml)"
+                self, "Open Image File", "", "Image Files (*.yaml)"
             )
             print(file_path)
             self.map_loaded.emit(file_path)
+            map = file_path
+            self.nodes_manager.stopNodes(['map_server'])
+            self.nodes_manager.startNodes(
+                self.nodes_manager.initNodes(
+                    [
+                        {
+                            "package": "map_server",
+                            "name": "map_server",
+                            "exec": "map_server",
+                            "arg": f"{map}",
+                        }
+                    ]
+                )
+            )
+            if file_path:
+                toast = Toast(self.parent)
+                toast.setDuration(3000)  # Hide after 5 seconds
+                toast.setTitle('Success!.')
+                toast.setText('Map upload completed')
+                toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+                Toast.setPositionRelativeToWidget(self.parent)  
+                toast.show()
+                return
 
-        except FileNotFoundError as e:
-            print(e) 
-        # file_path = "./map2.pgm"
+            toast = Toast(self.parent)
+            toast.setDuration(3000)  # Hide after 5 seconds
+            toast.setTitle('ERROR!.')
+            toast.setText('NO Map slected')
+            toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)  
+            toast.show()
 
+
+            if self.save_button.isEnabled():
+                self.save_button.setEnabled(False)
+
+        except FileNotFoundError as error:
+            print(error)
 
     def saveMapClickHandler(self):
-        pass
+        if self.nodes_manager.topicHasPublisher('/scan'):
+            self.save_button.setEnabled(False)
+            self.nodes_manager.save_map()
+            return
+
+        button = QMessageBox.critical(
+                self,
+                "oh no!",
+                "No hay datos del lidar?",
+            )
 
     def handleSavePoints(self, points):
         self.update_points.emit(points)
         pass
+
+    def handleCreateMap(self):
+        if not self.nodes_manager.topicHasPublisher('/scan'):
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("I have a question!")
+            dlg.setText("No LiDar Data, Ayyyy!!! \n Anda pasha BOBO")
+            button = dlg.exec()
+            return
+
+        if self.currentOperationMode == 'manual':
+            self.enable.emit('localization', False)
+            self.save_button.setEnabled(True)
+            self.nodes_manager.bringUpStop()
+            self.nodes_manager.stopNodes(['map_server', 'amcl'])
+            # self.create_map_btn.setEnabled(False)
+            self.nodes_manager.bringUpStart()
+            self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
+            return 
+
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("I have a question!")
+        dlg.setText("Solo se pueden crear mapas en el modo manual")
+        dlg.exec()
 
     def show_points_window(self, checked):
         # self.parent.w = None
         # if self.parent.pointsWindow is None:
         # self.parent.pointsWindow = ImageViewer()
         # print('None ;; multiwindows')
-        self.parent.pointsWindow.show()
+        self.parent.pointsWindow.show_win()
+        # self.parent.pointsWindow.save_points()
+
+    def update_operation_mode(self, mode):
+        self.currentOperationMode = mode
 
 
 class SelectModePanel(QGroupBox):
+    set_operation_mode = pyqtSignal(str)
     def __init__(self, nodes_manager=None, parent=None) -> None:
         super().__init__("select operation mode")
-        self.setMaximumHeight(80)
+        self.setMaximumHeight(100)
         self.layout = QGridLayout()
         self.nodes_manager = nodes_manager
+        self.nodes = [
+           {
+                "package": "amcl",
+                "exec": "amcl",
+                "name": "amcl",
+            },
+             {
+                "package": "move_base",
+                "exec": "move_base",
+                "name": "move_base",
+                "respawn": True
+            },
+        ]
         # self.name = QLabel()
         # self.name.setText("Modo de operacion")
-        self.nodes = [
-            {
-                "package": "gmapping",
-                "exec": "slam_gmapping",
-                "name": "turtlebot3_slam_gmapping",
-            }
-        ]
 
-        auto_mode_button, manual_mode_button = (
+        self.auto_mode_button, self.manual_mode_button, self.localize_button = (
             QPushButton("auto"),
             QPushButton("manual"),
+            QPushButton('localize robot')
         )
+        self.auto_mode_button.setEnabled(True)
+        self.manual_mode_button.setEnabled(False)
         # auto_mode_button.setEnabled(False)
-        auto_mode_button.clicked.connect(self.handleAutoMode)
+        self.auto_mode_button.clicked.connect(self.handleAutoMode)
+        self.manual_mode_button.clicked.connect(self.handleManualMode)
+        self.localize_button.clicked.connect(self.handleLocalization)
 
-        self.layout.addWidget(auto_mode_button, 1, 0)
-        self.layout.addWidget(manual_mode_button, 1, 1)
+        self.layout.addWidget(self.auto_mode_button, 1, 0)
+        self.layout.addWidget(self.manual_mode_button, 1, 1)
+        self.layout.addWidget(self.localize_button, 2, 1)
 
         self.setLayout(self.layout)
+        # self.localize_button.hide()
 
     def handleAutoMode(self):
-        pass
+        self.set_operation_mode.emit('auto')
+        self.nodes_manager.bringUpStop()
+        self.nodes_manager.bringUpStart()
+
+        self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
+        self.auto_mode_button.setEnabled(False)
+        self.manual_mode_button.setEnabled(True)
+        self.localize_button.setEnabled(False)
+
+    def handleManualMode(self):
+        self.set_operation_mode.emit('manual')
+        self.auto_mode_button.setEnabled(True)
+        self.manual_mode_button.setEnabled(False)
+        self.localize_button.setEnabled(True)
+
+    def handleLocalization(self):
+        if not self.nodes_manager.topicHasPublisher('/scan'):
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("I have a question!")
+            dlg.setText("No LiDar Data, Ayyyy!!! \n Anda pasha BOBO")
+            button = dlg.exec()
+            return
+
+        if not self.nodes_manager.topicHasPublisher('/map_metadata'):
+            dlg = QMessageBox(self)
+            dlg.setWindowTitle("I have a question!")
+            dlg.setText("Agrega el mapa primer, Ayyyy!!! \n Anda pasha BOBO")
+            button = dlg.exec()
+            return
+        self.nodes_manager.bringUpStop()
+        self.nodes_manager.bringUpStart()
+         
+        self.nodes_manager.stopNodes(['amcl'])
+        self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes[:1]))
+
+    def enable(self, object, state):
+        if object == 'localization':
+            self.localize_button.setEnabled(state)
+
+
+    # def update_operation_mode(self, mode):
+    #     self.currentOperationMode = mode
+
 
 
 class PatrolsPanel(QGroupBox):
@@ -194,6 +349,13 @@ class PatrolsPanel(QGroupBox):
         self.layout = QVBoxLayout()
         self.patrols_scheduler = PatrolsEscheduler()
         self.parent = parent
+
+        self.patrols_container = PatrolsContainer(
+            self.patrols_scheduler.patrols_data,
+            parent,
+            patrols_scheduler=self.patrols_scheduler,
+            callback=self.handleSinglepatrolExec,
+        )
 
         # self.layout.addWidget(self.name)
         (
@@ -219,11 +381,13 @@ class PatrolsPanel(QGroupBox):
         ]
 
         self.navigation_buttons = QHBoxLayout()
+        max_pag, pag_index = self.patrols_container.move_page_index(0)
+        self.patrol_indexing = QLabel(f'{pag_index}/{max_pag}')
         self.left_btn, self.right_btn = QPushButton("<"), QPushButton(">")
 
         [
             self.navigation_buttons.addWidget(button)
-            for button in (self.left_btn, self.right_btn)
+            for button in (self.patrol_indexing, self.left_btn, self.right_btn)
         ]
 
         self.create_btn.clicked.connect(self.add_patrol)
@@ -234,12 +398,6 @@ class PatrolsPanel(QGroupBox):
         self.patrols_scheduler.patrol_finished.connect(self.patrol_finished)
         self.stop_patrols_btn.clicked.connect(self.stop_any_patrol)
 
-        self.patrols_container = PatrolsContainer(
-            self.patrols_scheduler.patrols_data,
-            parent,
-            patrols_scheduler=self.patrols_scheduler,
-            callback=self.handleSinglepatrolExec,
-        )
         self.patrols_scheduler.update_patrols_view.connect(
             self.patrols_container.update_patrols
         )
@@ -257,7 +415,9 @@ class PatrolsPanel(QGroupBox):
         )
         self.popup.update_date.connect(self.patrols_scheduler.update_patrol)
         self.popup.show_popup()
-        pass
+        # max_pag, pag_index = self.patrols_container.move_page_index(0)
+        # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
+        # pass
 
     def start_patrols(self):
         self.patrols_scheduler.start_patrols()
@@ -278,6 +438,8 @@ class PatrolsPanel(QGroupBox):
     def delete_patrols(self):
         toDelete = self.patrols_container.get_selected_patrolsid()
         self.patrols_scheduler.delete_patrols(toDelete)
+        # max_pag, pag_index = self.patrols_container.move_page_index(0)
+        # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
 
     def handleSinglepatrolExec(self, x=None):
         self.start_patrols_btn.setEnabled(False)
@@ -290,16 +452,26 @@ class PatrolsPanel(QGroupBox):
         self.delete_btn.setEnabled(False)
 
     def set_next_page(self):
-        self.patrols_container.move_page_index(1)
+        max_pag, pag_index = self.patrols_container.move_page_index(1)
+        self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
+        # print('nex page fuc', a)
         self.patrols_scheduler.get_current_patrols()
 
     def set_previous_page(self):
-        self.patrols_container.move_page_index(-1)
+        max_pag, pag_index = self.patrols_container.move_page_index(-1)
+        self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
         self.patrols_scheduler.get_current_patrols()
 
+    def update_patrols_indexing_label(self, step=0):
+        max_pag, pag_index = self.patrols_container.move_page_index(step)
+        self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
+        # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
+        pass
+
     def update_points(self, points):
-        self.patrols_scheduler.pointsToVisit(points)
-        print("from patrolpanel ", points)
+        self.patrols_scheduler.setPointsToVisit(points)
+        # print("from patrolpanel "ToDelete, points)
+        pass
 
 
 class PatrolsContainer(QWidget):
@@ -361,6 +533,10 @@ class PatrolsContainer(QWidget):
         if self.pageindex < 0:
             self.pageindex = 0
 
+        max_pages_count = self.element_count// self.max_element_view + self.element_count% self.max_element_view
+
+        return (max_pages_count, self.pageindex) 
+
     def get_selected_patrolsid(self):
         return [patrol.selected for patrol in self.patrols if patrol.selected]
 
@@ -413,13 +589,13 @@ class Patrol(QGroupBox):
         #     }
         # """)
 
-        (delete_botton, self.exec_button, self.checkbox, repeate_patrol_botton) = (
+        (delete_botton, self.menu_button, self.checkbox, repeate_patrol_botton) = (
             QPushButton("exec"),
             QPushButton(),
             QCheckBox(),
             QPushButton("loop"),
         )
-        self.exec_button.clicked.connect(self.task)
+        self.menu_button.clicked.connect(self.task)
         self.menu = QMenu()
         edit = self.menu.addAction("editar")
         edit.triggered.connect(self.edit_patrol)
@@ -427,7 +603,12 @@ class Patrol(QGroupBox):
         force_exec = self.menu.addAction("ejecutar")
         force_exec.triggered.connect(self.force_execution)
         force_exec.setEnabled(False)
-        self.exec_button.setMenu(self.menu)
+        self.menu_button.setMenu(self.menu)
+
+        pixmapi = QStyle.SP_ComputerIcon
+        icon = self.style().standardIcon(pixmapi)
+        self.menu_button.setIcon(icon)
+        self.menu_button.setMaximumWidth(30)
 
         self.checkbox.stateChanged.connect(self.select)
         self.patrols_scheduler.patrol_progress.connect(
@@ -435,7 +616,7 @@ class Patrol(QGroupBox):
         )
 
         self.layout.addWidget(self.patrol_name, 1, 3)
-        self.layout.addWidget(self.exec_button, 1, 4)
+        self.layout.addWidget(self.menu_button, 1, 4,  alignment=Qt.AlignRight)
         self.layout.addWidget(self.progress, 2, 0, 1, 4)
         self.layout.addWidget(self.points_checked_label, 2, 4, 1, 1)
         self.layout.addWidget(self.checkbox, 1, 0, alignment=Qt.AlignLeft)
@@ -480,6 +661,7 @@ class Patrol(QGroupBox):
         opacity_effect = self.graphicsEffect()
         if not opacity_effect:
             from PyQt5.QtWidgets import QGraphicsOpacityEffect
+
             opacity_effect = QGraphicsOpacityEffect(self)
             self.setGraphicsEffect(opacity_effect)
 

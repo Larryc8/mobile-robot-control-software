@@ -77,7 +77,7 @@ class MyViz(QWidget):
         ## (from the bottom), and the "hide-docks" buttons, which are
         ## the tall skinny buttons on the left and right sides of the
         ## main render window.
-        self.frame.setMenuBar(None)
+        # self.frame.setMenuBar(None)
         self.frame.setStatusBar(None)
         self.frame.setHideButtonVisibility(False)
 

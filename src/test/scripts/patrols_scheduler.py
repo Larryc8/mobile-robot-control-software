@@ -11,6 +11,30 @@ import time
 from points_scheduler import PointsScheduler
 
 
+class ScheduleStateMachine:
+    def __init__(self):
+        self.state = "red"
+        self.transitions = {
+            "red": {"next": "green", "action": self.turn_green},
+            "green": {"next": "yellow", "action": self.turn_yellow},
+            "yellow": {"next": "red", "action": self.turn_red}
+        }
+    
+    def turn_green(self):
+        print("Turning light green - Go!")
+    
+    def turn_yellow(self):
+        print("Turning light yellow - Caution!")
+    
+    def turn_red(self):
+        print("Turning light red - Stop!")
+    
+    def change(self):
+        transition = self.transitions[self.state]
+        transition["action"]()
+        self.state = transition["next"]
+        print(f"Light is now {self.state}")
+
 class ScheduleChecker(QThread):
     progress_updated = pyqtSignal(int)
     task_completed = pyqtSignal(str)
@@ -22,24 +46,52 @@ class ScheduleChecker(QThread):
         self.index = currentpatrol
         self.points_scheduler = points_scheduler
         self.isDispatching = False
+        self.isForcingPatrolExec = False
         self.isBusy = False
         self.wainting_queue = []
+
+        self.state = "red"
+        self.next_state = None
+
+    # def transitions(self):
+       
+
+    def change(self):
+        transition = self.transitions[self.state]
+        transition["action"]()
+        self.state = transition["next"]
+        print(f"Light is now {self.state}")
+
+    def getDatetime(self, patrol):
+        days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+        day = days_shortname.index(patrol["day"])
+        time = list(patrol['time'])
+        hour = ''.join(time[:2])
+        minute = ''.join(time[2:])
+        #             "Lun": {"day": "Lun", "time": 20205, "finished": False},
+        return day, int(hour), int(minute)
+
 
     def run(self):
         try:
             while self.index["currentpatrol_index"] < len(self.patrols):
                 # Simulate work
-                scheduled_patrol = self.patrols[self.index["currentpatrol_index"]]
-                # print(f'current index {self.index["currentpatrol_index"]} len: {len(self.patrols)}')
 
-                # time.sleep(6)
-                if not self.isDispatching:
-                    print("worker thread points schedule: ", scheduled_patrol)
-                    self.points_scheduler.setDoneTask(
-                        done_task=self.free_points_dispatcher
-                    )
-                    self.points_scheduler.dispatch()
-                    self.isDispatching = True
+                scheduled_patrol = self.patrols[self.index["currentpatrol_index"]]
+                now = datetime.now()
+                day, hour, minute = self.getDatetime(scheduled_patrol)
+                # print('TASK WORKER', now.weekday(), now.hour, now.minute)
+
+                if not (day == now.weekday() and hour == now.hour and minute == now.minute):
+                    pass
+                else:
+                    if not self.isDispatching:
+                        print("worker thread points schedule: ", scheduled_patrol)
+                        self.points_scheduler.setDoneTask(
+                            done_task=self.free_points_dispatcher
+                        )
+                        self.points_scheduler.dispatch()
+                        self.isDispatching = True
 
                 # self.index["currentpatrol_index"] = (
                 #     self.index["currentpatrol_index"] + 1
@@ -64,6 +116,10 @@ class ScheduleChecker(QThread):
         self.index["currentpatrol_index"] = self.index["currentpatrol_index"] + 1
         pass
 
+    def handlePatrolsForcedExec(self, patrol):
+        self.isForcingPatrolExec = True
+        pass
+
 
 class PatrolsEscheduler(QObject):
     compelted_patrols = []
@@ -71,6 +127,7 @@ class PatrolsEscheduler(QObject):
     update_patrols_view = pyqtSignal(dict)
     patrol_finished = pyqtSignal(bool)
     patrol_progress = pyqtSignal(int)
+    patrols_scheduling_state = pyqtSignal(str)
     # add_patrol_view = pyqtSignal(dict)
 
     def __init__(self, id=5, date=None):
@@ -179,10 +236,14 @@ class PatrolsEscheduler(QObject):
         print(self.patrols)
         self.patrols.sort(key=self.sort_key)
         print(self.patrols)
+        self.points_scheduler.setGoals()
         self.start_patrols_scheduling()
+        self.patrols_scheduling_state.emit('start')
 
-    def pointsToVisit(self, points):
+
+    def setPointsToVisit(self, points):
         self._points_to_visit = points
+        self.points_scheduler.update_points(points)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ class ControlDynamicPose:
         self.isManualControl = False
         self.x = 0
         self.y = 0
+        self.stop = False
 
         # self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
         self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.imu_callback)
@@ -35,25 +36,34 @@ class ControlDynamicPose:
 
     def imu_callback(self, msg):
         # print(len(msg.ranges))
-        self.distance = min(msg.ranges[:90]  + msg.ranges[270:])
+        self.distance = min(msg.ranges[:90] + msg.ranges[270:])
         self.cmd_vel.linear.x = self.max_linear_velocity * self.y
         self.cmd_vel.angular.z = self.max_angular_velocity * -self.x
 
-        if self.isManualControl:
-            self.cmd_vel_pub.publish(self.cmd_vel)
-        # print('x y joy> ', self.x, self.y, self.distance)
+        if self.stop:
+            return 
 
-    def setRobotDynamicPose(self, x, y ):
+        if (self.x == 0 and self.y == 0):
+            self.stop = True 
+
+        self.cmd_vel_pub.publish(self.cmd_vel)
+
+    def setRobotDynamicPose(self, x, y):
         self.x = x
         self.y = y
 
+        if not (self.x == 0 and self.y == 0):
+            self.stop = False 
+
     def setControlMode(self, mode):
-        if mode == 'manual':
+        if mode == "manual":
             self.isManualControl = True
-        else:
+            return
+
+        if mode == "auto":
             self.isManualControl = False
-
-
+            return
+        raise ValueError("specify a valid operation mode [auto, manual]")
 
 
 if __name__ == "__main__":
