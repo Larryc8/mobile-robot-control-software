@@ -18,6 +18,7 @@ from home_view import HomePanel
 from configuration import ConfigPanel
 # from map_view import MappingPanel
 from better_image_display import ImageViewer
+from test_todo2 import TodoApp
 
 class App(QMainWindow):
     def __init__(self):
@@ -25,7 +26,7 @@ class App(QMainWindow):
         title = "The best GUI of the whole world"
         left = 50
         top = 50
-        width = 1000
+        width = 1500
         height = 800
         self.setWindowTitle(title)
         self.setGeometry(left, top, width, height)
@@ -40,8 +41,8 @@ class MyTableWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.nodes_manager = NodesManager()
-        # self.tabs_names = ["Home", "Configuracion", "Log system"]
-        self.tabs_names = ["Home", "Configuracion"]
+        self.tabs_names = ["Home", "Configuracion", "Log system"]
+        # self.tabs_names = ["Home", "Configuracion"]
         self.parent = parent
         self.parent.w = None
 
@@ -62,6 +63,7 @@ class MyTableWidget(QWidget):
         print('main', parent)
         self.tab_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
         self.tab_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
+        self.tab_widget['Log system'].layout.addWidget(TodoApp())
 
         [tab.setLayout(tab.layout) for tab in self.tab_widget.values()]
         self.button = QPushButton("Push for Window")

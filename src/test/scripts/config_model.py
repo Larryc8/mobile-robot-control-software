@@ -12,6 +12,8 @@ from roslaunch import parent
 from roslaunch import configure_logging
 from roslaunch.scriptapi import ROSLaunch
 
+from PyQt5.QtCore import QThread, pyqtSignal, QObject
+
 
 class StaticParamsConfigLoader:
     def __init__(self, param_file: str, workspace: str = "/calamardo_loader/") -> None:
@@ -65,13 +67,47 @@ class ConfigModel:
             yaml.dump(configs, file, sort_keys=False)
 
 
-class NodesManager:
+class NodeWorker(QThread):
+    # finished = pyqtSignal()
+    # progress = pyqtSignal(int)
+    
+    def __init__(self, node):
+        super().__init__()
+        self.node = node
+        self.subprocess = None
+        
+    def run(self):
+        package, exec, name, arg, respawn = self.node['package'], self.node['exec'], self.node['name'], self.node.get('arg'), self.node.get('respawn') 
+        if arg:
+            self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
+        else:
+            self.subprocess = subprocess.Popen(['rosrun', package, exec, f'__name:={name}'])
+
+        # self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
+        # self._launcher = ROSLaunch()
+        # self._launcher.start()
+        # self.subprocess = self._launcher.launch(self.node)
+        # for i in range(1, 101):
+        #     time.sleep(0.1)  # Simulate work
+        #     self.progress.emit(i)
+        # self.finished.emit()
+
+    def stop(self):
+        if self.subprocess:
+            self.subprocess.terminate()  # Send SIGTERM
+            # self.subprocess.stop()
+        if  self.thread.isRunning():
+            self.stop()
+
+
+class NodesManager(QObject):
     def __init__(self) -> None:
+        super().__init__()
         self.nodes_subprocess = {}
         self.bringup = None
+        self._launcher = ROSLaunch()
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
-        self._launcher = ROSLaunch()
         node_instances = {}
         for node in nodes:
             node_values = node.values()
@@ -80,9 +116,23 @@ class NodesManager:
                 respawn = False
             
             node_instances.update(
-                {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
+                # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
+                {name: Node(package=package, node_type=exec, name=name, args=arg,  respawn=False)}
             )
         return node_instances
+    # def initNodes(self, nodes: List[dict] = []) -> List[dict]:
+        # node_instances = {}
+        # for node in nodes:
+        #     node_values = node.values()
+        #     package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
+        #     if not respawn:
+        #         respawn = False
+        #     
+        #     node_instances.update(
+        #         # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
+        #         {name: Node(package=package, node_type=exec, name=name, args=arg,  respawn=respawn)}
+            # )
+        # return nodes
 
     def startNodes(self, node_instances: dict = {}) -> dict:
 
@@ -95,6 +145,29 @@ class NodesManager:
                 print(_subprocess)
                 self.nodes_subprocess.update(_subprocess)
         return {}
+
+    # def startNodes(self, node_instances: List[dict] = []) -> dict:
+
+    #     # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}
+    #     for node in node_instances :
+    #         package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn') 
+    #         _subprocess = {name: NodeWorker(node)}
+    #         _subprocess.get(name).start()
+    #         # if arg:
+    #         #     _subprocess = {name: subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])}
+    #         # else:
+    #         #     _subprocess = {name: subprocess.Popen(['rosrun', package, exec, f'__name:={name}'])}
+    #         # _subprocess.get(name).start()
+    #         print(_subprocess)
+    #         self.nodes_subprocess.update(_subprocess)
+
+    #     # for name, node in node_instances.items():
+    #     #     if not self.nodes_subprocess.get(name):
+    #     #         _subprocess = {name: NodeWorker(node)}
+    #     #         _subprocess.get(name).start()
+    #     #         print(_subprocess)
+    #     #         self.nodes_subprocess.update(_subprocess)
+    #     return {}
 
     def stopNodes(self, node_names: List[str]) -> None:
         # self.bringup.shutdown()
@@ -111,7 +184,22 @@ class NodesManager:
                     nodeToDeleteArray.append(name) 
                     nodeToDelete = name
 
-        print('node manager node to stop', nodeToDelete)
+    # def stopNodes(self, node_names: List[str]) -> None:
+    #     # self.bringup.shutdown()
+    #     # [subprocess.stop() for name, subprocess in self.nodes_subprocess.items()]
+    #     # subprocess = self.get(node_name)
+    #     # subprocess.stop()
+    #     nodeToDeleteArray = []
+
+    #     for node_name in node_names:
+    #         for name, _subprocess in self.nodes_subprocess.items():
+    #             if name == node_name:
+    #                 _subprocess.stop()
+    #                 # _subprocess.terminate()  # Send SIGTERM
+    #                 # _subprocess.wait()
+    #                 nodeToDeleteArray.append(name) 
+
+        # print('node manager node to stop', nodeToDelete)
         # if nodeToDelete:
         #     self.nodes_subprocess.pop(nodeToDelete)
         for node in nodeToDeleteArray:
@@ -140,10 +228,16 @@ class NodesManager:
     def save_map(self):
         subprocess.Popen(['rosrun', 'map_server', 'map_saver', '-f', 'mymap'])
 
-    def topicHasPublisher(self, topic):
-        for available_topic, type in rospy.get_published_topics():
+    def topicHasPublisher(self, topic, publisher=None):
+        for available_topic, _type in rospy.get_published_topics():
             if available_topic == topic:
                 return True
+            print('from topci :', available_topic, _type)
+        return False
+
+    def nodeIsRunning(self, nodename):
+        if self.nodes_subprocess.get(nodename):
+            return True
         return False
 
 

@@ -11,12 +11,35 @@ from PyQt5.QtWidgets import (
     QWidget,
     QPushButton,
     QGraphicsItem,
+    QHBoxLayout,
+    QStyle,
+    QLabel,
 )
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPainterPath
 from PyQt5.QtCore import Qt, QRectF, QSize
 import random
 import yaml
 from datetime import datetime
+
+
+from styles.buttons import (
+    border_button_style,
+    border_button_style_danger,
+    primary_button_style,
+    secondary_button_style,
+    colored_button_style,
+    tertiary_button_style,
+    toggle_button_style,
+    minimal_button_style,
+)
+
+from styles.labels import (
+    inactive_label_style,
+    minimal_label_style,
+    succes_label_style,
+    info_label_style,
+    warning_label_style
+)
 
 from PyQt5.QtCore import (
     Qt,
@@ -28,28 +51,34 @@ from PyQt5.QtCore import (
     QThread,
     pyqtSignal,
     QObject,
+    QTimer,
 )  # , pyqtSlot
 
 
 class ImageViewer(QMainWindow):
     save_selected_points = pyqtSignal(dict)
 
-    def __init__(self, ylm_map_filepath=None, parent=None, nodes_manager=None, patrols_scheduler=None):
+    def __init__(
+        self,
+        ylm_map_filepath=None,
+        parent=None,
+        nodes_manager=None,
+        patrols_scheduler=None,
+    ):
         super().__init__()
         # self.setWindowTitle("Image Viewer with QGraphicsView")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
-        self.setGeometry(100, 100, 384, 384)
+        self.setGeometry(100, 100, 600, 400)
 
-        # Initialize UI
         self.init_ui()
 
         # Variables
         # self.current_image_path = "./map2.pgm"
         self.zoom_factor = 1.0
         self.nodes_manager = nodes_manager
-        self.parent  = parent
+        self.parent = parent
         self.resolution = 0
-        self.botton_left_map = (999,999)
+        self.botton_left_map = (999, 999)
         # self.save_selected_points.connect(self.)
         # file_path = "./map2.pgm"
 
@@ -62,28 +91,52 @@ class ImageViewer(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout()
+        buttons_layout = QHBoxLayout()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.hide_alerts)
 
         # Create graphics view and scene
         self.graphics_view = Example()
+        self.success_label = QLabel("✓ SUCCESS: File saved successfully")
+        self.info_label = QLabel(
+            "ℹ INFO: Para guardar los puntos de  manera permante da click en Guardar"
+        )
+        self.warning_label = QLabel(
+            "⚠ WARNING: Necesitas cargar un mapa para agrgar puntos interes"
+        )
 
-        # self.graphics_view.setRenderHint(QPainter.Antialiasing)
-        # self.graphics_view.setRenderHint(QPainter.SmoothPixmapTransform)
-        # self.graphics_view.setDragMode(QGraphicsView.ScrollHandDrag)
-        # self.scene = QGraphicsScene()
-        # self.graphics_view.setScene(self.scene)
-        # pScene = QGraphicsScthis)
+        self.success_label.hide()
+        self.info_label.hide()
+        self.success_label.setStyleSheet(succes_label_style)
+        self.info_label.setStyleSheet(info_label_style)
+        self.warning_label.setStyleSheet(warning_label_style)
+
+        layout.addWidget(self.info_label, alignment=Qt.AlignTop)
+        layout.addWidget(self.warning_label)
         layout.addWidget(self.graphics_view)
+        layout.addWidget(self.success_label)
 
         # Buttons
         # self.load_button = QPushButton("Load Image")
-        self.close_button = QPushButton("close")
-        self.save_button = QPushButton("save")
+        self.close_button = QPushButton("Cerrar")
+        self.save_button = QPushButton("Guardar")
         # self.close_button.clicked.connect(self.load_image)
-        self.save_button.clicked.connect(self.save_points)
+        # self.save_button.clicked.connect(self.save_points)
+        self.graphics_view.send_points.connect(self.save_points)
         self.close_button.clicked.connect(self.close_win)
+        self.graphics_view.pointsChanged.connect(self.handlePointsChanged)
         # layout.addWidget(self.load_button)
-        layout.addWidget(self.save_button)
-        layout.addWidget(self.close_button)
+        buttons_layout.addWidget(self.save_button, 2)
+        buttons_layout.addWidget(self.close_button, 1)
+        layout.addLayout(buttons_layout)
+
+        self.close_button.setStyleSheet(border_button_style)
+        self.save_button.setStyleSheet(primary_button_style)
+
+        icon = QApplication.style().standardIcon(QStyle.SP_DriveNetIcon)
+        self.save_button.setIcon(icon)
+        icon = QApplication.style().standardIcon(QStyle.SP_DialogCloseButton)
+        self.close_button.setIcon(icon)
 
         # self.zoom_in_button = QPushButton("Zoom In (+)")
         # self.zoom_in_button.clicked.connect(self.zoom_in)
@@ -100,20 +153,35 @@ class ImageViewer(QMainWindow):
 
         central_widget.setLayout(layout)
 
+    def handlePointsChanged(self, state):
+        if state == "added":
+            self.success_label.setText(
+                "✓ SUCCESS: Se agrego un nuevo punto al patrullaje"
+            )
+        if state == "deleted":
+            self.success_label.setText("✓ SUCCESS: Se elimino un  punto al patrullaje")
+        self.success_label.show()
+        self.timer.start(4000)
+
+    def hide_alerts(self):
+        self.timer.stop()
+        self.success_label.hide()
+        pass
+
     def show_win(self):
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
-        popup_x = self.parent.x() + 30 
-        popup_y = self.parent.y() + 60
+        popup_x = self.parent.x() + (self.parent.width() - self.width() - 10)
+        popup_y = self.parent.y() + (self.parent.height() - self.height() - 30)
+        popup_y = self.parent.y() + 100
         self.move(popup_x, popup_y)
         self.show()
 
     def close_win(self):
         self.hide()
 
-
-    def save_points(self):
-        a = self.getPointsInMap()
+    def save_points(self, a):
+        # a = self.getPointsInMap()
         self.save_selected_points.emit(a)
 
         logging.info("from ImageViewer POINT SAVED")
@@ -123,15 +191,19 @@ class ImageViewer(QMainWindow):
         if self.graphics_view.pixmap:
             width = self.graphics_view.pixmap.width()
             height = self.graphics_view.pixmap.height()
-        
-            print('image viwer', width, height, self.resolution)
-            x_adjust_factor = abs(self.botton_left_map[0]) - width*self.resolution/2 
-            y_adjust_factor = abs(self.botton_left_map[1]) - height*self.resolution/2
+
+            print("image viwer", width, height, self.resolution)
+            x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
+            y_adjust_factor = (
+                abs(self.botton_left_map[1]) - height * self.resolution / 2
+            )
             print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
             path = {
                 str(id): {
-                    "x_meters": (point["x"] - width / 2 ) * self.resolution - x_adjust_factor/2,
-                    "y_meters": -(point["y"] - height / 2) * self.resolution - y_adjust_factor,
+                    "x_meters": (point["x"] - width / 2) * self.resolution
+                    - x_adjust_factor / 2,
+                    "y_meters": -(point["y"] - height / 2) * self.resolution
+                    - y_adjust_factor,
                     "yaw_degrees": 0,
                     "checked": False,
                 }
@@ -175,11 +247,20 @@ class ImageViewer(QMainWindow):
             print(root_file_path)
             self.graphics_view.display_image(f"{root_file_path}/{image}")
             self.resolution = resolution
-            self.botton_left_map = (x,y)
-            self.save_button.setEnabled(True)
+            self.botton_left_map = (x, y)
+            self.graphics_view.botton_left_map = (x, y)
+            self.graphics_view.resolution = resolution
+            # self.save_button.setEnabled(True)
+            self.info_label.show()
+            self.warning_label.hide()
 
         except Exception as e:
             print(e)
+
+    def update_points_state(self, current_poin_id, next_point_id, point_state):
+        self.graphics_view.update_points_state(
+            current_poin_id, next_point_id, point_state
+        )
 
     def zoom_in(self):
         # self.graphics_view.scale(1.2, 1.2)
@@ -209,6 +290,9 @@ class ImageViewer(QMainWindow):
 
 
 class Example(QGraphicsView):
+    send_points = pyqtSignal(dict)
+    pointsChanged = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.squares = {}  # Store square positions and sizes
@@ -236,7 +320,7 @@ class Example(QGraphicsView):
 
         # self.load_stored_points()
 
-    def getPointsPath(self):
+    def getPointsPath(self) -> dict:
         print(self.pointsToCheck)
         if self.pixmap:
             width = self.pixmap.width()
@@ -247,6 +331,32 @@ class Example(QGraphicsView):
             x, y = point["x"] - width / 2, point["y"] - height / 2
             print(f"new point x={x*0.05} m y={-y*0.05} m")
         return self.pointsToCheck
+
+    def getPointsInMap(self) -> dict:
+        path = {}
+        if self.pixmap:
+            width = self.pixmap.width()
+            height = self.pixmap.height()
+
+            print("image viwer", width, height, self.resolution)
+            x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
+            y_adjust_factor = (
+                abs(self.botton_left_map[1]) - height * self.resolution / 2
+            )
+            print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
+            path = {
+                str(id): {
+                    "x_meters": (point["x"] - width / 2) * self.resolution
+                    - x_adjust_factor / 2,
+                    "y_meters": -(point["y"] - height / 2) * self.resolution
+                    - y_adjust_factor,
+                    "yaw_degrees": 0,
+                    "checked": False,
+                }
+                for id, point in self.getPointsPath().items()
+            }
+            print("Image viwer map points", path)
+        return path
 
     def zoom_in(self):
         self.scale(1.1, 1.1)
@@ -281,6 +391,9 @@ class Example(QGraphicsView):
         event.accept()
 
     def mouseDoubleClickEvent(self, event):
+        if not self.pixmap:
+            return
+
         x = event.pos().x()
         y = event.pos().y()
         point = self.mapToScene(x, y)
@@ -322,11 +435,14 @@ class Example(QGraphicsView):
             self.squares.update(
                 {
                     str(sync_id): {
-                        "color": random.choice(colors),
+                        "color": Qt.red,
                         "object": obj,
                     }
                 }
             )
+            self.send_points.emit(self.getPointsInMap())
+            self.pointsChanged.emit("added")
+
             self.scale(1.2, 1.2)
             self.scale(1 / 1.2, 1 / 1.2)  # force a repaint
             self.update()  # Repaint the widget to reflect the updated label
@@ -343,6 +459,9 @@ class Example(QGraphicsView):
                 if not square["object"].contains(point.x(), point.y()):
                     temp_squares.update({id: square})
                     temp_points.update({id: self.pointsToCheck[id]})
+                    self.send_points.emit(self.getPointsInMap())
+                else:
+                    self.pointsChanged.emit("deleted")
 
             self.squares = temp_squares
             self.pointsToCheck = temp_points
@@ -383,6 +502,22 @@ class Example(QGraphicsView):
         # self.scene.setSceneRect(pixmap.rect().x(), pixmap.rect().y(), pixmap.rect().width(), pixmap.rect().height())
         self.reset_view()
         # self.load_stored_points()
+
+    def update_points_state(self, current_poin_id, next_point_id, point_state):
+        if not current_poin_id and not next_point_id:
+            print("Image viwer, SQUARE", self.squares)
+            for id, square in self.squares.items():
+                print("Image viwer SQuare FOR", square)
+                square["color"] = Qt.red
+            return
+
+        if point_state < 4:
+            self.squares[current_poin_id]["color"] = Qt.green
+        else:
+            self.squares[current_poin_id]["color"] = Qt.red
+
+        if next_point_id:
+            self.squares[next_point_id]["color"] = Qt.yellow
 
     def drawForeground(self, painter, rect):
         painter.drawLine(0, 0, 20, 20)

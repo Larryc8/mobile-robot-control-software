@@ -41,8 +41,12 @@ class MyViz(QWidget):
     def __init__(self, configfile: str, parent=None):
         super().__init__(parent)  # Pasa `parent` al constructor de QWidget
         # QWidget.__init__(self)
-        self.past_point = QPoint(0,0)
-        self.frame_position = QPoint(0,0)
+        self.past_point = QPoint(0, 0)
+        self.frame_position = QPoint(0, 0)
+        self.followRobot = False
+        self.minHeight = self.height()
+        self.minWidth = self.width()
+        self.resize = 145
         # rospy.init_node('harolsito')
 
         ## rviz.VisualizationFrame is the main container widget of the
@@ -51,6 +55,7 @@ class MyViz(QWidget):
         ## disable everything so that the only thing visible is the 3D
         ## render window.
         self.frame = rviz.VisualizationFrame()
+        # self.m = rviz.VisualizationManager()
 
         ## The "splash path" is the full path of an image file which
         ## gets shown during loading.  Setting it to the empty string
@@ -87,8 +92,8 @@ class MyViz(QWidget):
         ## any changes in an rviz instance.
         self.manager = self.frame.getManager()
         self.view_man = self.manager.getViewManager()
-        # print('view: ', self.view_man.getCurrent().subProp( "Angle" ).setValue(-5), self.view_man.getNumViews()) 
-        rospy.Subscriber('/odom', Odometry, self.callback)
+        # print('view: ', self.view_man.getCurrent().subProp( "Angle" ).setValue(-5), self.view_man.getNumViews())
+        rospy.Subscriber("/odom", Odometry, self.callback)
 
         # self.grid_display = self.manager.getRootDisplayGroup().getDisplayAt(0)
 
@@ -102,15 +107,70 @@ class MyViz(QWidget):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
 
-        present_point = QPoint(x,y)
-        delta_movement = present_point - self.past_point 
+        present_point = QPoint(x, y)
+        delta_movement = present_point - self.past_point
         self.past_point = present_point
 
-        (roll, pitch, yaw) = euler_from_quaternion([orientation.x, orientation.y, orientation.z, orientation.w])
-        self.view_man.getCurrent().subProp( "Angle" ).setValue(yaw  -1.55678) 
-        self.view_man.getCurrent().subProp( "X" ).setValue(self.frame_position.x())
-        self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
-        self.frame_position = self.frame_position + delta_movement
+        if self.followRobot:
+            (roll, pitch, yaw) = euler_from_quaternion(
+                [orientation.x, orientation.y, orientation.z, orientation.w]
+            )
+            self.view_man.getCurrent().subProp("Angle").setValue(yaw - 1.55678)
+            # self.view_man.getCurrent().subProp( "Global Options" ).subProp( "Fixed Frame" ).setValue('odom')
+            self.view_man.getCurrent().subProp("X").setValue(
+                self.view_man.getCurrent().subProp("X").getValue() 
+            )
+            self.view_man.getCurrent().subProp("Y").setValue(
+                self.view_man.getCurrent().subProp("Y").getValue()
+            )
+            # self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
+
+            # if self.width() > self.height():
+            #     delta_movement =  delta_movement*self.width()/self.height()
+            # else:
+            #     delta_movement = delta_movement*(self.width()/self.minWidth)
+            self.frame_position = self.frame_position + delta_movement
+
+        # print(
+        #     "RVIZ",
+        #     self.view_man.getCurrent().subProp("Y").getValue(),
+        #     self.view_man.getCurrent().subProp("Y").getValue(),
+        #     delta_movement.x(),
+        #     delta_movement.y()
+        # )
+
+    def setUp(self, prop: str, value):  # SCale 562
+        if prop == "globalframe":
+            self.manager.setFixedFrame(value)
+        if prop == "followrobot":
+            self.followRobot = value
+            self.view_man.getCurrent().subProp("Scale").setValue(self.resize)
+            self.manager.setFixedFrame("odom")
+        if prop == "scale":
+            self.view_man.getCurrent().subProp("Scale").setValue(value)
+        if prop == "reset":
+            for i in range(12):
+                display = self.manager.getRootDisplayGroup().getDisplayAt(i)
+                if display:
+                    display.reset()
+                # display.subProp( "Enabled" )#.setValue(False)
+                # display.subProp("Line Style")  # .setValue(True)
+            pass
+
+    def resizeEvent(self, event):
+        if self.width() > self.height():
+            # self.view_man.getCurrent().subProp( "Scale" ).setValue(145*self.width()/765)
+            # self.resize = 145*self.width()/self.height()
+            pass
+        else:
+            # self.view_man.getCurrent().subProp( "Scale" ).setValue(145*self.width()/self.minWidth)
+            # self.resize = 145*self.width()/self.minWidth
+            pass
+
+        if self.followRobot:
+            self.view_man.getCurrent().subProp("Scale").setValue(self.resize)
+        super().resizeEvent(event)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

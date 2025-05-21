@@ -18,12 +18,27 @@ from PyQt5.QtWidgets import (
     QSlider,
     QGroupBox,
     QTabWidget,
+    QStyle,
+    QLineEdit,
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 
 inputsHasChanged = False
 
+from styles.buttons import (
+    border_button_style,
+    border_button_style_danger,
+    primary_button_style,
+    secondary_button_style,
+    colored_button_style,
+    tertiary_button_style,
+    toggle_button_style,
+    minimal_button_style,
+    patrol_checkbox_style,
+)
+
+from styles.labels import inactive_label_style, minimal_label_style
 
 class ConfigPanel(QWidget):
     def __init__(self, nodes_manager) -> None:
@@ -59,25 +74,9 @@ class ConfigPanel(QWidget):
         self.layout = QVBoxLayout()
         self.buttons_layout = QHBoxLayout()
         self.tabs = QTabWidget()
+        self.filter = QLineEdit()
 
-        # self.tabs.setStyleSheet("""
-        #     QTabWidget::pane { /* The tab content area */
-        #         background: none;
-        #         border: 1px solid black;
-        #     }
-        #     QTabWidget::tab-bar {
-        #         alignment: left; /* Center the tabs */
-        #     }
-        #     QTabBar::tab {
-        #         padding: 5px 15px;
-        #         margin-right: 3px;
-        #     }
-        #     QTabBar::tab:selected {
-        #         background: gray;
-        #     }
-        #     QTabBar::tab:!selected:hover {
-        #         background: lightgray;
-        #     }""")
+
         self.panels = [
             {
                 "Mapeo": Panel(
@@ -101,19 +100,32 @@ class ConfigPanel(QWidget):
             [(name, tab)] = panel.items()
             self.tabs.addTab(tab, name)
 
-        self.save_config_button = QPushButton("save me")
-        self.apply_config_button = QPushButton("apply me")
-        self.start_nodes_button = QPushButton("rese to default")
-        self.buttons_layout.addWidget(self.save_config_button)
-        self.buttons_layout.addWidget(self.apply_config_button)
-        # self.layout.addWidget(self.set_config_button)
+        self.save_config_button = QPushButton("Guardar Configuracion")
+        self.apply_config_button = QPushButton("Aplicar Cambios")
+        self.reset_config_btn = QPushButton("Restaurar valores")
+        self.buttons_layout.addWidget(self.save_config_button, 2)
+        self.buttons_layout.addWidget(self.reset_config_btn, 1 )
+        self.buttons_layout.addWidget(self.apply_config_button, 1)
+
 
         self.save_config_button.clicked.connect(self.saveClickHandler)
         self.apply_config_button.clicked.connect(self.applyClickHandler)
+        self.save_config_button.setStyleSheet(colored_button_style)
+        self.apply_config_button.setStyleSheet(primary_button_style)
+        self.reset_config_btn.setStyleSheet(secondary_button_style)
         # self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
+        # btn.setIcon(QApplication.style().standardIcon()) SP_BrowserReload
 
+        icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
+        self.save_config_button.setIcon(icon)
+        icon = QApplication.style().standardIcon(QStyle.SP_DialogApplyButton)
+        self.apply_config_button.setIcon(icon)
+        icon = QApplication.style().standardIcon(QStyle.SP_BrowserReload)
+        self.reset_config_btn.setIcon(icon)
+
+        self.layout.addWidget(self.filter)
         self.layout.addWidget(self.tabs)
-        self.layout.addWidget(self.start_nodes_button)
+        # self.layout.addWidget(self.reset_config_btn)
         self.layout.addLayout(self.buttons_layout)
 
         self.setLayout(self.layout)
@@ -189,8 +201,8 @@ class ConfigInput(QGroupBox):
     def __init__(
         self, label_text: str, default_value: int = 0, _range: List[float] = [1, 2]
     ) -> None:
-        super().__init__()
-        self.setFixedHeight(110)
+        super().__init__(label_text)
+        self.setFixedHeight(115)
         # self.setStyleSheet("background-color: navy;")
         self.range = _range
         self.name = label_text
@@ -207,7 +219,11 @@ class ConfigInput(QGroupBox):
         self.label = QLabel()
         self.label.setText(self.name)
         self.value_lebel = QLabel()
+        self.line_edit = QLineEdit()
+        self.current_value = {0: 2.34}
+
         self.value_lebel.setText(str(default_value))
+        self.line_edit.setText(str(default_value))
 
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setValue(self.mapValueToRange(default_value))
@@ -216,10 +232,11 @@ class ConfigInput(QGroupBox):
         # self.slider.setRange(min(range), max(range))
 
         self.slider.valueChanged.connect(self.changeEventHandler)
+        self.line_edit.returnPressed.connect(self.handleLineEditChange)
 
         [
             self.layout.addWidget(element)
-            for element in (self.label, self.value_lebel, self.slider)
+            for element in ( self.value_lebel, self.line_edit, self.slider)
         ]
         self.setLayout(self.layout)
 
@@ -230,6 +247,7 @@ class ConfigInput(QGroupBox):
         inputsHasChanged = True
         value = self.mapRangeToValue(slider_value)
         self.value_lebel.setText(str(value))
+        self.line_edit.setText(str(value))
 
     def mapRangeToValue(self, index: int) -> float:
         return self.param_values_range[index]
@@ -239,12 +257,16 @@ class ConfigInput(QGroupBox):
             index = self.param_values_range.index(value)
             print(f"Found at index {index}")
         except ValueError:
-            index = 0
+            index = -1
             print("Not found")
         return index
 
     def value(self) -> dict:
         return {self.label.text(): self.mapRangeToValue(self.slider.value())}
+
+    def handleLineEditChange(self):
+        x = self.line_edit.text()
+        print(x, self.mapValueToRange(float(x)))
 
 
 if __name__ == "__main__":

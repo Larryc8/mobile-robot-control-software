@@ -11,33 +11,10 @@ import time
 from points_scheduler import PointsScheduler
 
 
-class ScheduleStateMachine:
-    def __init__(self):
-        self.state = "red"
-        self.transitions = {
-            "red": {"next": "green", "action": self.turn_green},
-            "green": {"next": "yellow", "action": self.turn_yellow},
-            "yellow": {"next": "red", "action": self.turn_red}
-        }
-    
-    def turn_green(self):
-        print("Turning light green - Go!")
-    
-    def turn_yellow(self):
-        print("Turning light yellow - Caution!")
-    
-    def turn_red(self):
-        print("Turning light red - Stop!")
-    
-    def change(self):
-        transition = self.transitions[self.state]
-        transition["action"]()
-        self.state = transition["next"]
-        print(f"Light is now {self.state}")
-
 class ScheduleChecker(QThread):
     progress_updated = pyqtSignal(int)
     task_completed = pyqtSignal(str)
+    patrol_state = pyqtSignal(str)
 
     def __init__(self, task_id=1, patrols=[], currentpatrol={}, points_scheduler=None):
         super().__init__()
@@ -49,72 +26,107 @@ class ScheduleChecker(QThread):
         self.isForcingPatrolExec = False
         self.isBusy = False
         self.wainting_queue = []
+        self.dispatched_patrols = []
+        self.movePatrolsIndex = False
 
         self.state = "red"
         self.next_state = None
 
     # def transitions(self):
-       
-
-    def change(self):
-        transition = self.transitions[self.state]
-        transition["action"]()
-        self.state = transition["next"]
-        print(f"Light is now {self.state}")
 
     def getDatetime(self, patrol):
         days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol["day"])
-        time = list(patrol['time'])
-        hour = ''.join(time[:2])
-        minute = ''.join(time[2:])
+        patrol_time = list(patrol["time"])
+        hour = "".join(patrol_time[:2])
+        minute = "".join(patrol_time[2:])
         #             "Lun": {"day": "Lun", "time": 20205, "finished": False},
         return day, int(hour), int(minute)
 
-
     def run(self):
         try:
+            # while True:
+            # print('HOLA HAROLD')
             while self.index["currentpatrol_index"] < len(self.patrols):
+                self.sleep(15)
                 # Simulate work
+                if self.isInterruptionRequested():
+                    self.task_completed.emit(f"TaskCancelled")
+                    return
 
                 scheduled_patrol = self.patrols[self.index["currentpatrol_index"]]
                 now = datetime.now()
                 day, hour, minute = self.getDatetime(scheduled_patrol)
-                # print('TASK WORKER', now.weekday(), now.hour, now.minute)
+                print('TASK WORKER', self.index["currentpatrol_index"] , (hour - now.hour), (minute - now.minute))
 
-                if not (day == now.weekday() and hour == now.hour and minute == now.minute):
-                    pass
-                else:
-                    if not self.isDispatching:
-                        print("worker thread points schedule: ", scheduled_patrol)
+                if (hour - now.hour) < 0:
+                    if -6 <  day - now.weekday():
+                        self.index["currentpatrol_index"] = (
+                            self.index["currentpatrol_index"] + 1
+                        )
+                        print('PATROL DELAYED',self.index["currentpatrol_index"],  )
+                        continue
+                elif (hour - now.hour) == 0:
+                    if (minute - now.minute) < 0:
+                        self.index["currentpatrol_index"] = (
+                            self.index["currentpatrol_index"] + 1
+                        )
+                        print('PATROL DELAYED',self.index["currentpatrol_index"],  )
+                        continue
+
+
+                if not (
+                    day == now.weekday() and hour == now.hour and minute == now.minute
+                ):
+                    continue
+
+                # print('PATRULLAJE', scheduled_patrol)
+
+                if not self.isDispatching:
+                    print("worker thread points schedule: ", scheduled_patrol)
+                    self.patrol_state.emit(str(scheduled_patrol.get("patrolid")))
+                    if not scheduled_patrol["finished"]:
                         self.points_scheduler.setDoneTask(
                             done_task=self.free_points_dispatcher
                         )
-                        self.points_scheduler.dispatch()
+                        self.points_scheduler.dispatch(scheduled_patrol["patrolid"])
                         self.isDispatching = True
+                        scheduled_patrol["finished"] = True
 
-                # self.index["currentpatrol_index"] = (
-                #     self.index["currentpatrol_index"] + 1
-                # )
+                if self.movePatrolsIndex:
+                    self.index["currentpatrol_index"] = (
+                        self.index["currentpatrol_index"] + 1
+                    )
+                    self.movePatrolsIndex = False
 
                 # Update progress
                 # self.progress_updated.emit(999)
 
                 # Check if thread should stop
-                if self.isInterruptionRequested():
-                    self.task_completed.emit(f"Task {self.task_id} cancelled")
-                    return
+                # if self.isInterruptionRequested():
+                #     self.task_completed.emit(f"Task {self.task_id} cancelled")
+                #     return
 
             # Task completed
-            self.task_completed.emit(f"Task {self.task_id} finished successfully")
+            print("TERMINO")
+            self.task_completed.emit("TaskSuccessfully")
         except Exception as e:
-            self.task_completed.emit(f"Task {self.task_id} failed: {str(e)}")
+            pass
+            self.task_completed.emit(f"TaskFailed: {str(e)}")
+            toast = Toast(self.parent)
+            toast.setDuration(4000)  # Hide after 5 seconds
+            toast.setTitle("ERROR: En la ejecion de las patrullas")
+            toast.setText("Inicie nuevamente las patrullas")
+            toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)
+            toast.show()
 
     def free_points_dispatcher(self):
+        self.movePatrolsIndex = True
+
+        # if self.index["currentpatrol_index"] < len(self.patrols):
         self.isDispatching = False
         self.points_scheduler.restart()
-        self.index["currentpatrol_index"] = self.index["currentpatrol_index"] + 1
-        pass
 
     def handlePatrolsForcedExec(self, patrol):
         self.isForcingPatrolExec = True
@@ -125,9 +137,10 @@ class PatrolsEscheduler(QObject):
     compelted_patrols = []
     looped_patrols = []
     update_patrols_view = pyqtSignal(dict)
-    patrol_finished = pyqtSignal(bool)
+    patrol_finished = pyqtSignal(str)
     patrol_progress = pyqtSignal(int)
     patrols_scheduling_state = pyqtSignal(str)
+    patrol_state = pyqtSignal(str)
     # add_patrol_view = pyqtSignal(dict)
 
     def __init__(self, id=5, date=None):
@@ -136,6 +149,7 @@ class PatrolsEscheduler(QObject):
         self.date = date
         self.patrols = []
         self.scheduler = None
+        self.patrolIsRunning = False
         self.indexKeeper = {"currentpatrol_index": 0}  # to pass as a pointer
         self._points_to_visit = []
         self.points_scheduler = PointsScheduler()
@@ -180,7 +194,9 @@ class PatrolsEscheduler(QObject):
         )
         self.scheduler.progress_updated.connect(self.update_progress)
         self.scheduler.task_completed.connect(self.task_finished)
-        self.scheduler.start()
+        self.scheduler.patrol_state.connect(self.update_patrol_info)
+        self.scheduler.start(QThread.IdlePriority)
+        self.patrolIsRunning = True
 
     def update_progress(self, k):
         a = self.indexKeeper["currentpatrol_index"]
@@ -191,9 +207,13 @@ class PatrolsEscheduler(QObject):
         self.indexKeeper["currentpatrol_index"] = 0
         if self.scheduler and self.scheduler.isRunning():
             self.scheduler.requestInterruption()
+            self.scheduler = None
+            return True
+        return False
 
     def task_finished(self, message):
         self.indexKeeper["currentpatrol_index"] = 0
+        self.patrolIsRunning = False
         print(message)
         # self.start_button.setEnabled(True)
         # self.cancel_button.setEnabled(False)
@@ -201,16 +221,16 @@ class PatrolsEscheduler(QObject):
             self.scheduler.quit()
             self.scheduler.wait()
             self.scheduler = None
-        self.patrol_finished.emit(True)
+        self.patrol_finished.emit(message)
 
     def update_patrol(self, x):
         self.patrols_data.update(x)
         print("Hola Soy el scheduler patrol", x)
         self.update_patrols_view.emit(self.patrols_data)
 
-    def delete_patrols(self, xs):
-        for x in xs:
-            self.patrols_data.pop(x)
+    def delete_patrols(self, patrolsToDelete):
+        for patrol in patrolsToDelete:
+            self.patrols_data.pop(patrol)
         self.update_patrols_view.emit(self.patrols_data)
 
     def get_current_patrols(self):
@@ -238,8 +258,10 @@ class PatrolsEscheduler(QObject):
         print(self.patrols)
         self.points_scheduler.setGoals()
         self.start_patrols_scheduling()
-        self.patrols_scheduling_state.emit('start')
+        self.patrols_scheduling_state.emit("start")
 
+    def update_patrol_info(self, id):
+        self.patrol_state.emit(id)
 
     def setPointsToVisit(self, points):
         self._points_to_visit = points
