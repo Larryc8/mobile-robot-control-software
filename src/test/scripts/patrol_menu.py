@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime
 
 from styles.buttons import primary_button_style, secondary_button_style 
-from styles.labels import inactive_label_style, border_label_style
+from styles.labels import inactive_label_style, border_label_style, error_label_style
 
 class PatrolsMenu(QMainWindow):
     update_date = pyqtSignal(dict)
@@ -62,7 +62,8 @@ class PatrolsMenu(QMainWindow):
         icon_save = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
         save_btn.setIcon(icon_save)
 
-        self.empty_days_alert = QLabel('Selecciona almenos un dia')
+        self.empty_days_alert = QLabel('✘ ERROR: Seleccione almenos un dia')
+        self.empty_days_alert.setStyleSheet(error_label_style)
         self.empty_days_alert.hide()
         layout = QVBoxLayout()
         layout.addWidget(self.time, alignment=Qt.AlignTop)
@@ -107,7 +108,7 @@ class PatrolsMenu(QMainWindow):
 
 class TimeSelect(QGroupBox):
     def __init__(self) -> None:
-        super().__init__("Selct the time for patrol")
+        super().__init__("Seleccione la hora de las patrullas")
         self.hours = QTimeEdit(self)
         self.minutes = QTimeEdit(self)
         # self.hours.setStyleSheet(f"font-size: {fontsize}px;")

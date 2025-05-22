@@ -53,7 +53,7 @@ from styles.buttons import (
     patrol_checkbox_style,
 )
 
-from styles.labels import inactive_label_style, minimal_label_style
+from styles.labels import inactive_label_style, minimal_label_style, muted_label_style
 
 from styles.patrols import patrol_base_style, patrol_selected_style
 
@@ -299,8 +299,9 @@ class VisualizationPanel(QWidget):
         dialog = InputDialog(self.parent)
         dialog.exec_()   
         print('VizPanel,dialog', dialog.filename)
-        self.nodes_manager.save_map()
-        self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
+        mapname = dialog.filename
+        self.nodes_manager.save_map(mapname)
+        # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
         toast = Toast(self.parent)
         toast.setDuration(4000)  # Hide after 5 seconds
         toast.setTitle('Se guardo el mapa exitosamente')
@@ -352,7 +353,7 @@ class VisualizationPanel(QWidget):
         self.isCreate = False
 
         self.nodes_manager.bringUpStop()
-        self.nodes_manager.stopNodes(["map_server", "amcl"])
+        self.nodes_manager.stopNodes(["map_server", "amcl", "turtlebot3_slam_gmapping"])
         # self.create_map_btn.setEnabled(False)
         self.nodes_manager.bringUpStart()
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
@@ -563,7 +564,7 @@ class PatrolsPanel(QGroupBox):
             self.stop_patrols_btn,
         ) = (
             QPushButton("+ Crear"),
-            QPushButton("delete"),
+            QPushButton("Eliminar"),
             QPushButton("Comenzar"),
             QPushButton(" Parar"),
         )
@@ -1164,7 +1165,8 @@ class BatteryIndicator(QWidget):
         self.layout = QHBoxLayout()
         
         # Battery percentage with dynamic colorSP_DialogCloseButton
-        text = QLabel('Estado de la bateria: ')
+        text = QLabel('♥ Estado de la bateria del robot: ')
+        text.setStyleSheet(muted_label_style)
         self.percentage_label = QLabel("100%")
         self.percentage_label.setAlignment(Qt.AlignLeft)
         self.percentage_label.setStyleSheet("""
@@ -1173,7 +1175,7 @@ class BatteryIndicator(QWidget):
             color: #4CAF50;  /* Initial green color */
         """)
         
-        self.status_label = QLabel("Fully Charged")
+        self.status_label = QLabel("Cargada")
         self.status_label.setAlignment(Qt.AlignLeft)
         self.status_label.setStyleSheet("font-size: 14px; color: #666;")
         
@@ -1207,18 +1209,18 @@ class BatteryIndicator(QWidget):
         if self.current_level > 70:
             battery_color = "#4CAF50"  # Green
             text_color = "#4CAF50"     # Green
-            status = "Good"
+            status = "Buena"
         elif self.current_level > 30:
             battery_color = "#FFC107"   # Amber
             text_color = "#FF9800"     # Darker amber
-            status = "Low"
+            status = "Baja"
         else:
             battery_color = "#F44336"   # Red
             text_color = "#D32F2F"     # Darker red
-            status = "Very Low"
+            status = "Muy Baja"
             
         if self.current_level >= 95:
-            status = "Fully Charged"
+            status = "Cargada"
         elif self.charging_icon.isVisible():
             status = "Charging"
         

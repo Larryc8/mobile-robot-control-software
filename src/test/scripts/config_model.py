@@ -30,6 +30,7 @@ class ConfigModel:
     ) -> None:
         self.workspace = workspace
         self.param_file = param_file
+        self.all_config_params = {} 
 
         with open(self.param_file, "r") as file:
             self.data = yaml.load(file, Loader=yaml.SafeLoader)
@@ -46,6 +47,7 @@ class ConfigModel:
                 params.update({str(key): value})
 
         # print(params)
+        self.all_config_params.update(params)
         return params
 
     def get_ranges(self) -> dict:
@@ -60,11 +62,15 @@ class ConfigModel:
         return data
 
     def set_params(self, configs: dict) -> None:
-        for key, value in configs.items():
+        self.all_config_params.update(configs)
+        for key, value in self.all_config_params.items():
             rospy.set_param(self.workspace + key, value)
 
         with open(self.param_file, "w") as file:
-            yaml.dump(configs, file, sort_keys=False)
+            yaml.dump(self.all_config_params, file, sort_keys=False)
+
+    def restore_values(self):
+        pass
 
 
 class NodeWorker(QThread):
@@ -225,8 +231,9 @@ class NodesManager(QObject):
         if  self.bringup is not None:
             self.bringup.shutdown()
 
-    def save_map(self):
-        subprocess.Popen(['rosrun', 'map_server', 'map_saver', '-f', 'mymap'])
+    def save_map(self, mapname):
+        x = subprocess.Popen(['rosrun', 'map_server', 'map_saver', '-f', f'{mapname}'])
+        # x.wait()
 
     def topicHasPublisher(self, topic, publisher=None):
         for available_topic, _type in rospy.get_published_topics():

@@ -83,15 +83,15 @@ error_label_style = ("""
     QLabel {
         color: #d32f2f;
         background-color: #ffebee;
-        padding: 10px;
+        padding: 5px;
         border: 1px solid #ef9a9a;
         border-radius: 5px;
         font-weight: bold;
     }
 """)
 
-title_label = QLabel("Main Title")
-title_label.setStyleSheet("""
+# title_label = QLabel("Main Title")
+title_label_style = ("""
     QLabel {
         font-size: 24px;
         font-weight: bold;
@@ -101,8 +101,8 @@ title_label.setStyleSheet("""
     }
 """)
 
-subtitle_label = QLabel("Section Subtitle")
-subtitle_label.setStyleSheet("""
+# subtitle_label = QLabel("Section Subtitle")
+subtitle_label_style = ("""
     QLabel {
         font-size: 18px;
         font-weight: 600;
@@ -113,9 +113,8 @@ subtitle_label.setStyleSheet("""
     }
 """)
 
-
-section_header = QLabel("Section Header")
-section_header.setStyleSheet("""
+# section_header = QLabel("Section Header")
+section_header_label_style = ("""
     QLabel {
         font-size: 16px;
         font-weight: 500;
@@ -128,21 +127,19 @@ section_header.setStyleSheet("""
 """)
 
 
-muted_label = QLabel("Secondary information")
-muted_label.setStyleSheet("""
+# muted_label = QLabel("Secondary information")
+muted_label_style = ("""
     QLabel {
-        font-size: 13px;
+        font-size: 15px;
         color: #777777;
-        font-style: italic;
         padding: 2px 0;
     }
 """)
 
-
-code_label = QLabel("print('Hello World')")
-code_label.setStyleSheet("""
+# code_label = QLabel("print('Hello World')")
+code_label_style = ("""
     QLabel {
-        font-family: 'Courier New', monospace;
+        font-family: monospace;
         font-size: 13px;
         color: #333;
         background-color: #f5f5f5;

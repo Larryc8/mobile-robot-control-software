@@ -5,6 +5,7 @@ border_button_style = ("""
         border: 1px solid #3498db;
         border-radius: 2px;
         padding: 6px 6px;
+        font-weight: bold;
     }
     QPushButton:hover {
         background: #3498db;
@@ -22,6 +23,7 @@ border_button_style_danger = ("""
         border: 1px solid #3498db;
         border-radius: 2px;
         padding: 6px 6px;
+        font-weight: bold;
     }
     QPushButton:hover {
         background: pink;
@@ -195,3 +197,88 @@ modern_checkbox_style = ("""
         border: 2px solid #3700b3;
     }
 """)
+
+common_slider_style = ("""    
+    QSlider::handle:horizontal {
+        width: 20px;
+        height: 12px;
+        margin: -4px 0;
+        background:  white;
+        border: 1px solid #777;
+        border-radius: 3px;
+    }
+
+    QSlider::tick-mark:horizontal {
+        height: 4px;
+        width: 1px;
+        background: #999;
+    }
+""" )
+
+
+simple_slider_rightleft_style  = ("""
+    QSlider::groove:horizontal {
+        height: 8px;
+        background:  #4682B4;
+        border-radius: 1px;
+    }
+    
+    QSlider::sub-page:horizontal {
+        background: lightgray;
+        border-radius: 1px;
+    }
+""" + common_slider_style)
+
+simple_slider_leftright_style  = ("""
+    QSlider::groove:horizontal {
+        height: 8px;
+        background: lightgray;
+        border-radius: 1px;
+    }
+    
+    QSlider::sub-page:horizontal {
+        background: #4682B4;
+        border-radius: 1px;
+    }
+""" + common_slider_style) 
+
+modern_line_edit_style = ("""
+    QLineEdit {
+        border: none;
+        border-bottom: 2px solid #bdbdbd;
+        background: transparent;
+        padding: 5px;
+        font-size: 16px;
+    }
+    
+    QLineEdit:focus {
+        border-bottom: 2px solid #2196F3;
+    }
+""")
+simple_line_edit_style = ("""
+    QLineEdit {
+        background-color: #f0f0f0;
+        border: 2px solid #ccc;
+        border-radius: 5px;
+        padding: 5px;
+        font-size: 14px;
+    }
+    
+    QLineEdit:focus {
+        border: 2px solid #6a9fb5;
+        background-color: #fff;
+    }
+""")
+error_simple_line_edit_style = ("""
+    QLineEdit {
+        background-color: #fff3f3;
+        border: 1px solid #ffcccc;
+        border-radius: 3px;
+        padding: 5px;
+    }
+    
+    QLineEdit:focus {
+        border: 1px solid #ff9999;
+    }
+""")
+

@@ -36,6 +36,12 @@ from styles.buttons import (
     toggle_button_style,
     minimal_button_style,
     patrol_checkbox_style,
+    simple_slider_rightleft_style,
+    simple_slider_leftright_style,
+    modern_line_edit_style,
+    simple_line_edit_style,
+    error_simple_line_edit_style
+
 )
 
 from styles.labels import inactive_label_style, minimal_label_style
@@ -78,6 +84,7 @@ class ConfigPanel(QWidget):
         self.filter_text = QLineEdit()
         self.filter_text.setPlaceholderText('Busca los parametros por nombre')
         self.filter_text.returnPressed.connect(self.handleLineEditEnter)
+        self.filter_text.setStyleSheet(simple_line_edit_style)
 
 
         self.panels = [
@@ -109,15 +116,16 @@ class ConfigPanel(QWidget):
         self.apply_config_button = QPushButton("Aplicar Cambios")
         self.reset_config_btn = QPushButton("Restaurar valores")
         self.buttons_layout.addWidget(self.save_config_button, 2)
-        self.buttons_layout.addWidget(self.reset_config_btn, 1 )
+        # self.buttons_layout.addWidget(self.reset_config_btn, 1 )
         self.buttons_layout.addWidget(self.apply_config_button, 1)
 
+        self.apply_config_button.hide()
 
         self.save_config_button.clicked.connect(self.saveClickHandler)
         self.apply_config_button.clicked.connect(self.applyClickHandler)
         self.save_config_button.setStyleSheet(colored_button_style)
         self.apply_config_button.setStyleSheet(primary_button_style)
-        self.reset_config_btn.setStyleSheet(secondary_button_style)
+        # self.reset_config_btn.setStyleSheet(secondary_button_style)
         # self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
         # btn.setIcon(QApplication.style().standardIcon()) SP_BrowserReload
 
@@ -137,9 +145,11 @@ class ConfigPanel(QWidget):
 
     @pyqtSlot()
     def saveClickHandler(self) -> None:
+        self.apply_config_button.hide()
         for panel in self.panels:
             [(name, tab)] = panel.items()
             self.configs.get(name).set_params(tab.getInputsValue())
+        self.apply_config_button.show()
 
     @pyqtSlot()
     def applyClickHandler(self) -> None:
@@ -157,10 +167,20 @@ class ConfigPanel(QWidget):
 
     @pyqtSlot()
     def handleLineEditEnter(self):
-        self.query_param.emit(self.filter_text.text())
+        text = self.filter_text.text()
+        self.query_param.emit(text)
+
+    @pyqtSlot(int)
+    def update_query_state(self):
+        text = ''
+        if text:
+            self.filter_text.setStyleSheet(simple_line_edit_style)
+        else:
+            self.filter_text.setStyleSheet(error_simple_line_edit_style)
 
 
 class Panel(QWidget):
+    query_result = pyqtSignal(int)
     def __init__(self, configs: dict, ranges: dict = {}) -> None:
         super().__init__()
         self.MAX_ELEMENT_BY_COLUMN = 6
@@ -224,10 +244,13 @@ class Panel(QWidget):
 
         self.generateConfigInputs()
 
-        for index, input in enumerate([item for item in self.config_inputs if text in item.title()]):
+        widget_array = [item for item in self.config_inputs if text in item.title()]
+
+        for index, input in enumerate(widget_array):
             row = index % self.MAX_ELEMENT_BY_COLUMN
             column = index // self.MAX_ELEMENT_BY_COLUMN
-            self.layout.addWidget(input, row, column, alignment=Qt.AlignTop)
+            self.layout.addWidget(input, row, column, alignment=(Qt.AlignTop | Qt.AlignLeft))
+        self.query_result.emit(len(widget_array))
 
 
 
@@ -239,6 +262,14 @@ class ConfigInput(QGroupBox):
         self.setFixedHeight(115)
         self.setFixedWidth(300)
         # self.setStyleSheet("background-color: navy;")
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 14px;
+            }
+
+
+            """)
         self.range = _range
         self.name = label_text
 
@@ -246,9 +277,12 @@ class ConfigInput(QGroupBox):
         if min(self.range) < 0:
             slider_range = range(100, 0, -1)
             step = -step
+            style = simple_slider_rightleft_style
         else:
             slider_range = range(0, 100, 1)
+            style = simple_slider_leftright_style
         self.param_values_range = [round(value * step, 5) for value in slider_range]
+
 
         self.layout = QVBoxLayout()
         self.label = QLabel()
@@ -265,6 +299,8 @@ class ConfigInput(QGroupBox):
         self.slider.setTickInterval(20)
         self.slider.setTickPosition(QSlider.TicksBothSides)
         # self.slider.setRange(min(range), max(range))
+        self.slider.setStyleSheet(style)
+        self.line_edit.setStyleSheet(modern_line_edit_style)
 
         self.slider.valueChanged.connect(self.changeEventHandler)
         self.line_edit.returnPressed.connect(self.handleLineEditChange)
