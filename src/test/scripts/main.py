@@ -18,7 +18,7 @@ from home_view import HomePanel
 from configuration import ConfigPanel
 # from map_view import MappingPanel
 from better_image_display import ImageViewer
-from test_todo2 import TodoApp
+from logsystem_view import TodoApp
 
 class App(QMainWindow):
     def __init__(self):

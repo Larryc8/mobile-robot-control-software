@@ -1,4 +1,6 @@
 import sys
+import re
+
 from PyQt5.QtWidgets import (
     QMainWindow,
     QApplication,
@@ -61,6 +63,7 @@ from joystick import Joypad
 from patrols_scheduler import PatrolsEscheduler
 from patrol_menu import PatrolsMenu
 from rview import MyViz
+from input_textdialog import InputDialog 
 
 
 class HomePanel(QWidget):
@@ -292,7 +295,10 @@ class VisualizationPanel(QWidget):
             return 
 
         # if self.nodes_manager.topicHasPublisher("/scan"):
-        self.save_map_button.setEnabled(False)
+        # self.save_map_button.setEnabled(False)
+        dialog = InputDialog(self.parent)
+        dialog.exec_()   
+        print('VizPanel,dialog', dialog.filename)
         self.nodes_manager.save_map()
         self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
         toast = Toast(self.parent)

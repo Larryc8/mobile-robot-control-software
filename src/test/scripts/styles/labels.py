@@ -89,4 +89,65 @@ error_label_style = ("""
         font-weight: bold;
     }
 """)
-        
+
+title_label = QLabel("Main Title")
+title_label.setStyleSheet("""
+    QLabel {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333333;
+        padding: 10px 0;
+        margin-bottom: 10px;
+    }
+""")
+
+subtitle_label = QLabel("Section Subtitle")
+subtitle_label.setStyleSheet("""
+    QLabel {
+        font-size: 18px;
+        font-weight: 600;
+        color: #444444;
+        padding: 8px 0;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+""")
+
+
+section_header = QLabel("Section Header")
+section_header.setStyleSheet("""
+    QLabel {
+        font-size: 16px;
+        font-weight: 500;
+        color: #2c3e50;
+        background-color: #f8f9fa;
+        padding: 6px 12px;
+        border-radius: 4px;
+        margin: 15px 0 5px 0;
+    }
+""")
+
+
+muted_label = QLabel("Secondary information")
+muted_label.setStyleSheet("""
+    QLabel {
+        font-size: 13px;
+        color: #777777;
+        font-style: italic;
+        padding: 2px 0;
+    }
+""")
+
+
+code_label = QLabel("print('Hello World')")
+code_label.setStyleSheet("""
+    QLabel {
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        color: #333;
+        background-color: #f5f5f5;
+        padding: 6px 10px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+""")

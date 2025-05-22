@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QStyle,
     QLineEdit,
 )
-from PyQt5.QtCore import Qt, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 
 inputsHasChanged = False
@@ -41,6 +41,7 @@ from styles.buttons import (
 from styles.labels import inactive_label_style, minimal_label_style
 
 class ConfigPanel(QWidget):
+    query_param = pyqtSignal(str)
     def __init__(self, nodes_manager) -> None:
         super().__init__()
         # self.inputsHasChanged = False
@@ -74,7 +75,9 @@ class ConfigPanel(QWidget):
         self.layout = QVBoxLayout()
         self.buttons_layout = QHBoxLayout()
         self.tabs = QTabWidget()
-        self.filter = QLineEdit()
+        self.filter_text = QLineEdit()
+        self.filter_text.setPlaceholderText('Busca los parametros por nombre')
+        self.filter_text.returnPressed.connect(self.handleLineEditEnter)
 
 
         self.panels = [
@@ -99,6 +102,8 @@ class ConfigPanel(QWidget):
         for panel in self.panels:
             [(name, tab)] = panel.items()
             self.tabs.addTab(tab, name)
+            self.query_param.connect(tab.update_panel)
+
 
         self.save_config_button = QPushButton("Guardar Configuracion")
         self.apply_config_button = QPushButton("Aplicar Cambios")
@@ -123,7 +128,7 @@ class ConfigPanel(QWidget):
         icon = QApplication.style().standardIcon(QStyle.SP_BrowserReload)
         self.reset_config_btn.setIcon(icon)
 
-        self.layout.addWidget(self.filter)
+        self.layout.addWidget(self.filter_text)
         self.layout.addWidget(self.tabs)
         # self.layout.addWidget(self.reset_config_btn)
         self.layout.addLayout(self.buttons_layout)
@@ -150,6 +155,10 @@ class ConfigPanel(QWidget):
         self.nodes_manager.bringUpStart()
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
 
+    @pyqtSlot()
+    def handleLineEditEnter(self):
+        self.query_param.emit(self.filter_text.text())
+
 
 class Panel(QWidget):
     def __init__(self, configs: dict, ranges: dict = {}) -> None:
@@ -158,15 +167,27 @@ class Panel(QWidget):
         self.BLACK_LIST = ["map_frame"]
         self.layout = QGridLayout()
         self.input_values = configs.copy()
+        self.filter_text = QLineEdit()
+        self.ranges = ranges
 
+        self.generateConfigInputs()
+
+        for index, input in enumerate(self.config_inputs):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            self.layout.addWidget(input, row, column, alignment=Qt.AlignTop)
+
+        self.setLayout(self.layout)
+
+    def generateConfigInputs(self):
         self.config_inputs = []
-        for name, value in configs.items():
+        for name, value in self.input_values.items():
             if (
                 not isinstance(value, str)
                 and not isinstance(value, bool)
                 and value != 0
             ):
-                slider_range = ranges.get(name)
+                slider_range = self.ranges.get(name)
                 self.config_inputs.append(
                     ConfigInput(
                         name,
@@ -178,12 +199,8 @@ class Panel(QWidget):
                     )
                 )
 
-        for index, input in enumerate(self.config_inputs):
-            row = index % self.MAX_ELEMENT_BY_COLUMN
-            column = index // self.MAX_ELEMENT_BY_COLUMN
-            self.layout.addWidget(input, row, column)
 
-        self.setLayout(self.layout)
+
 
     def getInputs(self) -> list:
         return self.config_inputs
@@ -193,8 +210,25 @@ class Panel(QWidget):
             self.input_values.update(input.value())
         return self.input_values
 
-    def update(self):
-        pass
+    def update_panel(self, text):
+        # if text:
+        print('filter from panel', text)
+        for index  in range(len(self.config_inputs)):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            item = self.layout.itemAtPosition(row, column)
+            if item:
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+
+        self.generateConfigInputs()
+
+        for index, input in enumerate([item for item in self.config_inputs if text in item.title()]):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            self.layout.addWidget(input, row, column, alignment=Qt.AlignTop)
+
 
 
 class ConfigInput(QGroupBox):
@@ -203,6 +237,7 @@ class ConfigInput(QGroupBox):
     ) -> None:
         super().__init__(label_text)
         self.setFixedHeight(115)
+        self.setFixedWidth(300)
         # self.setStyleSheet("background-color: navy;")
         self.range = _range
         self.name = label_text
@@ -236,7 +271,7 @@ class ConfigInput(QGroupBox):
 
         [
             self.layout.addWidget(element)
-            for element in ( self.value_lebel, self.line_edit, self.slider)
+            for element in (  self.line_edit, self.slider)
         ]
         self.setLayout(self.layout)
 
@@ -265,8 +300,20 @@ class ConfigInput(QGroupBox):
         return {self.label.text(): self.mapRangeToValue(self.slider.value())}
 
     def handleLineEditChange(self):
-        x = self.line_edit.text()
-        print(x, self.mapValueToRange(float(x)))
+        try:
+            x = self.line_edit.text()
+            value =  float(x)
+            range_values_float = self.param_values_range.copy()
+            range_values_float.pop()
+            range_values_float.append(value)
+            range_values_float.sort()
+            index = range_values_float.index(value)
+            # index = self.mapValueToRange(float(x))
+            self.slider.setValue(index)
+        except ValueError as e:
+            print('config Panel-Input', e)
+        # print(x, index)
+        # if index > 0:
 
 
 if __name__ == "__main__":
