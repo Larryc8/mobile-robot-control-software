@@ -47,25 +47,44 @@ class MyTableWidget(QWidget):
         self.parent.w = None
 
         self.tabs = QTabWidget()
-        self.tab_widget = {name: QWidget() for name in self.tabs_names}
+        self.tabs_widget = {name: QWidget() for name in self.tabs_names}
 
         [
             self.tabs.addTab(tab, name)
-            for name, tab in  self.tab_widget.items()
+            for name, tab in  self.tabs_widget.items()
         ]
+
+        self.tabs.setStyleSheet("""
+            QTabBar::tab {
+                background: transparent;
+                color: #555;
+                padding: 10px 8px;
+                margin: 4px 2px;
+                border-radius: 2px;
+            }
+            
+            QTabBar::tab:selected {
+                background: lightblue;
+                color: #333;
+            }
+            QTabBar::tab:hover {
+                background: lightgray;
+                color: #333;
+            }
+        """)
 
         topbar = TopBar()
 
         # Create  tab
-        for name in self.tab_widget.keys():
-            self.tab_widget[name].layout = QVBoxLayout()
+        for name in self.tabs_widget.keys():
+            self.tabs_widget[name].layout = QVBoxLayout()
 
         print('main', parent)
-        self.tab_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
-        self.tab_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
-        self.tab_widget['Log system'].layout.addWidget(TodoApp())
+        self.tabs_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
+        self.tabs_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
+        self.tabs_widget['Log system'].layout.addWidget(TodoApp())
 
-        [tab.setLayout(tab.layout) for tab in self.tab_widget.values()]
+        [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]
         self.button = QPushButton("Push for Window")
         self.button.clicked.connect(self.show_new_window)
         

@@ -12,6 +12,6 @@ patrol_selected_style = ("""
         border: 1px solid #aaa;
         border-radius: 5px;
         margin: 0.2em;
-        background: blue 
+        background: lightgray 
         }
 """)

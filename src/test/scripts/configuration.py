@@ -111,6 +111,22 @@ class ConfigPanel(QWidget):
             self.tabs.addTab(tab, name)
             self.query_param.connect(tab.update_panel)
 
+        self.tabs.setStyleSheet("""
+            
+            QTabBar::tab {
+                background: #F5F5F5;
+                padding: 8px;
+                color: #555;
+            }
+            
+            QTabBar::tab:selected {
+                color: #333;
+                border-bottom: 4px solid #2196F3;
+            }
+        """)
+        # self.tabs.setTabPosition(QTabWidget.West)  # Set tabs to left side
+        # self.tabs.setTabPosition(QTabWidget.West)
+
 
         self.save_config_button = QPushButton("Guardar Configuracion")
         self.apply_config_button = QPushButton("Aplicar Cambios")
@@ -259,7 +275,7 @@ class ConfigInput(QGroupBox):
         self, label_text: str, default_value: int = 0, _range: List[float] = [1, 2]
     ) -> None:
         super().__init__(label_text)
-        self.setFixedHeight(115)
+        self.setFixedHeight(105)
         self.setFixedWidth(300)
         # self.setStyleSheet("background-color: navy;")
         self.setStyleSheet("""

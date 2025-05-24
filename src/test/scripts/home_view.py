@@ -1,5 +1,6 @@
 import sys
 import re
+from typing import List
 
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -106,7 +107,9 @@ class HomePanel(QWidget):
 
         self.layout.addWidget(joypad, 7, 2)
         # self.layout.addWidget(btn1, 3, 2)
-        # self.layout.setColumnStretch(2, 2)
+        self.layout.setColumnStretch(2, 2)
+        self.layout.setRowStretch(1, 2)
+
 
         self.setLayout(self.layout)
 
@@ -404,7 +407,7 @@ class SelectModePanel(QGroupBox):
         # self.name.setText("Modo de operacion")
         # self.setStyleSheet("""
         #     QGroupBox {
-        #         border: 1px solid #c0c0c0;
+        #         padding: 4px;
         #     }
 
         # """)
@@ -605,13 +608,14 @@ class PatrolsPanel(QGroupBox):
         self.left_btn.clicked.connect(self.set_previous_page)
         self.right_btn.clicked.connect(self.set_next_page)
         self.patrols_scheduler.patrol_finished.connect(self.patrol_finished)
-        self.stop_patrols_btn.clicked.connect(self.stop_any_patrol)
+        # self.stop_patrols_btn.clicked.connect(self.stop_any_patrol)
         self.patrols_scheduler.update_patrols_view.connect(self.get_current_patrols)
         # self.patrols_scheduler.update_patrols_view.connect(self.update_patrols_indexing_label)
 
         self.patrols_scheduler.update_patrols_view.connect(
             self.patrols_container.update_patrols
         )
+        self.patrols_container.exec_single_patrol.connect(self.start_any_patrol)
         # self.patrols_scheduler.
         [
             button.setIcon(QApplication.style().standardIcon(icon))
@@ -761,12 +765,8 @@ class PatrolsPanel(QGroupBox):
             toast.show()
             return
 
-        icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
-        self.start_patrols_btn.setIcon(icon_stop)
-        self.start_patrols_btn.setText("Parar")
-        self.isStart = False
 
-        self.patrols_scheduler.start_patrols()
+        self.start_any_patrol()
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
@@ -779,6 +779,15 @@ class PatrolsPanel(QGroupBox):
         toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
         Toast.setPositionRelativeToWidget(self.parent)
         toast.show()
+
+    def start_any_patrol(self, patrolid=None):
+        icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
+        self.start_patrols_btn.setIcon(icon_stop)
+        self.start_patrols_btn.setText("Parar")
+        self.isStart = False
+
+        self.patrols_scheduler.start_patrols()
+        pass
 
     def stop_any_patrol(self, c=None):
         # self.patrols_container
@@ -824,9 +833,10 @@ class PatrolsPanel(QGroupBox):
         # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
 
     def handleSinglepatrolExec(self, x=None):
-        self.start_patrols_btn.setEnabled(False)
-        self.create_btn.setEnabled(False)
-        self.delete_btn.setEnabled(False)
+        # self.start_patrols_btn.setEnabled(False)
+        # self.create_btn.setEnabled(False)
+        # self.delete_btn.setEnabled(False)
+        pass
 
     def patrol_finished(self, message):
         # self.start_patrols_btn.setEnabled(False)
@@ -886,6 +896,7 @@ class PatrolsPanel(QGroupBox):
 
 
 class PatrolsContainer(QWidget):
+    exec_single_patrol = pyqtSignal(str)
     def __init__(
         self, patrols_data: dict, parent, patrols_scheduler, callback=None
     ) -> None:
@@ -895,7 +906,7 @@ class PatrolsContainer(QWidget):
         self.patrols_data = patrols_data
         self.parent = parent
         # self.layout.setSpacing(0)
-        self.patrols = []
+        self.patrols_widgets = []
         self.patrols_scheduler = patrols_scheduler
         self.pageindex = 0
         self.max_element_view = 2
@@ -908,11 +919,12 @@ class PatrolsContainer(QWidget):
         self.update_patrols(patrols_data)
         self.setLayout(self.layout)
         self.patrols_scheduler.patrol_state.connect(self.update_running_patrol)
+        self.patrols_scheduler.single_patrol_active.connect(self.handleSinglePatrolActive)
 
     def update_patrols(self, patrols_data):
-        [w.setParent(None) for w in self.patrols]
-        [self.layout.removeWidget(w) for w in self.patrols]
-        self.patrols = []
+        [w.setParent(None) for w in self.patrols_widgets]
+        [self.layout.removeWidget(w) for w in self.patrols_widgets]
+        self.patrols_widgets = []
         self.element_count = len(patrols_data)
         patrols_items = list(patrols_data.items())
         patrols_items.reverse()
@@ -936,7 +948,7 @@ class PatrolsContainer(QWidget):
             )
             i = i + 1
             patrol_widget.enable_single_patrol_exec.connect(self.handleSinglepatrolExec)
-            self.patrols.append(patrol_widget)
+            self.patrols_widgets.append(patrol_widget)
 
             if str(self.running_patrol) == str(id):
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
@@ -944,14 +956,14 @@ class PatrolsContainer(QWidget):
                 )
 
 
-        print("hola soy patrolcontainer", len(self.patrols), patrols_data)
-        [self.layout.addWidget(patrol) for patrol in self.patrols]
+        print("hola soy patrolcontainer", len(self.patrols_widgets), patrols_data)
+        [self.layout.addWidget(patrol) for patrol in self.patrols_widgets]
         self.update()
 
     def update_running_patrol(self, id):
-        print("running patrol ", id)
+        print("PATROL RUNNNing ", id)
         self.running_patrol = id
-        for patrol in self.patrols:
+        for patrol in self.patrols_widgets:
             if str(patrol.id) == str(id):
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
                     patrol.update_patrol_progress
@@ -992,11 +1004,19 @@ class PatrolsContainer(QWidget):
         return (max_pages_count, self.pageindex)
 
     def get_selected_patrolsid(self):
-        return [patrol.selected for patrol in self.patrols if patrol.selected]
+        return [patrol.selected for patrol in self.patrols_widgets if patrol.selected]
 
-    def handleSinglepatrolExec(self, x):
-        self.isSinglePatrolExec = x
-        self.callback()
+    def handleSinglepatrolExec(self, patrolid):
+        self.patrols_scheduler.start_single_patrol_scheduling(patrolid)
+        for patrol in self.patrols_widgets:
+            if str(patrol.id) == str(patrolid):
+                self.patrols_scheduler.points_scheduler.patrol_progress.connect(
+                    patrol.update_patrol_progress
+                )
+
+    def handleSinglePatrolActive(self, patrolid=None):
+        self.exec_single_patrol.emit(str(patrolid))
+
 
     def patrol_finished(self):
         pass
@@ -1006,14 +1026,14 @@ class PatrolsContainer(QWidget):
 
 
 class Patrol(QGroupBox):
-    enable_single_patrol_exec = pyqtSignal(bool)
+    enable_single_patrol_exec = pyqtSignal(float)
 
     def __init__(
         self,
         parent,
         id: str = "999",
-        days=[],
-        time=2233,
+        days:List[str] =[],
+        time:str ='2323',
         patrols_scheduler=None,
         state=None,
         delay = 0
@@ -1047,22 +1067,23 @@ class Patrol(QGroupBox):
             self.progress.setValue(100 * (state[1] - state[0]) / state[1])
 
         self.layout = QGridLayout()
-        self.patrol_name = QLabel()
-        self.patrol_name.setText(" ".join(days))
+        self.patrol_name_label = QLabel()
+        self.patrol_name_label.setText(" ".join(days))
+        self.patrol_time_label = QLabel(self.time)
 
         ( self.menu_button, self.checkbox) = (
             QPushButton("Menu"),
             QCheckBox(),
         )
 
-        self.menu_button.clicked.connect(self.task)
+        self.menu_button.clicked.connect(self.edit_patrol_task)
         self.menu = QMenu()
-        edit = self.menu.addAction("Editar")
+        edit = self.menu.addAction("Editar /")
         edit.triggered.connect(self.edit_patrol)
 
-        force_exec = self.menu.addAction("Ejecutar")
+        force_exec = self.menu.addAction("Ejecutar ⤭")
         force_exec.triggered.connect(self.force_execution)
-        force_exec.setEnabled(False)
+        # force_exec.setEnabled(False)
         self.menu_button.setMenu(self.menu)
 
         pixmapi = QStyle.SP_MessageBoxInformation
@@ -1071,19 +1092,22 @@ class Patrol(QGroupBox):
         self.menu_button.setStyleSheet(tertiary_button_style)
         self.checkbox.setStyleSheet(patrol_checkbox_style)
         # self.menu_button.setMaximumWidth(30)
+        self.patrol_name_label.setToolTip("This is a tooltip!")
+        self.patrol_time_label.setToolTip("This is a tooltip!")
 
         self.checkbox.stateChanged.connect(self.select)
 
-        self.layout.addWidget(self.patrol_name, 1, 3)
+        self.layout.addWidget(self.patrol_time_label, 1, 1, alignment=Qt.AlignLeft)
+        self.layout.addWidget(self.patrol_name_label, 1, 3)
         self.layout.addWidget(self.menu_button, 1, 4, alignment=Qt.AlignRight)
         self.layout.addWidget(self.progress, 2, 0, 1, 4)
         self.layout.addWidget(self.points_checked_label, 2, 4, 1, 1)
         self.layout.addWidget(self.checkbox, 1, 0, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
 
-        self.animate_show()
+        # self.animate_show()
 
-    def task(self):
+    def edit_patrol_task(self):
         self.popup = PatrolsMenu(
             self.parent,
             selected_days=self.days,
@@ -1096,10 +1120,10 @@ class Patrol(QGroupBox):
 
     def edit_patrol(self):
         # print("Option 1 selected")
-        self.task()
+        self.edit_patrol_task()
 
     def force_execution(self):
-        self.enable_single_patrol_exec.emit(True)
+        self.enable_single_patrol_exec.emit(self.id)
         # self.exec_botton.setEnabled(False)
         print("Option 2 selected")
 

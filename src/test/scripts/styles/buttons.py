@@ -27,7 +27,7 @@ border_button_style_danger = ("""
     }
     QPushButton:hover {
         background: pink;
-        color: white;
+        color: #3498db;
     }    
     QPushButton:pressed {
         background-color: red;

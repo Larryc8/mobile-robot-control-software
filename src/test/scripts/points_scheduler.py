@@ -42,6 +42,7 @@ class PointsScheduler(QObject):
         self.feedback_task = feedback_task
         self.cancelled = False
         self.emit_callback = None
+        self.client = None
         # actionlib.GoalStatus.SUCCEEDED
 
     def setGoals(self):
@@ -66,14 +67,16 @@ class PointsScheduler(QObject):
     def setHomePoint(self):
         pass
 
-    def cancel_goal(self):
-        if self.client.get_state() == GoalStatus.ACTIVE:
-            self.client.cancel_goal()
-            self.cancelled = True
-            # self.done_task()
-            # self.restart()
+    def cancel_points_scheduling(self):
+        if self.client:
+            if self.client.get_state() == GoalStatus.ACTIVE:
+                self.client.cancel_goal()
+                self.cancelled = True
+                # self.done_task()
+                # self.restart()
+        print('points canceled from points sche')
 
-    def dispatch(self, patrolid=None):
+    def dispatch(self, patrolid =None):
         self.current_patrolid = float(patrolid)
 
         print("points points_scheduler points", self.goals)
@@ -116,8 +119,12 @@ class PointsScheduler(QObject):
             print("TODAS LOS PUNTOS HAN SIDO RECORRIDOS")
             return
 
-        if not self.cancelled:
-            self.dispatch(str(self.current_patrolid))
+        if self.cancelled:
+            self.cancelled = False
+            print('POINTS CANCELLED WITH state ', state )
+            return
+
+        self.dispatch(str(self.current_patrolid))
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
@@ -142,7 +149,6 @@ class PointsScheduler(QObject):
 
     def update_points(self, points):
         self._goals = points
-        self.setGoals()
         print("from points_scheduler POINTS UPDATE")
 
 

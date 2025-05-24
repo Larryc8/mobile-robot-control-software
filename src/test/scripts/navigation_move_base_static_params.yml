@@ -14,7 +14,7 @@ global_costmap/scan/marking: True
 global_costmap/scan/sensor_frame: base_scan
 global_costmap/scan/topic: scan
 global_costmap/static_map: True
-global_costmap/transform_tolerance: 11
+global_costmap/transform_tolerance: 10
 global_costmap/update_frequency: 10.0
 global_costmap/scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
 # global_costmap/observation_sources: scan
@@ -38,7 +38,7 @@ local_costmap/scan/marking: True
 local_costmap/scan/sensor_frame: base_scan
 local_costmap/scan/topic: scan
 local_costmap/static_map: False
-local_costmap/transform_tolerance: 11
+local_costmap/transform_tolerance: 10
 local_costmap/update_frequency: 10.0
 local_costmap/width: 3
 local_costmap/scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}

@@ -144,6 +144,8 @@ class TimeSelect(QGroupBox):
         """)
         self.hours.setStyleSheet(style)
         self.minutes.setStyleSheet(style)
+        # self.minutes.setTime()
+        print('current time', QTime.currentTime())
 
     def setTime(self, time: str):
         x = [digit for digit in time]
