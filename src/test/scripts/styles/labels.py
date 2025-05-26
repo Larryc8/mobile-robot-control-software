@@ -96,8 +96,8 @@ title_label_style = ("""
         font-size: 24px;
         font-weight: bold;
         color: #333333;
-        padding: 10px 0;
-        margin-bottom: 10px;
+        padding: 2px 0;
+        margin-bottom: 5px;
     }
 """)
 
@@ -126,6 +126,12 @@ section_header_label_style = ("""
     }
 """)
 
+normal_label_style = ("""
+    QLabel {
+        font-size: 15px;
+        margin-bottom: 6px;
+    }
+""")
 
 # muted_label = QLabel("Secondary information")
 muted_label_style = ("""
@@ -136,11 +142,20 @@ muted_label_style = ("""
     }
 """)
 
+
+muted_mini_label_style = ("""
+    QLabel {
+        font-size: 14px;
+        color: #777777;
+        padding: 2px 0;
+    }
+""")
+
 # code_label = QLabel("print('Hello World')")
 code_label_style = ("""
     QLabel {
         font-family: monospace;
-        font-size: 13px;
+        font-size: 14px;
         color: #333;
         background-color: #f5f5f5;
         padding: 6px 10px;

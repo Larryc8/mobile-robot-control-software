@@ -73,37 +73,37 @@ class ConfigModel:
         pass
 
 
-class NodeWorker(QThread):
-    # finished = pyqtSignal()
-    # progress = pyqtSignal(int)
-    
-    def __init__(self, node):
-        super().__init__()
-        self.node = node
-        self.subprocess = None
-        
-    def run(self):
-        package, exec, name, arg, respawn = self.node['package'], self.node['exec'], self.node['name'], self.node.get('arg'), self.node.get('respawn') 
-        if arg:
-            self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
-        else:
-            self.subprocess = subprocess.Popen(['rosrun', package, exec, f'__name:={name}'])
+# class NodeWorker(QThread):
+#     # finished = pyqtSignal()
+#     # progress = pyqtSignal(int)
+#     
+#     def __init__(self, node):
+#         super().__init__()
+#         self.node = node
+#         self.subprocess = None
+#         
+#     def run(self):
+#         package, exec, name, arg, respawn = self.node['package'], self.node['exec'], self.node['name'], self.node.get('arg'), self.node.get('respawn') 
+#         if arg:
+#             self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
+#         else:
+#             self.subprocess = subprocess.Popen(['rosrun', package, exec, f'__name:={name}'])
 
-        # self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
-        # self._launcher = ROSLaunch()
-        # self._launcher.start()
-        # self.subprocess = self._launcher.launch(self.node)
-        # for i in range(1, 101):
-        #     time.sleep(0.1)  # Simulate work
-        #     self.progress.emit(i)
-        # self.finished.emit()
+#         # self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
+#         # self._launcher = ROSLaunch()
+#         # self._launcher.start()
+#         # self.subprocess = self._launcher.launch(self.node)
+#         # for i in range(1, 101):
+#         #     time.sleep(0.1)  # Simulate work
+#         #     self.progress.emit(i)
+#         # self.finished.emit()
 
-    def stop(self):
-        if self.subprocess:
-            self.subprocess.terminate()  # Send SIGTERM
-            # self.subprocess.stop()
-        if  self.thread.isRunning():
-            self.stop()
+#     def stop(self):
+#         if self.subprocess:
+#             self.subprocess.terminate()  # Send SIGTERM
+#             # self.subprocess.stop()
+#         if  self.thread.isRunning():
+#             self.stop()
 
 
 class NodesManager(QObject):
@@ -112,18 +112,19 @@ class NodesManager(QObject):
         self.nodes_subprocess = {}
         self.bringup = None
         self._launcher = ROSLaunch()
+        self.rosbag = None
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
         node_instances = {}
         for node in nodes:
             node_values = node.values()
-            package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
+            package, exec, name, args, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
             if not respawn:
                 respawn = False
             
             node_instances.update(
                 # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
-                {name: Node(package=package, node_type=exec, name=name, args=arg,  respawn=False)}
+                {name: Node(package=package, node_type=exec, name=name, args=args,  respawn=False, output='screen')}
             )
         return node_instances
     # def initNodes(self, nodes: List[dict] = []) -> List[dict]:
@@ -246,6 +247,17 @@ class NodesManager(QObject):
         if self.nodes_subprocess.get(nodename):
             return True
         return False
+
+    def recordSensordata(self, topicslist: list):
+        topics = ' '.join(topicslist)
+        filename = 'haroldjeje'
+        self.rosbag = subprocess.Popen(['rosbag', 'record', '-O', filename,  topics])
+        print('ROSBAG: ', topics)
+
+    def stopRecordSensorData(self):
+        if self.rosbag:
+            self.rosbag.terminate()
+        pass 
 
 
 

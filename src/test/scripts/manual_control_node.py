@@ -4,7 +4,7 @@ import time
 import math
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Twist
-from scipy.spatial.transform import Rotation
+#from scipy.spatial.transform import Rotation
 from scipy.linalg import norm
 import math
 from tf.transformations import euler_from_quaternion

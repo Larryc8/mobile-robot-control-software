@@ -92,12 +92,11 @@ secondary_button_style = ("""
 tertiary_button_style = ("""
     QPushButton {
         background: none;
-        color: black;
+        color: gray;
         border: none;
         padding: 5px;
         text-align: left;
         font-size: 16px;
-        font-weight: bold;
     }
     QPushButton:hover {
         color: magenta;

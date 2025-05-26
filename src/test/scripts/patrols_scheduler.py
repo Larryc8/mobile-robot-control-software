@@ -31,7 +31,7 @@ class ScheduleChecker(QThread):
         self.wainting_queue = []
         self.dispatched_patrols = []
         self.movePatrolsIndex = False
-        self.sleep_time = 8
+        self.sleep_time = 10
         # self.forced_exec = forced_exec
 
         self.state = "red"
@@ -56,6 +56,7 @@ class ScheduleChecker(QThread):
                 )
                 self.patrol_state.emit(str(self.single_patrolid))
                 self.points_scheduler.dispatch(self.single_patrolid)
+
                 while not self.isSinglePatrolFinished:
                     print('EXEC FORCED PATROL...')
                     if self.isInterruptionRequested():
@@ -121,8 +122,8 @@ class ScheduleChecker(QThread):
 
                 if not self.isDispatching:
                     print("worker thread points schedule: ", scheduled_patrol)
-                    self.patrol_state.emit(str(scheduled_patrol.get("patrolid")))
                     if not scheduled_patrol["finished"]:
+                        self.patrol_state.emit(str(scheduled_patrol.get("patrolid")))
                         self.points_scheduler.setDoneTask(
                             done_task=self.free_points_dispatcher
                         )
@@ -180,7 +181,7 @@ class PatrolsEscheduler(QObject):
     patrol_finished = pyqtSignal(str)
     patrol_progress = pyqtSignal(int)
     patrols_scheduling_state = pyqtSignal(str)
-    patrol_state = pyqtSignal(str)
+    set_running_patrol = pyqtSignal(str)
     terminate_all_patrols = pyqtSignal(str)
     single_patrol_active = pyqtSignal(str)
     # add_patrol_view = pyqtSignal(dict)
@@ -260,7 +261,7 @@ class PatrolsEscheduler(QObject):
             points_scheduler=self.points_scheduler,
         )
         print('FORCED EXECUTION patrol id:', self.single_patrolid)
-        self.scheduler.start(QThread.IdlePriority)
+        # self.scheduler.start(QThread.IdlePriority)
         self.points_scheduler.setGoals()
         self.scheduler.progress_updated.connect(self.update_progress)
         self.scheduler.task_completed.connect(self.task_finished)
@@ -285,10 +286,10 @@ class PatrolsEscheduler(QObject):
 
         if self.scheduler and self.scheduler.isRunning():
             self.scheduler.requestInterruption()
-            print('scheduler None')
+            print('scheduler request cancel')
             self.patrolIsRunning = False
-            return True
-        return False
+            return True #patrol was cancel?
+        return False #patrol was cancel?
 
     def task_finished(self, message):
         self.indexKeeper["currentpatrol_index"] = 0
@@ -304,6 +305,7 @@ class PatrolsEscheduler(QObject):
         self.patrol_finished.emit(message)
 
         if self.single_patrolid:
+            print('single patrol func executing')
             self.exec_single_patrol()
 
     def update_patrol(self, x):
@@ -344,7 +346,8 @@ class PatrolsEscheduler(QObject):
         self.patrols_scheduling_state.emit("start")
 
     def update_patrol_info(self, id):
-        self.patrol_state.emit(id)
+        print('UPDATE PATROL INFO')
+        self.set_running_patrol.emit(id)
 
     def setPointsToVisit(self, points):
         self._points_to_visit = points

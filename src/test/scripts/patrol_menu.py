@@ -18,11 +18,12 @@ from PyQt5.QtWidgets import (
     QMenu,
     QTimeEdit,
     QStyle,
+    QGraphicsOpacityEffect,
 )
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime,  QPropertyAnimation, QRect, QEasingCurve
 
 from styles.buttons import primary_button_style, secondary_button_style 
-from styles.labels import inactive_label_style, border_label_style, error_label_style
+from styles.labels import inactive_label_style, border_label_style, error_label_style, muted_mini_label_style
 
 class PatrolsMenu(QMainWindow):
     update_date = pyqtSignal(dict)
@@ -41,6 +42,7 @@ class PatrolsMenu(QMainWindow):
                 background-color: white;
             }
         """)
+
 
         self.setGeometry(0, 0, 380, 275)
         self.patrolid = patrolid
@@ -75,10 +77,11 @@ class PatrolsMenu(QMainWindow):
         close_btn.clicked.connect(self.close)
         self.central_widget.setLayout(layout)
 
+
     def show_popup(self):
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
-        popup_x = self.parent.x() + (self.parent.width() - self.width() - 45) 
+        popup_x = self.parent.x() + (self.parent.width() - self.width() - 60) 
         popup_y = self.parent.y() + (self.parent.height() - self.height())//2 
         # print("popup", popup_x, popup_y)
         self.move(popup_x, popup_y)
@@ -108,18 +111,27 @@ class PatrolsMenu(QMainWindow):
 
 class TimeSelect(QGroupBox):
     def __init__(self) -> None:
-        super().__init__("Seleccione la hora de las patrullas")
+        super().__init__("Seleccione la hora de los patrullas (Formato 24 horas)")
         self.hours = QTimeEdit(self)
         self.minutes = QTimeEdit(self)
+        self.ap = QTimeEdit()
         # self.hours.setStyleSheet(f"font-size: {fontsize}px;")
         # self.minutes.setStyleSheet(f"font-size: {fontsize}px;")
         self.hours.setDisplayFormat("HH")
         self.minutes.setDisplayFormat("mm")
+        self.ap.setDisplayFormat("AP")
 
-        self.layout = QHBoxLayout()
-        self.layout.addWidget(self.hours)
-        self.layout.addWidget(self.minutes)
+
+        self.layout = QGridLayout()
+        self.hours_label = QLabel('Horas')
+        self.minutes_label = QLabel('Minutes')
+        self.layout.addWidget(self.hours_label, 0, 0)
+        self.layout.addWidget(self.minutes_label, 0, 1)
+        self.layout.addWidget(self.hours, 1, 0)
+        self.layout.addWidget(self.minutes, 1, 1)
+        self.layout.addWidget(self.ap, 1, 2)
         self.setLayout(self.layout)
+
         style =  ("""
             QTimeEdit {
                 border: 2px solid #3498db;
@@ -144,8 +156,10 @@ class TimeSelect(QGroupBox):
         """)
         self.hours.setStyleSheet(style)
         self.minutes.setStyleSheet(style)
-        # self.minutes.setTime()
-        print('current time', QTime.currentTime())
+        self.ap.setStyleSheet(style)
+        self.hours_label.setStyleSheet(muted_mini_label_style)
+        self.minutes_label.setStyleSheet(muted_mini_label_style)
+
 
     def setTime(self, time: str):
         x = [digit for digit in time]

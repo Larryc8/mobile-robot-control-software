@@ -36,6 +36,7 @@ from PyQt5.QtCore import (
     QParallelAnimationGroup,
     QEasingCurve,
     QTimer,
+    QTime,
 )
 from PyQt5.QtGui import QIcon, QPixmap, QTransform
 
@@ -64,7 +65,7 @@ from joystick import Joypad
 from patrols_scheduler import PatrolsEscheduler
 from patrol_menu import PatrolsMenu
 from rview import MyViz
-from input_textdialog import InputDialog 
+from input_textdialog import InputDialog, CustomDialog
 
 
 class HomePanel(QWidget):
@@ -110,7 +111,6 @@ class HomePanel(QWidget):
         self.layout.setColumnStretch(2, 2)
         self.layout.setRowStretch(1, 2)
 
-
         self.setLayout(self.layout)
 
     # def updatePoints(self, points):
@@ -130,10 +130,11 @@ class VisualizationPanel(QWidget):
         self.rviz_options_layout = QHBoxLayout()
         self.parent = parent
         self.nodes_manager = nodes_manager
-        self.isCreate = True
+        self.isCreateMap = True
         # ImageViewer()
         # self.parent.pointWindow = None
         self.currentOperationMode = "manual"
+        self.currentUserOperation = "idle"
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager, parent=self.parent
         )
@@ -176,7 +177,7 @@ class VisualizationPanel(QWidget):
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.create_map_btn.setIcon(icon_start)
         # self.create_map_btn.setText('ddd')
-        
+
         icon_load = QApplication.style().standardIcon(QStyle.SP_FileLinkIcon)
         self.load_map_button.setIcon(icon_load)
 
@@ -197,7 +198,6 @@ class VisualizationPanel(QWidget):
         self.followrobot_check.stateChanged.connect(self.setFollowRobot)
         self.save_map_button.hide()
 
-
         # self.save_button.setEnabled(False)
         self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
@@ -209,12 +209,11 @@ class VisualizationPanel(QWidget):
         self.layout.addLayout(self.buttons_layout, 2, 0, 1, 3)
         self.setLayout(self.layout)
 
-
     def toggleCreaeteSaveMap(self):
-        if self.isCreate:
+        if self.isCreateMap:
             self.handleCreateMap()
         else:
-            self.saveMapClickHandler()
+            self.saveMapHandler()
 
     def setFollowRobot(self, x):
         self.rviz.setUp("followrobot", x)
@@ -223,22 +222,38 @@ class VisualizationPanel(QWidget):
             self.rviz.setUp("globalframe", "map")
 
     def handleLoadMap(self):
+        if self.currentUserOperation == "createmap":
+            dg = CustomDialog(
+                self.parent,
+                "Creacion de mapa sigue activo",
+                positive_response="Seguir creando",
+                negative_response="Descartar",
+                retries=1,
+            )
+            dg.exec_()
+            if dg.response == "Positive":
+                return
+
+            # self.saveMapHandler()
+            # self.nodes_manager.save_map()
+            icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+            self.create_map_btn.setIcon(icon)
+            self.create_map_btn.setText("Crear Mapa")
+            self.isCreateMap = True
+
         self.nodes_manager.stopNodes(["turtlebot3_slam_gmapping"])
         self.rviz.setUp("globalframe", "map")
         if self.nodes_manager.topicHasPublisher("/map_metadata"):
-            button = QMessageBox.critical(
-                self,
-                "oh no!",
-                "Ya hay un mapa, CONSERVAR el que tienes?",
-                buttons=QMessageBox.No | QMessageBox.Yes,
-                defaultButton=QMessageBox.Yes,
+            dg = CustomDialog(
+                self.parent,
+                "Ya hay un mapa cargado",
+                positive_response="Conservar",
+                negative_response="Descartar",
+                retries=0,
             )
-            try:
-                if button == QMessageBox.Yes:
-                    print("OK!")
-                    return
-            except AttributeError as error:
-                print(error)
+            dg.exec_()
+            if dg.response == "Positive":
+                return
 
         try:
             self.nodes_manager.bringUpStop()
@@ -286,36 +301,36 @@ class VisualizationPanel(QWidget):
         except FileNotFoundError as error:
             print(error)
 
-    def saveMapClickHandler(self):
-        if not self.nodes_manager.nodeIsRunning('turtlebot3_slam_gmapping'):
+    def saveMapHandler(self):
+        if not self.nodes_manager.nodeIsRunning("turtlebot3_slam_gmapping"):
             toast = Toast(self.parent)
             toast.setDuration(4000)  # Hide after 5 seconds
-            toast.setTitle('Fallo en la creacion del mapa')
+            toast.setTitle("Fallo en la creacion del mapa")
             toast.setText("El nodo turtlebot3_slam_gmapping no disponible")
             toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
             Toast.setPositionRelativeToWidget(self.parent)
             toast.show()
-            return 
+            return
 
         # if self.nodes_manager.topicHasPublisher("/scan"):
         # self.save_map_button.setEnabled(False)
         dialog = InputDialog(self.parent)
-        dialog.exec_()   
-        print('VizPanel,dialog', dialog.filename)
+        dialog.exec_()
+        print("VizPanel,dialog", dialog.filename)
         mapname = dialog.filename
         self.nodes_manager.save_map(mapname)
         # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
         toast = Toast(self.parent)
         toast.setDuration(4000)  # Hide after 5 seconds
-        toast.setTitle('Se guardo el mapa exitosamente')
+        toast.setTitle("Se guardo el mapa exitosamente")
         toast.setText("Ahora puedes usar tu mapa para la navegacion")
         toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
         Toast.setPositionRelativeToWidget(self.parent)
 
         icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.create_map_btn.setIcon(icon)
-        self.create_map_btn.setText('Crear Mapa')
-        self.isCreate = True
+        self.create_map_btn.setText("Crear Mapa")
+        self.isCreateMap = True
         toast.show()
 
     def handleSavePoints(self, points):
@@ -348,12 +363,13 @@ class VisualizationPanel(QWidget):
             return
 
         self.enable.emit("localization", False)
+        self.currentUserOperation = "createmap"
         # self.save_map_button.show()
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
         self.create_map_btn.setIcon(icon)
-        self.create_map_btn.setText('Guardar')
-        self.isCreate = False
+        self.create_map_btn.setText("Guardar")
+        self.isCreateMap = False
 
         self.nodes_manager.bringUpStop()
         self.nodes_manager.stopNodes(["map_server", "amcl", "turtlebot3_slam_gmapping"])
@@ -676,8 +692,20 @@ class PatrolsPanel(QGroupBox):
         )
 
     def add_patrol(self, check):
+        now = QTime.currentTime()
+        hour = now.hour()
+        minute = now.minute()
+
+        if hour < 10:
+            hour = f"0{hour}"
+        if minute < 10:
+            minute = f"0{minute}"
+
         self.parent.popup = PatrolsMenu(
-            self.parent, selected_days=[], patrolid=datetime.now().timestamp()
+            self.parent,
+            selected_days=[],
+            time=f"{hour}{minute}",
+            patrolid=datetime.now().timestamp(),
         )
         self.parent.popup.update_date.connect(self.patrols_scheduler.update_patrol)
         self.parent.popup.update_date.connect(self.alert)
@@ -765,7 +793,6 @@ class PatrolsPanel(QGroupBox):
             toast.show()
             return
 
-
         self.start_any_patrol()
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
@@ -799,24 +826,29 @@ class PatrolsPanel(QGroupBox):
         if not self.patrols_scheduler.cancel_task():
             icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
             self.start_patrols_btn.setIcon(icon_start)
-            self.start_patrols_btn.setText('Comenzar')
+            self.start_patrols_btn.setText("Comenzar")
             self.isStart = True
-            toast = Toast(self.parent)
-            toast.setDuration(4000)  # Hide after 5 seconds
-            toast.setTitle("No hay patrollajes corriendo")
-            toast.setText("Reinicie los patrullajes")
-            toast.applyPreset(ToastPreset.INFORMATION)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            # toast = Toast(self.parent)
+            # toast.setDuration(4000)  # Hide after 5 seconds
+            # toast.setTitle("No hay patrollajes corriendo")
+            # toast.setText("Reinicie los patrullajes")
+            # toast.applyPreset(ToastPreset.INFORMATION)  # Apply style preset
+            # Toast.setPositionRelativeToWidget(self.parent)
+            # toast.show()
             return
 
+        toast = Toast(self.parent)
+        toast.setDuration(4000)  # Hide after 5 seconds
+        toast.setTitle("Los patrullajes se esta cancelando")
+        toast.setText("Espere a que los patrullajes se cancelen")
+        toast.applyPreset(ToastPreset.INFORMATION)  # Apply style preset
+        Toast.setPositionRelativeToWidget(self.parent)
+        toast.show()
         # icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         # self.start_patrols_btn.setIcon(icon_start)
         # self.start_patrols_btn.setText("Comenzar")
         # self.isStart = True
         # print("PATROL STOPPED")
-
-
 
     def delete_patrols(self):
         toDelete = self.patrols_container.get_selected_patrolsid()
@@ -842,7 +874,7 @@ class PatrolsPanel(QGroupBox):
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
-        if message == 'TaskSuccessfully' :
+        if message == "TaskSuccessfully":
             toast = Toast(self.parent)
             toast.setDuration(3000)  # Hide after 5 seconds
             toast.setTitle("Todos los Patrullajes se Ejecutado con Exito")
@@ -851,7 +883,7 @@ class PatrolsPanel(QGroupBox):
             Toast.setPositionRelativeToWidget(self.parent)
             toast.show()
 
-        if message == 'TaskCancelled':
+        if message == "TaskCancelled":
             toast = Toast(self.parent)
             toast.setDuration(3000)  # Hide after 5 seconds
             toast.setTitle("Programacion cancelada`")
@@ -864,7 +896,6 @@ class PatrolsPanel(QGroupBox):
         self.start_patrols_btn.setIcon(icon_start)
         self.start_patrols_btn.setText("Comenzar")
         self.isStart = True
-
 
     def set_next_page(self):
         max_pag, pag_index = self.patrols_container.move_page_index(1)
@@ -897,6 +928,7 @@ class PatrolsPanel(QGroupBox):
 
 class PatrolsContainer(QWidget):
     exec_single_patrol = pyqtSignal(str)
+
     def __init__(
         self, patrols_data: dict, parent, patrols_scheduler, callback=None
     ) -> None:
@@ -913,13 +945,15 @@ class PatrolsContainer(QWidget):
         self.element_count = 0
         self.isSinglePatrolExec = False
         self.callback = callback
-        self.running_patrol = None
+        self.running_patrol = "1"
         self.layout.setSpacing(2)
 
+        self.patrols_scheduler.set_running_patrol.connect(self.update_running_patrol)
+        self.patrols_scheduler.single_patrol_active.connect(
+            self.handleSinglePatrolActive
+        )
         self.update_patrols(patrols_data)
         self.setLayout(self.layout)
-        self.patrols_scheduler.patrol_state.connect(self.update_running_patrol)
-        self.patrols_scheduler.single_patrol_active.connect(self.handleSinglePatrolActive)
 
     def update_patrols(self, patrols_data):
         [w.setParent(None) for w in self.patrols_widgets]
@@ -950,27 +984,31 @@ class PatrolsContainer(QWidget):
             patrol_widget.enable_single_patrol_exec.connect(self.handleSinglepatrolExec)
             self.patrols_widgets.append(patrol_widget)
 
+            print("RUNNNing PATROL id", self.running_patrol)
             if str(self.running_patrol) == str(id):
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
                     patrol_widget.update_patrol_progress
                 )
-
+            self.patrols_scheduler.points_scheduler.patrol_progress.connect(
+                self.update_patrol_model
+            )
 
         print("hola soy patrolcontainer", len(self.patrols_widgets), patrols_data)
         [self.layout.addWidget(patrol) for patrol in self.patrols_widgets]
         self.update()
 
     def update_running_patrol(self, id):
-        print("PATROL RUNNNing ", id)
+        print("ESTOY CORRIENDO ", id)
         self.running_patrol = id
         for patrol in self.patrols_widgets:
             if str(patrol.id) == str(id):
+                print("ESTOY CORRIENDO IF")
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
                     patrol.update_patrol_progress
                 )
-                self.patrols_scheduler.points_scheduler.patrol_progress.connect(
-                    self.update_patrol_model
-                )
+                # self.patrols_scheduler.points_scheduler.patrol_progress.connect(
+                # self.update_patrol_model
+                # )
             # else:
             #     # button.clicked.disconnect(self.on_button_clicked)
             #     self.patrols_scheduler.points_scheduler.patrol_progress.disconnect(
@@ -1007,16 +1045,18 @@ class PatrolsContainer(QWidget):
         return [patrol.selected for patrol in self.patrols_widgets if patrol.selected]
 
     def handleSinglepatrolExec(self, patrolid):
-        self.patrols_scheduler.start_single_patrol_scheduling(patrolid)
         for patrol in self.patrols_widgets:
             if str(patrol.id) == str(patrolid):
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
                     patrol.update_patrol_progress
                 )
+                self.patrols_scheduler.points_scheduler.patrol_progress.connect(
+                    self.update_patrol_model
+                )
+        self.patrols_scheduler.start_single_patrol_scheduling(patrolid)
 
     def handleSinglePatrolActive(self, patrolid=None):
         self.exec_single_patrol.emit(str(patrolid))
-
 
     def patrol_finished(self):
         pass
@@ -1032,11 +1072,11 @@ class Patrol(QGroupBox):
         self,
         parent,
         id: str = "999",
-        days:List[str] =[],
-        time:str ='2323',
+        days: List[str] = [],
+        time: str = "2323",
         patrols_scheduler=None,
         state=None,
-        delay = 0
+        delay=0,
     ):
         super().__init__()
         self.days = days
@@ -1071,7 +1111,7 @@ class Patrol(QGroupBox):
         self.patrol_name_label.setText(" ".join(days))
         self.patrol_time_label = QLabel(self.time)
 
-        ( self.menu_button, self.checkbox) = (
+        (self.menu_button, self.checkbox) = (
             QPushButton("Menu"),
             QCheckBox(),
         )
@@ -1123,6 +1163,19 @@ class Patrol(QGroupBox):
         self.edit_patrol_task()
 
     def force_execution(self):
+        if self.patrols_scheduler.patrolIsRunning:
+            dg = CustomDialog(
+                self.parent,
+                "Ejecion forzada de patrulla!",
+                message="Ejecutar patrullas de manera forzada, detendra la ejecion de todas las patrullas.\nPara reprogramar de click en Comenzar",
+                positive_response="Descartar",
+                negative_response="Ejecutar de todos modos",
+                retries=0,
+            )
+            dg.exec_()
+            if dg.response == "Positive":
+                return
+
         self.enable_single_patrol_exec.emit(self.id)
         # self.exec_botton.setEnabled(False)
         print("Option 2 selected")
@@ -1145,7 +1198,7 @@ class Patrol(QGroupBox):
             )
             self.progress.show()
             self.points_checked_label.show()
-            self.points_checked_label.setText(f"activo {patrols_left}/{total_patrols}")
+            self.points_checked_label.setText(f"{patrols_left}/{total_patrols}")
             self.progress.setValue(
                 int(100 * (total_patrols - patrols_left) / total_patrols)
             )
@@ -1163,7 +1216,7 @@ class Patrol(QGroupBox):
 
     def animate_show(self):
         anim = QPropertyAnimation(self, b"maximumWidth")
-        anim.setDuration(200 + 100*self.delay)
+        anim.setDuration(200 + 100 * self.delay)
         anim.setStartValue(300)
         anim.setEndValue(500)
         anim.setEasingCurve(QEasingCurve.InOutExpo)
@@ -1182,14 +1235,15 @@ class Patrol(QGroupBox):
         group.addAnimation(opacity_anim)
         group.start()
 
+
 class BatteryIndicator(QWidget):
     def __init__(self):
         super().__init__()
         # Create UI elements
         self.layout = QHBoxLayout()
-        
+
         # Battery percentage with dynamic colorSP_DialogCloseButton
-        text = QLabel('♥ Estado de la bateria del robot: ')
+        text = QLabel("♥ Estado de la bateria del robot: ")
         text.setStyleSheet(muted_label_style)
         self.percentage_label = QLabel("100%")
         self.percentage_label.setAlignment(Qt.AlignLeft)
@@ -1198,11 +1252,11 @@ class BatteryIndicator(QWidget):
             font-weight: bold;
             color: #4CAF50;  /* Initial green color */
         """)
-        
+
         self.status_label = QLabel("Cargada")
         self.status_label.setAlignment(Qt.AlignLeft)
         self.status_label.setStyleSheet("font-size: 14px; color: #666;")
-        
+
         self.charging_icon = QLabel("⚡ CHARGING")
         # self.charging_icon.setAlignment(Qt.AlignCenter)
         self.charging_icon.setStyleSheet("""
@@ -1216,12 +1270,12 @@ class BatteryIndicator(QWidget):
         self.layout.addWidget(self.status_label, alignment=Qt.AlignRight)
         # self.layout.addWidget(self.charging_icon, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
-        
+
         self.current_level = 100
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_battery)
         self.timer.start(1000)  # Update every second
-    
+
     def update_battery(self):
         if self.current_level > 0:
             self.current_level -= 2  # Drain faster for demo
@@ -1229,25 +1283,25 @@ class BatteryIndicator(QWidget):
             self.current_level += 5  # Charge faster for demo
             if self.current_level >= 100:
                 self.current_level = 100
-        
+
         if self.current_level > 70:
             battery_color = "#4CAF50"  # Green
-            text_color = "#4CAF50"     # Green
+            text_color = "#4CAF50"  # Green
             status = "Buena"
         elif self.current_level > 30:
-            battery_color = "#FFC107"   # Amber
-            text_color = "#FF9800"     # Darker amber
+            battery_color = "#FFC107"  # Amber
+            text_color = "#FF9800"  # Darker amber
             status = "Baja"
         else:
-            battery_color = "#F44336"   # Red
-            text_color = "#D32F2F"     # Darker red
+            battery_color = "#F44336"  # Red
+            text_color = "#D32F2F"  # Darker red
             status = "Muy Baja"
-            
+
         if self.current_level >= 95:
             status = "Cargada"
         elif self.charging_icon.isVisible():
             status = "Charging"
-        
+
         self.percentage_label.setStyleSheet(f"""
             font-size: 13px;
             font-weight: bold;
@@ -1255,7 +1309,6 @@ class BatteryIndicator(QWidget):
         """)
         self.percentage_label.setText(f"{self.current_level}%")
         self.status_label.setText(status)
-    
 
 
 if __name__ == "__main__":

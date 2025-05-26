@@ -14,9 +14,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QStyle,
     QLabel,
+    QGraphicsOpacityEffect,
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPainterPath
-from PyQt5.QtCore import Qt, QRectF, QSize
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPainterPath, QPen, QBrush, QColor
+from PyQt5.QtCore import Qt, QRectF, QSize, QPropertyAnimation
 import random
 import yaml
 from datetime import datetime
@@ -38,7 +39,7 @@ from styles.labels import (
     minimal_label_style,
     succes_label_style,
     info_label_style,
-    warning_label_style
+    warning_label_style,
 )
 
 from PyQt5.QtCore import (
@@ -186,31 +187,31 @@ class ImageViewer(QMainWindow):
 
         logging.info("from ImageViewer POINT SAVED")
 
-    def getPointsInMap(self) -> dict:
-        path = {}
-        if self.graphics_view.pixmap:
-            width = self.graphics_view.pixmap.width()
-            height = self.graphics_view.pixmap.height()
+    # def getPointsInMap(self) -> dict:
+    #     path = {}
+    #     if self.graphics_view.pixmap:
+    #         width = self.graphics_view.pixmap.width()
+    #         height = self.graphics_view.pixmap.height()
 
-            print("image viwer", width, height, self.resolution)
-            x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
-            y_adjust_factor = (
-                abs(self.botton_left_map[1]) - height * self.resolution / 2
-            )
-            print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
-            path = {
-                str(id): {
-                    "x_meters": (point["x"] - width / 2) * self.resolution
-                    - x_adjust_factor / 2,
-                    "y_meters": -(point["y"] - height / 2) * self.resolution
-                    - y_adjust_factor,
-                    "yaw_degrees": 0,
-                    "checked": False,
-                }
-                for id, point in self.graphics_view.getPointsPath().items()
-            }
-            print("Image viwer map points", path)
-        return path
+    #         print("image viwer", width, height, self.resolution)
+    #         x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
+    #         y_adjust_factor = (
+    #             abs(self.botton_left_map[1]) - height * self.resolution / 2
+    #         )
+    #         print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
+    #         path = {
+    #             str(id): {
+    #                 "x_meters": (point["x"] - width / 2) * self.resolution
+    #                 - x_adjust_factor / 2,
+    #                 "y_meters": -(point["y"] - height / 2) * self.resolution
+    #                 - y_adjust_factor,
+    #                 "yaw_degrees": 0,
+    #                 "checked": False,
+    #             }
+    #             for id, point in self.graphics_view.getPointsPath().items()
+    #         }
+    #         print("Image viwer map points", path)
+    #     return path
 
     # def display_image(self, file_path):
     #     # Clear previous items from scene
@@ -281,12 +282,12 @@ class ImageViewer(QMainWindow):
         )
         self.zoom_factor = 1.0
 
-    def resizeEvent(self, event):
-        # if self.graphics_view.scene.items():
-        #     self.graphics_view.fitInView(
-        #         self.graphics_view.scene.sceneRect(), Qt.KeepAspectRatio
-        #     )
-        super().resizeEvent(event)
+    # def resizeEvent(self, event):
+    #     # if self.graphics_view.scene.items():
+    #     #     self.graphics_view.fitInView(
+    #     #         self.graphics_view.scene.sceneRect(), Qt.KeepAspectRatio
+    #     #     )
+    #     super().resizeEvent(event)
 
 
 class Example(QGraphicsView):
@@ -321,15 +322,15 @@ class Example(QGraphicsView):
         # self.load_stored_points()
 
     def getPointsPath(self) -> dict:
-        print(self.pointsToCheck)
-        if self.pixmap:
-            width = self.pixmap.width()
-            height = self.pixmap.height()
-            # path = [((point['x'] - width/2)*0.05, (point['y'] - height/2) )]
+        print('Points to Check:', self.pointsToCheck)
+        # if self.pixmap:
+        #     width = self.pixmap.width()
+        #     height = self.pixmap.height()
+        #     # path = [((point['x'] - width/2)*0.05, (point['y'] - height/2) )]
 
-        for id, point in self.pointsToCheck.items():
-            x, y = point["x"] - width / 2, point["y"] - height / 2
-            print(f"new point x={x*0.05} m y={-y*0.05} m")
+        # for id, point in self.pointsToCheck.items():
+        #     x, y = point["x"] - width / 2, point["y"] - height / 2
+        #     print(f"new point x={x*0.05} m y={-y*0.05} m")
         return self.pointsToCheck
 
     def getPointsInMap(self) -> dict:
@@ -337,19 +338,23 @@ class Example(QGraphicsView):
         if self.pixmap:
             width = self.pixmap.width()
             height = self.pixmap.height()
+            # self.resolution = 0.05000000074505806
 
             print("image viwer", width, height, self.resolution)
-            x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
-            y_adjust_factor = (
-                abs(self.botton_left_map[1]) - height * self.resolution / 2
+            # x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
+            # y_adjust_factor = (
+            #     abs(self.botton_left_map[1]) - height * self.resolution / 2
+            # )
+            x0_pix, y0_pix = (
+                abs(self.botton_left_map[0]) ,
+                height*self.resolution - abs(self.botton_left_map[1]),
             )
-            print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
+
+            # print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
             path = {
                 str(id): {
-                    "x_meters": (point["x"] - width / 2) * self.resolution
-                    - x_adjust_factor / 2,
-                    "y_meters": -(point["y"] - height / 2) * self.resolution
-                    - y_adjust_factor,
+                    "x_meters": ((point["x"])*self.resolution - x0_pix), #* self.resolution,
+                    "y_meters": -((point["y"])*self.resolution - y0_pix),# * self.resolution,
                     "yaw_degrees": 0,
                     "checked": False,
                 }
@@ -396,11 +401,11 @@ class Example(QGraphicsView):
 
         x = event.pos().x()
         y = event.pos().y()
-        point = self.mapToScene(x, y)
-        self.points_path.append(point)
-        print(f"PUNTOS CON RESPECTO A LA VISTA X:{point.x()} Y:{point.y()}")
+        point_mapped2scene = self.mapToScene(x, y)
+        self.points_path.append(point_mapped2scene)
+        print(f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()} Y:{point_mapped2scene.y()}")
         print(
-            f"PUNTOS CON RESPECTO A LA VISTA X:{point.x()*0.05} X:{point.y()*0.05} en metros"
+            f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()*0.05} X:{point_mapped2scene.y()*0.05} en metros"
         )
 
         colors = [Qt.red, Qt.yellow, Qt.green, Qt.blue]
@@ -411,10 +416,11 @@ class Example(QGraphicsView):
                 y - self.square_size * self.zoom_factor // 2,
             )
 
-            point = QPoint(
-                x - self.square_size // 2,
-                y - self.square_size // 2,
-            )
+            # point_map = QPoint(
+            #     x - self.square_size // 2,
+            #     y - self.square_size // 2,
+            # )
+            point_mapped2scene = self.mapToScene(x - self.square_size // 2, y - self.square_size // 2)
 
             # Add the square to our list
             obj = self.mapToScene(
@@ -429,7 +435,7 @@ class Example(QGraphicsView):
             sync_id = str(datetime.now().timestamp())
 
             self.pointsToCheck.update(
-                {str(sync_id): {"color": Qt.red, "x": obj.x(), "y": obj.y()}}
+                {str(sync_id): {"color": Qt.red, "x": point_mapped2scene.x(), "y": point_mapped2scene.y()}}
             )
 
             self.squares.update(
@@ -456,7 +462,7 @@ class Example(QGraphicsView):
             print(self.pointsToCheck)
 
             for id, square in self.squares.items():
-                if not square["object"].contains(point.x(), point.y()):
+                if not square["object"].contains(point_mapped2scene.x(), point_mapped2scene.y()):
                     temp_squares.update({id: square})
                     temp_points.update({id: self.pointsToCheck[id]})
                     self.send_points.emit(self.getPointsInMap())
@@ -529,6 +535,20 @@ class Example(QGraphicsView):
             # height = square['object'].height()
             # size = QSizeF((width * scale), (height * scale))
             # square["object"].setSize(size)
+            # effect = QGraphicsOpacityEffect(self)
+            # square['object'].setGraphicsEffect(effect)
+            # self.child.setStyleSheet("background-color:red;border-radius:15px;")
+            # self.anim = QPropertyAnimation(self.child, b"pos")
+            # self.anim.setEndValue(QPoint(200, 200))
+            # self.anim.setDuration(1500)
+            # self.anim_2 = QPropertyAnimation(effect, b"opacity")
+            # self.anim_2.setStartValue(0)
+            # self.anim_2.setEndValue(1)
+            # self.anim_2.setDuration(2500)
+            # self.anim_group = QParallelAnimationGroup()
+            # self.anim_group.addAnimation(self.anim)
+            # self.anim_group.addAnimation(self.anim_2)
+            # self.anim_2.start()
             super().drawForeground(painter, square["object"])
         self.update()
 
@@ -547,6 +567,40 @@ class Example(QGraphicsView):
         else:
             super().keyPressEvent(event)
 
+
+
+class CustomGraphicsItem(QGraphicsItem):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+        
+        # Custom properties
+        self.color = QColor(Qt.blue)
+        self.selected_color = QColor(Qt.red)
+        self.pen_width = 2
+        
+    def boundingRect(self):
+        # Define the bounding rectangle of the item
+        return QRectF(self.x, self.y, self.width, self.height)
+    
+    def paint(self, painter, option, widget=None):
+        # Custom painting of the item
+        pen = QPen(self.selected_color if self.isSelected() else self.color)
+        pen.setWidth(self.pen_width)
+        painter.setPen(pen)
+        
+        brush = QBrush(self.color.lighter(130))
+        painter.setBrush(brush)
+        
+        painter.drawRect(self.x, self.y, self.width, self.height)
+        
+        # Draw some custom decoration
+        painter.drawText(self.x + 5, self.y + 15, "Custom Item")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

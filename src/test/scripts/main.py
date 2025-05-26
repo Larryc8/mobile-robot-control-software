@@ -18,7 +18,7 @@ from home_view import HomePanel
 from configuration import ConfigPanel
 # from map_view import MappingPanel
 from better_image_display import ImageViewer
-from logsystem_view import TodoApp
+from logsystem_view import LogPanel
 
 class App(QMainWindow):
     def __init__(self):
@@ -82,7 +82,7 @@ class MyTableWidget(QWidget):
         print('main', parent)
         self.tabs_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
         self.tabs_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager))
-        self.tabs_widget['Log system'].layout.addWidget(TodoApp())
+        self.tabs_widget['Log system'].layout.addWidget(LogPanel(node_manager=self.nodes_manager))
 
         [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]
         self.button = QPushButton("Push for Window")

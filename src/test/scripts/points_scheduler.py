@@ -47,6 +47,8 @@ class PointsScheduler(QObject):
 
     def setGoals(self):
         self.goals = self._goals.copy()
+        self.goals_count = len(self.goals)
+
 
     def configGoal(self, x, y, yaw):
         quaternion = Rotation.from_euler("z", yaw, True).as_quat()
@@ -81,6 +83,7 @@ class PointsScheduler(QObject):
 
         print("points points_scheduler points", self.goals)
         if len(self.goals) > 0:
+            # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
             self.pointid, pose = self.goals.popitem()
             # ids_list = list(self.goals.keys())
             # if len(ids_list) < 2:
@@ -111,9 +114,10 @@ class PointsScheduler(QObject):
                 state,
             )
 
-        self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
+        # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
         rospy.loginfo("Finished in state %s", str(state))
         if len(self.goals) == 0:
+            self.patrol_progress.emit(self.current_patrolid, len(self.goals), self.goals_count)
             if self.done_task:
                 self.done_task()
             print("TODAS LOS PUNTOS HAN SIDO RECORRIDOS")
@@ -128,13 +132,12 @@ class PointsScheduler(QObject):
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
-        self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
+        self.patrol_progress.emit(self.current_patrolid, len(self.goals) + 1, self.goals_count)
         self.points_state.emit(self.pointid, self.pointid, 0)
 
     def feedback_cb(self, feedback):
         if self.feedback_task:
             self.feedback_task(feedback)
-        # time.sleep(2)
         if self.client.get_state() == GoalStatus.ACTIVE:
             # self.cancel_goal()
             pass
@@ -147,8 +150,8 @@ class PointsScheduler(QObject):
         # self.emit_callback = callback#callback(str(self.current_patrolid), len(self.goals), len(self._goals))
 
 
-    def update_points(self, points):
-        self._goals = points
+    def update_points(self, points: list):
+        self._goals = points.copy()
         print("from points_scheduler POINTS UPDATE")
 
 

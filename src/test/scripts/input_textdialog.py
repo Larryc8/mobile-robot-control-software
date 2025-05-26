@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QMessageBox,
+    QHBoxLayout,
 )
 
 
@@ -22,7 +23,13 @@ from styles.buttons import (
     patrol_checkbox_style,
 )
 
-from styles.labels import inactive_label_style, minimal_label_style, subtitle_label_style, error_label_style
+from styles.labels import (
+    inactive_label_style,
+    minimal_label_style,
+    subtitle_label_style,
+    error_label_style,
+    normal_label_style
+)
 
 
 class InputDialog(QDialog):
@@ -31,7 +38,7 @@ class InputDialog(QDialog):
         self.setWindowTitle("Text Input Dialog")
         self.setGeometry(100, 100, 300, 150)
         self.filename = "defaultname"
-        self.atempts = 0 
+        self.atempts = 0
         # self.setStyleSheet("""
         #     QMessageBox {
         #         background-color: #f8f9fa;
@@ -47,7 +54,7 @@ class InputDialog(QDialog):
         # Label
         self.label = QLabel("Ponle un nombre a tu feo mama!")
         self.label.setStyleSheet(subtitle_label_style)
-        self.alert_label = QLabel('ERROR: Ingresa un nombre a tu feo mapa!')
+        self.alert_label = QLabel("ERROR: Ingresa un nombre a tu feo mapa!")
         self.alert_label.setStyleSheet(error_label_style)
         self.alert_label.hide()
         layout.addWidget(self.label)
@@ -78,6 +85,79 @@ class InputDialog(QDialog):
             self.accept()  # Close the dialog
             return
         self.atempts = self.atempts + 1
+
+
+class CustomDialog(QDialog):
+    def __init__(
+        self,
+        parent,
+        title: str,
+        message: str = '',
+        positive_response: str = "Yes",
+        negative_response: str = "No",
+        retries: int = 0
+    ):
+        super().__init__(parent)
+        self.setWindowTitle("Alerta!")
+        self.setGeometry(100, 100, 400, 100)
+        self.response = "Negative"
+        self.title = title
+        self.message = message
+        self.positive_response = positive_response
+        self.negative_response = negative_response
+        self.retries = retries
+        self.atempts = 0 
+
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        buttons_layout = QHBoxLayout()
+
+        # Label
+        self.title_label = QLabel(self.title)
+        self.alert_label = QLabel("ERROR: muy mallll!")
+        self.message_label = QLabel(self.message)
+        self.alert_label.hide()
+
+        layout.addWidget(self.title_label)
+        if self.message:
+            layout.addWidget(self.message_label)
+        layout.addWidget(self.alert_label)
+
+        # Submit button
+        self.positive_btn = QPushButton(self.positive_response)
+        self.negative_btn = QPushButton(self.negative_response)
+
+        self.positive_btn.clicked.connect(self.setPositiveResponse)
+        self.negative_btn.clicked.connect(self.setNegativeResponse)
+
+        self.positive_btn.setStyleSheet(primary_button_style)
+        self.negative_btn.setStyleSheet(tertiary_button_style)
+        self.title_label.setStyleSheet(subtitle_label_style)
+        self.message_label.setStyleSheet(normal_label_style )
+        self.alert_label.setStyleSheet(error_label_style)
+
+        buttons_layout.addWidget(self.negative_btn, 1)
+        buttons_layout.addWidget(self.positive_btn, 2)
+
+        layout.addLayout(buttons_layout)
+        self.setLayout(layout)
+
+    def setPositiveResponse(self):
+        self.response = "Positive"
+        self.accept()
+
+    def setNegativeResponse(self):
+        self.response = "Negative"
+        self.atempts = self.atempts + 1
+
+        if self.atempts > self.retries:
+            self.accept()  # Close the dialog
+            return
+
+        if self.atempts == self.retries:
+            self.alert_label.show()
 
 
 
