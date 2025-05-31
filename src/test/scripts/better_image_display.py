@@ -16,7 +16,16 @@ from PyQt5.QtWidgets import (
     QLabel,
     QGraphicsOpacityEffect,
 )
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPainterPath, QPen, QBrush, QColor
+from PyQt5.QtGui import (
+    QPixmap,
+    QImage,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QBrush,
+    QColor,
+    QFont,
+)
 from PyQt5.QtCore import Qt, QRectF, QSize, QPropertyAnimation
 import random
 import yaml
@@ -40,6 +49,7 @@ from styles.labels import (
     succes_label_style,
     info_label_style,
     warning_label_style,
+    code_label_style,
 )
 
 from PyQt5.QtCore import (
@@ -58,6 +68,7 @@ from PyQt5.QtCore import (
 
 class ImageViewer(QMainWindow):
     save_selected_points = pyqtSignal(dict)
+    save_in_database = pyqtSignal(dict)
 
     def __init__(
         self,
@@ -69,7 +80,7 @@ class ImageViewer(QMainWindow):
         super().__init__()
         # self.setWindowTitle("Image Viewer with QGraphicsView")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 700, 600)
 
         self.init_ui()
 
@@ -80,12 +91,8 @@ class ImageViewer(QMainWindow):
         self.parent = parent
         self.resolution = 0
         self.botton_left_map = (999, 999)
+        self.pointsInMap = {}
         # self.save_selected_points.connect(self.)
-        # file_path = "./map2.pgm"
-
-        # if file_path:
-        # self.current_image_path = file_path
-        # self.display_image(file_path)
 
     def init_ui(self):
         # Central widget and layout
@@ -93,8 +100,11 @@ class ImageViewer(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout()
         buttons_layout = QHBoxLayout()
+        top_buttons_layout = QHBoxLayout()
+        checkpoints_info_layout = QHBoxLayout()
         self.timer = QTimer()
         self.timer.timeout.connect(self.hide_alerts)
+        self.setBiggerSize = True
 
         # Create graphics view and scene
         self.graphics_view = Example()
@@ -105,13 +115,24 @@ class ImageViewer(QMainWindow):
         self.warning_label = QLabel(
             "⚠ WARNING: Necesitas cargar un mapa para agrgar puntos interes"
         )
+        self.checkpoints_labels_checked = QLabel("▣ Visistado con exito")
+        self.checkpoints_labels_nochecked = QLabel("▣ No revisado")
+        self.checkpoints_labels_next = QLabel("▣ Siguiente para revision")
 
         self.success_label.hide()
         self.info_label.hide()
         self.success_label.setStyleSheet(succes_label_style)
         self.info_label.setStyleSheet(info_label_style)
         self.warning_label.setStyleSheet(warning_label_style)
+        self.toggle_size_button = QPushButton("◰ Expandir")
+        self.import_points_button = QPushButton('Importar puntos de interes de otro mapa')
+        self.toggle_size_button.setMaximumSize(110, 30)
+        self.toggle_size_button.setStyleSheet(border_button_style)
+        # self.toggle_size_button.setStyleSheet('font-size: 20px')
 
+        top_buttons_layout.addWidget(self.import_points_button, alignment=Qt.AlignRight)
+        top_buttons_layout.addWidget(self.toggle_size_button, alignment=Qt.AlignRight)
+        layout.addLayout(top_buttons_layout)
         layout.addWidget(self.info_label, alignment=Qt.AlignTop)
         layout.addWidget(self.warning_label)
         layout.addWidget(self.graphics_view)
@@ -122,17 +143,31 @@ class ImageViewer(QMainWindow):
         self.close_button = QPushButton("Cerrar")
         self.save_button = QPushButton("Guardar")
         # self.close_button.clicked.connect(self.load_image)
-        # self.save_button.clicked.connect(self.save_points)
+        self.save_button.clicked.connect(self.saveInDatabase)
         self.graphics_view.send_points.connect(self.save_points)
         self.close_button.clicked.connect(self.close_win)
         self.graphics_view.pointsChanged.connect(self.handlePointsChanged)
+        self.toggle_size_button.clicked.connect(self.toggleSize)
         # layout.addWidget(self.load_button)
+        [
+            checkpoints_info_layout.addWidget(b)
+            for b in (
+                self.checkpoints_labels_next,
+                self.checkpoints_labels_checked,
+                self.checkpoints_labels_nochecked,
+            )
+        ]
         buttons_layout.addWidget(self.save_button, 2)
         buttons_layout.addWidget(self.close_button, 1)
+        layout.addLayout(checkpoints_info_layout)
         layout.addLayout(buttons_layout)
 
+        self.checkpoints_labels_nochecked.setStyleSheet(code_label_style)
+        self.checkpoints_labels_checked.setStyleSheet(code_label_style)
+        self.checkpoints_labels_next.setStyleSheet(code_label_style)
         self.close_button.setStyleSheet(border_button_style)
         self.save_button.setStyleSheet(primary_button_style)
+        self.import_points_button.setStyleSheet(tertiary_button_style)
 
         icon = QApplication.style().standardIcon(QStyle.SP_DriveNetIcon)
         self.save_button.setIcon(icon)
@@ -150,7 +185,7 @@ class ImageViewer(QMainWindow):
         # self.reset_button = QPushButton("Reset View")
         # self.reset_button.clicked.connect(self.reset_view)
         # layout.addWidget(self.reset_button)
-        self.save_button.setEnabled(False)
+        # self.save_button.setEnabled(False)
 
         central_widget.setLayout(layout)
 
@@ -169,71 +204,52 @@ class ImageViewer(QMainWindow):
         self.success_label.hide()
         pass
 
+    def toggleSize(self):
+        if self.setBiggerSize:
+            self.setGeometry(
+                self.parent.x(),
+                self.parent.y(),
+                self.parent.width(),
+                self.parent.height() - 100,
+            )
+            self.toggle_size_button.setText("◲ Disminuir")
+            # self.reset_view()
+            self.setBiggerSize = False
+        else:
+            self.setGeometry(0, 0, 700, 600)
+            self.move_win()
+            self.toggle_size_button.setText("◰ Expandir")
+            # self.reset_view()
+            self.setBiggerSize = True
+
     def show_win(self):
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
+        if self.setBiggerSize:
+            self.move_win()
+        self.show()
+
+    def move_win(self):
         popup_x = self.parent.x() + (self.parent.width() - self.width() - 10)
-        popup_y = self.parent.y() + (self.parent.height() - self.height() - 30)
+        # popup_y = self.parent.y() + (self.parent.height() - self.height() - 30)
         popup_y = self.parent.y() + 100
         self.move(popup_x, popup_y)
-        self.show()
 
     def close_win(self):
         self.hide()
 
     def save_points(self, a):
         # a = self.getPointsInMap()
+        self.pointsInMap = a
         self.save_selected_points.emit(a)
 
         logging.info("from ImageViewer POINT SAVED")
 
-    # def getPointsInMap(self) -> dict:
-    #     path = {}
-    #     if self.graphics_view.pixmap:
-    #         width = self.graphics_view.pixmap.width()
-    #         height = self.graphics_view.pixmap.height()
+    def saveInDatabase(self, x):
+        self.save_in_database.emit(self.pointsInMap)
 
-    #         print("image viwer", width, height, self.resolution)
-    #         x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
-    #         y_adjust_factor = (
-    #             abs(self.botton_left_map[1]) - height * self.resolution / 2
-    #         )
-    #         print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
-    #         path = {
-    #             str(id): {
-    #                 "x_meters": (point["x"] - width / 2) * self.resolution
-    #                 - x_adjust_factor / 2,
-    #                 "y_meters": -(point["y"] - height / 2) * self.resolution
-    #                 - y_adjust_factor,
-    #                 "yaw_degrees": 0,
-    #                 "checked": False,
-    #             }
-    #             for id, point in self.graphics_view.getPointsPath().items()
-    #         }
-    #         print("Image viwer map points", path)
-    #     return path
 
-    # def display_image(self, file_path):
-    #     # Clear previous items from scene
-    #     self.scene.clear()
-
-    #     # Load image
-    #     pixmap = QPixmap(file_path)
-    #     if pixmap.isNull():
-    #         print("Failed to load image")
-    #         return
-
-    #     # Add pixmap to scene
-    #     self.scene.addPixmap(pixmap)
-    #     self.graphics_view.scale(1.2, 1.2)
-
-    #     # Set scene rect to image size
-    #     # self.scene.setSceneRect(pixmap.rect().x(), pixmap.rect().y(), pixmap.rect().width(), pixmap.rect().height())
-
-    #     # Reset view
-    # self.reset_view()
-
-    def load_map(self, file_path):
+    def load_map(self, file_path, stored_database_points=[]):
         try:
             with open(file_path, "r") as file:
                 data = yaml.load(file, Loader=yaml.SafeLoader)
@@ -250,13 +266,20 @@ class ImageViewer(QMainWindow):
             self.resolution = resolution
             self.botton_left_map = (x, y)
             self.graphics_view.botton_left_map = (x, y)
-            self.graphics_view.resolution = resolution
+            self.graphics_view.map_resolution = resolution
+            self.graphics_view.mapfile = file_path
             # self.save_button.setEnabled(True)
             self.info_label.show()
             self.warning_label.hide()
+            self.graphics_view.clear_points()
+            # self.load_stored_points.emit(stored_database_points)
 
         except Exception as e:
             print(e)
+
+    def load_stored_points(self, data):
+        print('ImageViewer', data)
+        self.graphics_view.load_stored_points(data)
 
     def update_points_state(self, current_poin_id, next_point_id, point_state):
         self.graphics_view.update_points_state(
@@ -277,9 +300,10 @@ class ImageViewer(QMainWindow):
 
     def reset_view(self):
         # if self.graphics_view.scene.items():
-        self.graphics_view.fitInView(
-            self.graphics_view.scene.sceneRect(), Qt.KeepAspectRatio
-        )
+        if self.graphics_view.pixmap:
+            self.graphics_view.fitInView(
+                self.graphics_view.scene.sceneRect(), Qt.KeepAspectRatio
+            )
         self.zoom_factor = 1.0
 
     # def resizeEvent(self, event):
@@ -303,10 +327,12 @@ class Example(QGraphicsView):
         self.points_path = []
         self.zoom_factor = 1
         self.pixmap = None
-        self.resolution = 0
+        self.map_resolution = 0
+        self.mapfile = None
+        self.mapfile_database = None
 
-        self.setGeometry(300, 300, 350, 300)
-        self.setWindowTitle("Shapes")
+        # self.setGeometry(300, 300, 350, 300)
+        # self.setWindowTitle("Shapes")
         self.setMouseTracking(True)
         self.setInteractive(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -322,7 +348,7 @@ class Example(QGraphicsView):
         # self.load_stored_points()
 
     def getPointsPath(self) -> dict:
-        print('Points to Check:', self.pointsToCheck)
+        print("Points to Check:", self.pointsToCheck)
         # if self.pixmap:
         #     width = self.pixmap.width()
         #     height = self.pixmap.height()
@@ -340,23 +366,28 @@ class Example(QGraphicsView):
             height = self.pixmap.height()
             # self.resolution = 0.05000000074505806
 
-            print("image viwer", width, height, self.resolution)
+            print("image viwer", width, height, self.map_resolution)
             # x_adjust_factor = abs(self.botton_left_map[0]) - width * self.resolution / 2
             # y_adjust_factor = (
             #     abs(self.botton_left_map[1]) - height * self.resolution / 2
             # )
-            x0_pix, y0_pix = (
-                abs(self.botton_left_map[0]) ,
-                height*self.resolution - abs(self.botton_left_map[1]),
+            x0_meters, y0_meters = (
+                abs(self.botton_left_map[0]),
+                height * self.map_resolution - abs(self.botton_left_map[1]),
             )
 
             # print("IMAGE VIWER adjets factors", x_adjust_factor, y_adjust_factor)
             path = {
                 str(id): {
-                    "x_meters": ((point["x"])*self.resolution - x0_pix), #* self.resolution,
-                    "y_meters": -((point["y"])*self.resolution - y0_pix),# * self.resolution,
+                    "x_meters": (
+                        (point["x"]) * self.map_resolution - x0_meters
+                    ),  # * self.resolution,
+                    "y_meters": -(
+                        (point["y"]) * self.map_resolution - y0_meters
+                    ),  # * self.resolution,
                     "yaw_degrees": 0,
                     "checked": False,
+                    "mapfile": self.mapfile,
                 }
                 for id, point in self.getPointsPath().items()
             }
@@ -388,7 +419,7 @@ class Example(QGraphicsView):
 
         if delta > 0 and self.zoom_factor > 1:
             self.zoom_out()
-        if delta < 0 and self.zoom_factor < 30:
+        if delta < 0 and self.zoom_factor < 80:
             self.zoom_in()
 
         # You can also print the raw delta for debugging
@@ -403,7 +434,9 @@ class Example(QGraphicsView):
         y = event.pos().y()
         point_mapped2scene = self.mapToScene(x, y)
         self.points_path.append(point_mapped2scene)
-        print(f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()} Y:{point_mapped2scene.y()}")
+        print(
+            f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()} Y:{point_mapped2scene.y()}"
+        )
         print(
             f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()*0.05} X:{point_mapped2scene.y()*0.05} en metros"
         )
@@ -412,30 +445,51 @@ class Example(QGraphicsView):
         if event.button() == Qt.LeftButton:
             print(f"Mouse Position: ({x}, {y})")  # Update label with mouse position
             square_pos = QPoint(
-                x - self.square_size * self.zoom_factor // 2,
-                y - self.square_size * self.zoom_factor // 2,
+                x
+                - self.square_size
+                * self.zoom_factor
+                * (224 / max(self.pixmap.width(), self.pixmap.height()))
+                // 2,
+                y
+                - self.square_size
+                * self.zoom_factor
+                * (224 / max(self.pixmap.width(), self.pixmap.height()))
+                // 2,
             )
 
             # point_map = QPoint(
             #     x - self.square_size // 2,
             #     y - self.square_size // 2,
             # )
-            point_mapped2scene = self.mapToScene(x - self.square_size // 2, y - self.square_size // 2)
+            # point_mapped2scene = self.mapToScene(
+            #     x - self.square_size // 2, y - self.square_size // 2
+            # )
+            point_mapped2scene = self.mapToScene(x, y)
 
             # Add the square to our list
             obj = self.mapToScene(
                 QRect(
                     square_pos.x(),
                     square_pos.y(),
-                    self.square_size * self.zoom_factor,
-                    self.square_size * self.zoom_factor,
+                    self.square_size
+                    * self.zoom_factor
+                    * (224 / max(self.pixmap.width(), self.pixmap.height())),
+                    self.square_size
+                    * self.zoom_factor
+                    * (224 / max(self.pixmap.width(), self.pixmap.height())),
                 )
             ).boundingRect()
 
             sync_id = str(datetime.now().timestamp())
 
             self.pointsToCheck.update(
-                {str(sync_id): {"color": Qt.red, "x": point_mapped2scene.x(), "y": point_mapped2scene.y()}}
+                {
+                    str(sync_id): {
+                        "color": Qt.red,
+                        "x": point_mapped2scene.x(),
+                        "y": point_mapped2scene.y(),
+                    }
+                }
             )
 
             self.squares.update(
@@ -462,7 +516,9 @@ class Example(QGraphicsView):
             print(self.pointsToCheck)
 
             for id, square in self.squares.items():
-                if not square["object"].contains(point_mapped2scene.x(), point_mapped2scene.y()):
+                if not square["object"].contains(
+                    point_mapped2scene.x(), point_mapped2scene.y()
+                ):
                     temp_squares.update({id: square})
                     temp_points.update({id: self.pointsToCheck[id]})
                     self.send_points.emit(self.getPointsInMap())
@@ -478,19 +534,43 @@ class Example(QGraphicsView):
             self.update()
             # self.updateScene()
 
-    def load_stored_points(self):
-        obj = QRectF(
-            10,
-            10,
-            self.square_size * self.zoom_factor,
-            self.square_size * self.zoom_factor,
-        )
+    def clear_points(self):
+        self.pointsToCheck = {}
+        self.squares = {}
+        
 
-        id_sync = datetime.now().timestamp()
-        self.squares.update({str(id_sync): {"color": Qt.red, "object": obj}})
-        self.pointsToCheck.update(
-            {str(id_sync): {"color": Qt.red, "x": obj.x(), "y": obj.y()}}
-        )
+    def load_stored_points(self, stored_points):
+        # print('Example', stored_points)
+        if stored_points:
+            for point in  stored_points.get('points'):
+                x_meters, y_meters, map_file  = point
+                if map_file == self.mapfile:
+                    x_pix = int(
+                        (x_meters - self.botton_left_map[0]) / self.map_resolution
+                    )  # Change coordinates from real to map's
+                    y_pix = (self.pixmap.height()) - int(
+                        (y_meters - self.botton_left_map[1]) / self.map_resolution
+                    )  # Origin is set at left-bottom corner, so subtraction from map size is needed
+
+                    size =  self.mapToScene(self.square_size, self.square_size)
+
+                    obj = QRectF(
+                        x_pix - size.y()*(224 / max(self.pixmap.width(), self.pixmap.height()))*1.3//2,
+                        y_pix - size.y()*(224 / max(self.pixmap.width(), self.pixmap.height()))*1.3//2,
+                        size.y()* (224 / max(self.pixmap.width(), self.pixmap.height()))*1.3,
+                        size.y()* (224 / max(self.pixmap.width(), self.pixmap.height()))*1.3,
+                    )
+                    # point = QPointF(x_pix, y_pix)
+
+
+                    id_sync = datetime.now().timestamp()
+                    self.squares.update({str(id_sync): {"color": Qt.red, "object": obj}})
+                    self.pointsToCheck.update(
+                        {str(id_sync): {"color": Qt.red, "x": x_pix, "y": y_pix}}
+                    )
+        self.update()
+        self.send_points.emit(self.getPointsInMap())
+        self.pointsChanged.emit("added")
 
     def display_image(self, file_path):  # ghghghghhg
         self.scene = QGraphicsScene()
@@ -510,46 +590,46 @@ class Example(QGraphicsView):
         # self.load_stored_points()
 
     def update_points_state(self, current_poin_id, next_point_id, point_state):
-        if not current_poin_id and not next_point_id:
-            print("Image viwer, SQUARE", self.squares)
-            for id, square in self.squares.items():
-                print("Image viwer SQuare FOR", square)
-                square["color"] = Qt.red
-            return
+        # if not current_poin_id and not next_point_id:
+        #     print("Image viwer, SQUARE", self.squares)
+        #     for id, square in self.squares.items():
+        #         print("Image viwer SQuare FOR", square)
+        #         square["color"] = Qt.red
+        #         self.update()
+        #     return
 
         if point_state < 4:
-            self.squares[current_poin_id]["color"] = Qt.green
+            if self.squares.get(current_poin_id):
+                self.squares[current_poin_id]["color"] = Qt.green
         else:
-            self.squares[current_poin_id]["color"] = Qt.red
+            if self.squares.get(current_poin_id):
+                self.squares[current_poin_id]["color"] = Qt.red
 
-        if next_point_id:
+        if next_point_id and self.squares.get(next_point_id):
             self.squares[next_point_id]["color"] = Qt.yellow
 
     def drawForeground(self, painter, rect):
-        painter.drawLine(0, 0, 20, 20)
+        # painter.drawLine(0, 0, 20, 20)
+        # painter.drawEllipse(20, 20, 20, 20)
+        # self.setBackgroundBrush(Qt.gray)
         for id, square in self.squares.items():
             self.setForegroundBrush(square["color"])  #     for square in self.squares:
-            # transform = self.transform()
-            # scale = transform.m11()
-            # width = square["object"].width()
-            # height = square['object'].height()
-            # size = QSizeF((width * scale), (height * scale))
-            # square["object"].setSize(size)
-            # effect = QGraphicsOpacityEffect(self)
-            # square['object'].setGraphicsEffect(effect)
-            # self.child.setStyleSheet("background-color:red;border-radius:15px;")
-            # self.anim = QPropertyAnimation(self.child, b"pos")
-            # self.anim.setEndValue(QPoint(200, 200))
-            # self.anim.setDuration(1500)
-            # self.anim_2 = QPropertyAnimation(effect, b"opacity")
-            # self.anim_2.setStartValue(0)
-            # self.anim_2.setEndValue(1)
-            # self.anim_2.setDuration(2500)
-            # self.anim_group = QParallelAnimationGroup()
-            # self.anim_group.addAnimation(self.anim)
-            # self.anim_group.addAnimation(self.anim_2)
-            # self.anim_2.start()
+            # painter.setBrush(square['color'])
+            painter.setFont(QFont('Arial', 2))
+            painter.setPen(QPen(square['color'], 1, Qt.SolidLine))
+            # painter.drawRect(square['object'])
+
+            text = 'No revisado'
+            if square['color'] == Qt.red:
+                text = 'No revisado'
+            if square['color'] == Qt.green:
+                text = 'Revisado'
+            if square['color'] == Qt.yellow:
+                text = 'Siguiente...'
+            painter.drawText(square['object'].x(),square['object'].y()+8, text)
+
             super().drawForeground(painter, square["object"])
+            # super().drawForeground(painter, rect)
         self.update()
 
     def keyPressEvent(self, event):
@@ -568,7 +648,6 @@ class Example(QGraphicsView):
             super().keyPressEvent(event)
 
 
-
 class CustomGraphicsItem(QGraphicsItem):
     def __init__(self, x, y, width, height):
         super().__init__()
@@ -578,29 +657,30 @@ class CustomGraphicsItem(QGraphicsItem):
         self.height = height
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
-        
+
         # Custom properties
         self.color = QColor(Qt.blue)
         self.selected_color = QColor(Qt.red)
         self.pen_width = 2
-        
+
     def boundingRect(self):
         # Define the bounding rectangle of the item
         return QRectF(self.x, self.y, self.width, self.height)
-    
+
     def paint(self, painter, option, widget=None):
         # Custom painting of the item
         pen = QPen(self.selected_color if self.isSelected() else self.color)
         pen.setWidth(self.pen_width)
         painter.setPen(pen)
-        
+
         brush = QBrush(self.color.lighter(130))
         painter.setBrush(brush)
-        
+
         painter.drawRect(self.x, self.y, self.width, self.height)
-        
+
         # Draw some custom decoration
         painter.drawText(self.x + 5, self.y + 15, "Custom Item")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

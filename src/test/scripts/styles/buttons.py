@@ -142,6 +142,37 @@ minimal_button_style = ("""
     }
 """)
 
+tag_button_style = ("""
+    QPushButton {
+        background-color: #e0e0e0;
+        border: 1px solid #b0b0b0;
+        border-radius: 10px;
+        padding:  6px;
+        color: #333333;
+        font-size: 14px;
+    }
+    
+    QPushButton:hover {
+        background-color: #d0d0d0;
+    }
+    
+    QPushButton:pressed {
+        background-color: #c0c0c0;
+    }
+""")
+
+
+tag_selected_button_style = ("""
+            QPushButton {
+                background-color: #e3f2fd;
+                border: 1px solid #90caf9;
+                border-radius: 10px;
+                padding: 6px;
+                color: #1565c0;
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: #bbdefb; }
+        """)
 
 patrol_checkbox_style = ("""
     QCheckBox {

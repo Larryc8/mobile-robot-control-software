@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QStyle,
     QLineEdit,
+    QStackedLayout,
 )
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
@@ -50,6 +51,7 @@ class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
     def __init__(self, nodes_manager) -> None:
         super().__init__()
+        self.stacklayout = QStackedLayout()
         # self.inputsHasChanged = False
         self.config_mapping = ConfigModel(workspace="/turtlebot3_slam_gmapping/")
         self.config_dwa_planner = ConfigModel(
@@ -156,8 +158,19 @@ class ConfigPanel(QWidget):
         self.layout.addWidget(self.tabs)
         # self.layout.addWidget(self.reset_config_btn)
         self.layout.addLayout(self.buttons_layout)
+        # self.stacklayout.addLayout(self.layout)
+        self.advance_config_wrapper = QWidget()
+        self.basic_config_wrapper = FriendlyConfig()
+        self.advance_config_wrapper.setLayout(self.layout)
+        self.stacklayout.addWidget(self.basic_config_wrapper)
+        self.stacklayout.addWidget(self.advance_config_wrapper)
 
-        self.setLayout(self.layout)
+        self.upper_layout = QVBoxLayout()
+        # self.upper_layout.addWidget(QPushButton('Advence'))
+        self.upper_layout.addLayout(self.stacklayout)
+
+        # self.setLayout(self.layout)
+        self.setLayout(self.upper_layout)
 
     @pyqtSlot()
     def saveClickHandler(self) -> None:
@@ -366,6 +379,31 @@ class ConfigInput(QGroupBox):
             print('config Panel-Input', e)
         # print(x, index)
         # if index > 0:
+
+class FriendlyConfig(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        # self.layout = QGridLayout()
+        # self.layout.addWidget(DescriptionConfigContainer(title='Crecionde mapa'), 1, 1)
+        # self.layout.addWidget(DescriptionConfigContainer(title='Desepeno de localizacion'), 2, 1)
+        # self.layout.addWidget(DescriptionConfigContainer(title='Desepeno de Navegacion'), 3, 1)
+        # self.setLayout(self.layout)
+
+class DescriptionConfigContainer(QGroupBox):
+    def __init__(self, title='Estatdiaticas') -> None:
+        super().__init__(title)
+        self.layout = QVBoxLayout()
+        self.option_layout = QHBoxLayout()
+        self.layout.addWidget(QLabel('Mucho texto aburriod ewfefwef efwefwefwe fwefwefwefwefwe fwefwefwe fefwefwe fwefwefwefwe wfweffe efefe '))
+        self.firtoption_button = QPushButton("pequeno")
+        self.secondoption_button = QPushButton("Mediano")
+        self.thirdoption_button = QPushButton("Grande")
+
+        self.option_layout.addWidget(self.firtoption_button)
+        self.option_layout.addWidget(self.secondoption_button)
+        self.option_layout.addWidget(self.thirdoption_button)
+        self.layout.addLayout(self.option_layout)
+        self.setLayout(self.layout)
 
 
 if __name__ == "__main__":

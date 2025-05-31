@@ -1,6 +1,7 @@
 import sys
 import re
 from typing import List
+from enum import Enum
 
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -95,6 +96,9 @@ class HomePanel(QWidget):
         )
         visualization_panel.update_points.connect(self.patrol_panel.update_points)
         visualization_panel.enable.connect(select_mode_panel.enable)
+        visualization_panel.save_in_database.connect(self.patrol_panel.patrols_container.handleSavePointsInDatabase)
+        visualization_panel.map_loaded.connect(self.patrol_panel.patrols_container.patrols_scheduler.send_points_data)
+        self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(visualization_panel.parent.pointsWindow.load_stored_points)
 
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
             visualization_panel.parent.pointsWindow.update_points_state
@@ -117,10 +121,20 @@ class HomePanel(QWidget):
     # self.patrol_panel.update_points(points)
 
 
+class userOperation(Enum):
+    CREATEMAP = 0
+    LOADMAP = 1
+    IDLE = 2
+
+class operationMode(Enum):
+    AUTO = 0
+    MANUAL = 1
+
 class VisualizationPanel(QWidget):
     update_points = pyqtSignal(dict)
     map_loaded = pyqtSignal(str)
     map_change = pyqtSignal(bool)
+    save_in_database = pyqtSignal(dict)
     enable = pyqtSignal(str, bool)
 
     def __init__(self, nodes_manager=None, parent=None) -> None:
@@ -134,7 +148,7 @@ class VisualizationPanel(QWidget):
         # ImageViewer()
         # self.parent.pointWindow = None
         self.currentOperationMode = "manual"
-        self.currentUserOperation = "idle"
+        self.currentUserOperation = userOperation.IDLE
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager, parent=self.parent
         )
@@ -201,6 +215,7 @@ class VisualizationPanel(QWidget):
         # self.save_button.setEnabled(False)
         self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
+        self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
 
         self.rviz = MyViz(configfile="./config_navigation.rviz")
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
@@ -221,8 +236,11 @@ class VisualizationPanel(QWidget):
             self.rviz.setUp("scale", 60)
             self.rviz.setUp("globalframe", "map")
 
+    def handleSaveInDatabase(self, data):
+        self.save_in_database.emit(data)
+
     def handleLoadMap(self):
-        if self.currentUserOperation == "createmap":
+        if self.currentUserOperation == userOperation.CREATEMAP:
             dg = CustomDialog(
                 self.parent,
                 "Creacion de mapa sigue activo",
@@ -247,6 +265,7 @@ class VisualizationPanel(QWidget):
             dg = CustomDialog(
                 self.parent,
                 "Ya hay un mapa cargado",
+                message='Si cambia de mapa perdera los puntos que haya agregado',
                 positive_response="Conservar",
                 negative_response="Descartar",
                 retries=0,
@@ -262,23 +281,24 @@ class VisualizationPanel(QWidget):
             )
             print(file_path)
             self.map_loaded.emit(file_path)
-            map = file_path
-            self.nodes_manager.stopNodes(["map_server"])
-            self.nodes_manager.startNodes(
-                self.nodes_manager.initNodes(
-                    [
-                        {
-                            "package": "map_server",
-                            "name": "map_server",
-                            "exec": "map_server",
-                            "arg": f"{map}",
-                        }
-                    ]
-                )
-            )
+
             self.save_map_button.hide()
             # self.rviz.setUp('globalframe', 'odom')
             if file_path:
+                map = file_path
+                self.nodes_manager.stopNodes(["map_server"])
+                self.nodes_manager.startNodes(
+                    self.nodes_manager.initNodes(
+                        [
+                            {
+                                "package": "map_server",
+                                "name": "map_server",
+                                "exec": "map_server",
+                                "arg": f"{map}",
+                            }
+                        ]
+                    )
+                )
                 toast = Toast(self.parent)
                 toast.setDuration(3000)  # Hide after 5 seconds
                 toast.setTitle("Success!.")
@@ -286,6 +306,7 @@ class VisualizationPanel(QWidget):
                 toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
                 Toast.setPositionRelativeToWidget(self.parent)
                 toast.show()
+                self.currentUserOperation = userOperation.LOADMAP
                 return
 
             toast = Toast(self.parent)
@@ -296,7 +317,7 @@ class VisualizationPanel(QWidget):
             Toast.setPositionRelativeToWidget(self.parent)
             toast.show()
 
-            self.save_map_button.hide()
+            # self.save_map_button.hide()
 
         except FileNotFoundError as error:
             print(error)
@@ -363,7 +384,7 @@ class VisualizationPanel(QWidget):
             return
 
         self.enable.emit("localization", False)
-        self.currentUserOperation = "createmap"
+        self.currentUserOperation = userOperation.CREATEMAP
         # self.save_map_button.show()
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
@@ -549,6 +570,7 @@ class SelectModePanel(QGroupBox):
 
 
 class PatrolsPanel(QGroupBox):
+    set_stored_database_points = pyqtSignal(dict)
     def __init__(self, nodes_manager=None, parent=None) -> None:
         super().__init__("Patrullajes")
         # self.setMaximumHeight(500)
@@ -673,6 +695,9 @@ class PatrolsPanel(QGroupBox):
         self.layout.addWidget(self.patrols_container)
 
         self.setLayout(self.layout)
+
+    def handleLoadStoredPoints(self, data):
+        self.set_stored_database_points.emit(data)
 
     def blink(self):
         """Toggle between two colors to create blink effect"""
@@ -1015,6 +1040,9 @@ class PatrolsContainer(QWidget):
             #         patrol.update_patrol_progress
             #     )
 
+    def handleSavePointsInDatabase(self, points_to_save):
+        self.patrols_scheduler.handleSavePointsInDatabase(points_to_save)
+
     def update_patrol_model(self, id, patrols_left, total_patrols):
         print("PATROLD UPDATE", id, self.patrols_scheduler.patrols_data.get(id))
         if self.patrols_scheduler.patrols_data.get(id):
@@ -1066,7 +1094,7 @@ class PatrolsContainer(QWidget):
 
 
 class Patrol(QGroupBox):
-    enable_single_patrol_exec = pyqtSignal(float)
+    enable_single_patrol_exec = pyqtSignal(str)
 
     def __init__(
         self,

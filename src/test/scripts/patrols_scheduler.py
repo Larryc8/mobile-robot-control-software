@@ -9,6 +9,8 @@ from datetime import datetime
 import time
 
 from points_scheduler import PointsScheduler
+from database_manager import DataBase
+import queue
 
 
 class ScheduleChecker(QThread):
@@ -31,7 +33,7 @@ class ScheduleChecker(QThread):
         self.wainting_queue = []
         self.dispatched_patrols = []
         self.movePatrolsIndex = False
-        self.sleep_time = 10
+        self.sleep_time = 5
         # self.forced_exec = forced_exec
 
         self.state = "red"
@@ -70,8 +72,7 @@ class ScheduleChecker(QThread):
         except Exception as e:
             # raise e
             print('Algo sali mal en FORCED PATROL')
-            self.task_completed.emit(f"TaskFailed: {str(e)}")
-
+            self.task_completed.emit(f"TaskFailedForced: {str(e)}")
             return
 
         try:
@@ -184,6 +185,7 @@ class PatrolsEscheduler(QObject):
     set_running_patrol = pyqtSignal(str)
     terminate_all_patrols = pyqtSignal(str)
     single_patrol_active = pyqtSignal(str)
+    set_stored_database_points = pyqtSignal(dict)
     # add_patrol_view = pyqtSignal(dict)
 
     def __init__(self, id=5, date=None):
@@ -198,6 +200,9 @@ class PatrolsEscheduler(QObject):
         self.indexKeeper = {"currentpatrol_index": 0}  # to pass as a pointer
         self._points_to_visit = []
         self.points_scheduler = PointsScheduler()
+        self.database = None
+        self.actions_queue = []
+
 
         # self.patrols_data = {
         #     "0": {
@@ -226,8 +231,44 @@ class PatrolsEscheduler(QObject):
         self.isPatrolArrayModified = False
         self.forceExec = False 
 
+        self.send_database_action(action='get_user_patrols')
+
     # def patrols_schedule_generator(self):
     # for patrol in self.
+    def send_database_action(self, action: str, data: dict={}):
+        if self.database and self.database.isRunning():
+            self.actions_queue.append((action, data ))
+            return
+
+        self.database = DataBase(action=action, data=data)
+        self.database.action_completed.connect(self.database_action_finished)
+        self.database.start()
+
+    def database_action_finished(self, state, data):
+        # self.patrols_data.update(data)
+        if state == 'SuccessGetAllUserPatrols':
+            self.patrols_data.update(data)
+            self.update_patrols_view.emit(self.patrols_data)
+
+        if state == "SuccessSavePatrol":
+            pass
+
+        if state == 'SuccessGetPoinst':
+            print('SCHEDULER', data)
+            self.set_stored_database_points.emit(data)
+
+
+        self.database.quit()
+        self.database.wait()
+        self.database = None
+
+        if len(self.actions_queue) > 0:
+            action, data1 = self.actions_queue.pop(0)
+            self.database = DataBase(action=action, data=data1)
+            self.database.action_completed.connect(self.database_action_finished)
+            self.database.start()
+
+
 
     def start_patrols_scheduling(self, patrol=None):
         if self.scheduler and self.scheduler.isRunning():
@@ -309,6 +350,14 @@ class PatrolsEscheduler(QObject):
             self.exec_single_patrol()
 
     def update_patrol(self, x):
+        [id] = list(x.keys())
+        print('update PATROL ID verifcation', self.patrols_data.get(id))
+
+        if self.patrols_data.get(id):
+            self.send_database_action(action='update_patrol', data=x)
+        else:
+            self.send_database_action(action='save_patrol', data=x)
+
         self.patrols_data.update(x)
         print("Hola Soy el scheduler patrol", x)
         self.update_patrols_view.emit(self.patrols_data)
@@ -316,6 +365,7 @@ class PatrolsEscheduler(QObject):
     def delete_patrols(self, patrolsToDelete):
         for patrol in patrolsToDelete:
             self.patrols_data.pop(patrol)
+        self.send_database_action(action='delete_user_patrols', data={'ids': patrolsToDelete})
         self.update_patrols_view.emit(self.patrols_data)
 
     def get_current_patrols(self):
@@ -352,6 +402,13 @@ class PatrolsEscheduler(QObject):
     def setPointsToVisit(self, points):
         self._points_to_visit = points
         self.points_scheduler.update_points(points)
+
+    def handleSavePointsInDatabase(self, points_to_save):
+        self.send_database_action(action='save_points', data=points_to_save)
+
+    def send_points_data(self, m):
+        self.send_database_action(action='get_points', data={'map_file': m})
+        # self.get_stored_database_points.emit()
 
 
 if __name__ == "__main__":

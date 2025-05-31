@@ -90,10 +90,11 @@ class PointsScheduler(QObject):
             #     self.points_state.emit(self.id, None, len(self.goals), len(self._goals))
             # else:
             #     self.points_state.emit(id, ids_list[-1], len(self.goals), len(self._goals))
-            x_meters, y_meters, yaw_degrees, check = pose.values()
-            goal = self.configGoal(x_meters, y_meters, yaw_degrees)
+            # x_meters, y_meters, yaw_degrees, check = pose.values()
+            x_meters, y_meters,  check = pose.get('x_meters'), pose.get('y_meters'), pose.get('checked')
+            goal = self.configGoal(x_meters, y_meters, 0)
             self.client = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
-            self.client.wait_for_server()
+            self.client.wait_for_server(rospy.Duration(5))
             self.client.send_goal(goal, self.done_cb, self.active_cb, self.feedback_cb)
 
     def restart(self):
