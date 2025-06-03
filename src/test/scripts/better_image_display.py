@@ -27,6 +27,7 @@ from PyQt5.QtGui import (
     QFont,
 )
 from PyQt5.QtCore import Qt, QRectF, QSize, QPropertyAnimation
+from pyqttoast import Toast, ToastPreset
 import random
 import yaml
 from datetime import datetime
@@ -189,6 +190,10 @@ class ImageViewer(QMainWindow):
 
         central_widget.setLayout(layout)
 
+    
+    def reset_points_state(self, patrolid=None):
+        self.graphics_view.reset_points_state(patrolid)
+
     def handlePointsChanged(self, state):
         if state == "added":
             self.success_label.setText(
@@ -280,6 +285,14 @@ class ImageViewer(QMainWindow):
     def load_stored_points(self, data):
         print('ImageViewer', data)
         self.graphics_view.load_stored_points(data)
+        if len(data.get('points')):
+            toast = Toast(self.parent)
+            toast.setDuration(5000)  # Hide after 5 seconds
+            toast.setTitle("Puntos cargados correctamente")
+            toast.setText(f"Se han cargado {len(data.get('points'))} puntos de interés")
+            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)
+            toast.show()
 
     def update_points_state(self, current_poin_id, next_point_id, point_state):
         self.graphics_view.update_points_state(
@@ -426,6 +439,10 @@ class Example(QGraphicsView):
         print(f"Wheel moved: {delta} (total: {self.wheel_delta})")
         event.accept()
 
+    def mouseClickEvent(self, event):
+        print('clicked one')
+        pass
+
     def mouseDoubleClickEvent(self, event):
         if not self.pixmap:
             return
@@ -543,7 +560,7 @@ class Example(QGraphicsView):
         # print('Example', stored_points)
         if stored_points:
             for point in  stored_points.get('points'):
-                x_meters, y_meters, map_file  = point
+                id, x_meters, y_meters, map_file  = point
                 if map_file == self.mapfile:
                     x_pix = int(
                         (x_meters - self.botton_left_map[0]) / self.map_resolution
@@ -563,7 +580,8 @@ class Example(QGraphicsView):
                     # point = QPointF(x_pix, y_pix)
 
 
-                    id_sync = datetime.now().timestamp()
+                    # id_sync = datetime.now().timestamp()
+                    id_sync = id
                     self.squares.update({str(id_sync): {"color": Qt.red, "object": obj}})
                     self.pointsToCheck.update(
                         {str(id_sync): {"color": Qt.red, "x": x_pix, "y": y_pix}}
@@ -589,29 +607,37 @@ class Example(QGraphicsView):
         self.reset_view()
         # self.load_stored_points()
 
-    def update_points_state(self, current_poin_id, next_point_id, point_state):
-        # if not current_poin_id and not next_point_id:
-        #     print("Image viwer, SQUARE", self.squares)
-        #     for id, square in self.squares.items():
-        #         print("Image viwer SQuare FOR", square)
-        #         square["color"] = Qt.red
-        #         self.update()
-        #     return
+    def reset_points_state(self, patrolid=None):
+        # if  point_state == -1:
+        # print("Image viwer, SQUARE", self.squares)
+        for id, square in self.squares.items():
+            # print("Image viwer SQuare FOR", square)
+            square["color"] = Qt.red
+        self.update()
 
-        if point_state < 4:
-            if self.squares.get(current_poin_id):
-                self.squares[current_poin_id]["color"] = Qt.green
+    def update_points_state(self, current_point_id, next_point_id, point_state):
+        standard_orange = QColor("#FFA500")  # Orange
+        dark_orange = QColor("#FF8C00")     # DarkOrange
+        coral = QColor("#FF7F50")           # Coral
+
+        if point_state == 3:
+            if self.squares.get(current_point_id):
+                self.squares[current_point_id]["color"] = Qt.darkGreen
         else:
-            if self.squares.get(current_poin_id):
-                self.squares[current_poin_id]["color"] = Qt.red
+            if self.squares.get(current_point_id):
+                self.squares[current_point_id]["color"] = Qt.red
 
         if next_point_id and self.squares.get(next_point_id):
-            self.squares[next_point_id]["color"] = Qt.yellow
+            self.squares[next_point_id]["color"] = standard_orange
 
     def drawForeground(self, painter, rect):
         # painter.drawLine(0, 0, 20, 20)
         # painter.drawEllipse(20, 20, 20, 20)
         # self.setBackgroundBrush(Qt.gray)
+        standard_orange = QColor("#FFA500")  # Orange
+        dark_orange = QColor("#FF8C00")     # DarkOrange
+        coral = QColor("#FF7F50")           # Coral
+
         for id, square in self.squares.items():
             self.setForegroundBrush(square["color"])  #     for square in self.squares:
             # painter.setBrush(square['color'])
@@ -621,19 +647,19 @@ class Example(QGraphicsView):
 
             text = 'No revisado'
             if square['color'] == Qt.red:
-                text = 'No revisado'
-            if square['color'] == Qt.green:
+                text = 'Pendiente'
+            if square['color'] == Qt.darkGreen:
                 text = 'Revisado'
-            if square['color'] == Qt.yellow:
-                text = 'Siguiente...'
-            painter.drawText(square['object'].x(),square['object'].y()+8, text)
+            if square['color'] == standard_orange:
+                text = 'Proximo...'
+            painter.drawText(square['object'].x(),square['object'].y()+9, text)
 
             super().drawForeground(painter, square["object"])
             # super().drawForeground(painter, rect)
         self.update()
 
     def keyPressEvent(self, event):
-        move_step = 50
+        move_step = 10
         center = self.mapToScene(self.viewport().rect().center())
 
         if event.key() == Qt.Key_Left:
@@ -646,40 +672,6 @@ class Example(QGraphicsView):
             self.centerOn(center.x(), center.y() + move_step)
         else:
             super().keyPressEvent(event)
-
-
-class CustomGraphicsItem(QGraphicsItem):
-    def __init__(self, x, y, width, height):
-        super().__init__()
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.setFlag(QGraphicsItem.ItemIsMovable)
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-
-        # Custom properties
-        self.color = QColor(Qt.blue)
-        self.selected_color = QColor(Qt.red)
-        self.pen_width = 2
-
-    def boundingRect(self):
-        # Define the bounding rectangle of the item
-        return QRectF(self.x, self.y, self.width, self.height)
-
-    def paint(self, painter, option, widget=None):
-        # Custom painting of the item
-        pen = QPen(self.selected_color if self.isSelected() else self.color)
-        pen.setWidth(self.pen_width)
-        painter.setPen(pen)
-
-        brush = QBrush(self.color.lighter(130))
-        painter.setBrush(brush)
-
-        painter.drawRect(self.x, self.y, self.width, self.height)
-
-        # Draw some custom decoration
-        painter.drawText(self.x + 5, self.y + 15, "Custom Item")
 
 
 if __name__ == "__main__":

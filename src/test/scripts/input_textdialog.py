@@ -95,7 +95,8 @@ class CustomDialog(QDialog):
         message: str = '',
         positive_response: str = "Yes",
         negative_response: str = "No",
-        retries: int = 0
+        retries: int = 0,
+        interative: bool = True
     ):
         super().__init__(parent)
         self.setWindowTitle("Alerta!")
@@ -106,6 +107,7 @@ class CustomDialog(QDialog):
         self.positive_response = positive_response
         self.negative_response = negative_response
         self.retries = retries
+        self.interative = interative
         self.atempts = 0 
 
         self.initUI()
@@ -128,24 +130,33 @@ class CustomDialog(QDialog):
         # Submit button
         self.positive_btn = QPushButton(self.positive_response)
         self.negative_btn = QPushButton(self.negative_response)
+        self.default_close_btn = QPushButton('Cerrar')
 
         self.positive_btn.clicked.connect(self.setPositiveResponse)
         self.negative_btn.clicked.connect(self.setNegativeResponse)
+        self.default_close_btn.clicked.connect(self.close)
 
         self.positive_btn.setStyleSheet(primary_button_style)
+        self.default_close_btn.setStyleSheet(primary_button_style)
         self.negative_btn.setStyleSheet(tertiary_button_style)
         self.title_label.setStyleSheet(subtitle_label_style)
         self.message_label.setStyleSheet(normal_label_style )
         self.alert_label.setStyleSheet(error_label_style)
 
-        buttons_layout.addWidget(self.negative_btn, 1)
-        buttons_layout.addWidget(self.positive_btn, 2)
+        if self.interative:
+            buttons_layout.addWidget(self.negative_btn, 1)
+            buttons_layout.addWidget(self.positive_btn, 2)
+        else:
+            buttons_layout.addWidget(self.default_close_btn)
 
         layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
     def setPositiveResponse(self):
         self.response = "Positive"
+        self.accept()
+
+    def close(self):
         self.accept()
 
     def setNegativeResponse(self):

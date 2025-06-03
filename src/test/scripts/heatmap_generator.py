@@ -18,8 +18,8 @@ Waypoint = namedtuple("Waypoint", "x y")
 
 
 class HeatmapGenerator:
-    def __init__(self):
-        with open("./test1.yaml", "r") as file:
+    def __init__(self, file_path: str = "./test1.yaml"):
+        with open(file_path, "r") as file:
             map_data = yaml.safe_load(file)
         self.map_origin = Waypoint(map_data["origin"][0], map_data["origin"][1])
         self.map_resolution = map_data["resolution"]

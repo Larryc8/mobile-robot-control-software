@@ -118,10 +118,10 @@ class MyViz(QWidget):
             self.view_man.getCurrent().subProp("Angle").setValue(yaw - 1.55678)
             # self.view_man.getCurrent().subProp( "Global Options" ).subProp( "Fixed Frame" ).setValue('odom')
             self.view_man.getCurrent().subProp("X").setValue(
-                self.view_man.getCurrent().subProp("X").getValue() 
+                self.view_man.getCurrent().subProp("X").getValue() + delta_movement.x() 
             )
             self.view_man.getCurrent().subProp("Y").setValue(
-                self.view_man.getCurrent().subProp("Y").getValue()
+                self.view_man.getCurrent().subProp("Y").getValue() + delta_movement.y()
             )
             # self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
 

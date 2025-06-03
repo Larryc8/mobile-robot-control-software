@@ -9,7 +9,7 @@ from manual_control_node import ControlDynamicPose
 
 class Joypad(QGroupBox):
     def __init__(self, parent=None):
-        super().__init__("Control")
+        super().__init__("Mover el robot")
         size = 220
         self.setMaximumHeight(size)
         self.setMinimumHeight(size)

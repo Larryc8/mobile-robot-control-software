@@ -104,6 +104,15 @@ class MyTableWidget(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyleSheet("""
+        QToolTip {
+            background-color: #3498db;
+            color: white;
+            border: 1px solid lightgray;
+            padding: 2px;
+            border-radius: 3px;
+        }
+    """)
     ex = App()
     ex.show()
     sys.exit(app.exec())

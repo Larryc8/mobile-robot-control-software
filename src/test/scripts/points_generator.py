@@ -6,14 +6,14 @@ import sys
 import random
 
 
-class PointsGenerator(QLabel):
+class CheckPointDisplay(QLabel):
     def __init__(self):
         super().__init__()
         self.squares = []  # Store square positions and sizes
         self.square_size = 10  # Size of the square to draw
 
-        self.setGeometry(300, 300, 350, 300)
-        self.setWindowTitle('Shapes')
+        # self.setGeometry(300, 300, 350, 300)
+        # self.setWindowTitle('Shapes')
         self.setMouseTracking(True)
         self.loadImage("./map2.pgm")
 
@@ -63,6 +63,6 @@ class PointsGenerator(QLabel):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    ex = PointsGenerator()
+    ex = CheckPointDisplay()
     ex.show()
     sys.exit(app.exec_())

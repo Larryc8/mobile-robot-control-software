@@ -26,8 +26,8 @@ border_button_style_danger = ("""
         font-weight: bold;
     }
     QPushButton:hover {
-        background: pink;
-        color: #3498db;
+        background: #3498db;
+        color: white;
     }    
     QPushButton:pressed {
         background-color: red;
@@ -164,41 +164,40 @@ tag_button_style = ("""
 
 tag_selected_button_style = ("""
             QPushButton {
-                background-color: #e3f2fd;
+                background-color: #4682B4;
                 border: 1px solid #90caf9;
                 border-radius: 10px;
                 padding: 6px;
-                color: #1565c0;
+                color: white;
                 font-size: 14px;
+                font-weight: bold;
             }
-            QPushButton:hover { background-color: #bbdefb; }
         """)
 
 patrol_checkbox_style = ("""
     QCheckBox {
-        spacing: 8px;
         font-size: 14px;
         color: #424242;
     }
     QCheckBox::indicator {
-        width: 18px;
-        height: 18px;
-        border: 2px solid #757575;
+        width: 15px;
+        height: 15px;
+        border: 1px solid #757575;
         border-radius: 2px;
     }
     QCheckBox::indicator:checked {
-        background-color: red;
-        border: 2px solid #6200ee;
+        background-color: #3498db;
+        border: 1px solid gray;
     }
     QCheckBox::indicator:hover {
-        border: 2px solid #424242;
+        border: 1px solid #424242;
     }
     QCheckBox::indicator:checked:hover {
-        background-color: pink;
-        border: 2px solid #3700b3;
+        background-color: #d5ffff;
+        border: 1px solid gray;
     }
     QCheckBox::indicator:unchecked:hover {
-        background: #bbb;
+        background: lightgray;
     }
 """)
 

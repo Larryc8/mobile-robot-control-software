@@ -17,13 +17,13 @@ from move_base_msgs.msg import (
 )
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
-
+from  utils.patrol import PatrolEndState
 
 class PointsScheduler(QObject):
     points_state = pyqtSignal(
         str, str, int
     )  ## current pointid, next point id, numbres of points tha left, total points
-    patrol_progress = pyqtSignal(float, int, int)
+    patrol_progress = pyqtSignal(str, int, int, PatrolEndState)
 
     def __init__(self, points=[], done_task=None, feedback_task=None) -> None:
         super().__init__()
@@ -43,11 +43,13 @@ class PointsScheduler(QObject):
         self.cancelled = False
         self.emit_callback = None
         self.client = None
+        self.points_left = 999
         # actionlib.GoalStatus.SUCCEEDED
 
     def setGoals(self):
         self.goals = self._goals.copy()
         self.goals_count = len(self.goals)
+        self.points_left = len(self.goals)
 
 
     def configGoal(self, x, y, yaw):
@@ -79,12 +81,13 @@ class PointsScheduler(QObject):
         print('points canceled from points sche')
 
     def dispatch(self, patrolid =None):
-        self.current_patrolid = float(patrolid)
+        self.current_patrolid = patrolid
+        self.patrol_progress.emit(self.current_patrolid, self.points_left, self.goals_count, PatrolEndState.ACTIVE)
 
-        print("points points_scheduler points", self.goals)
         if len(self.goals) > 0:
             # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
             self.pointid, pose = self.goals.popitem()
+            print("points points_scheduler points", len(self.goals), pose.get('x_meters'), pose.get('y_meters'))
             # ids_list = list(self.goals.keys())
             # if len(ids_list) < 2:
             #     self.points_state.emit(self.id, None, len(self.goals), len(self._goals))
@@ -99,7 +102,8 @@ class PointsScheduler(QObject):
 
     def restart(self):
         self.goals = self._goals.copy()
-        self.points_state.emit(None, None, 0)
+        self.points_left = len(self.goals)
+        # self.points_state.emit(None, None, 0)
 
     def setDoneTask(self, done_task):
         self.done_task = done_task
@@ -109,6 +113,7 @@ class PointsScheduler(QObject):
         if len(ids_list) == 0:
             self.points_state.emit(self.pointid, None, state)
         else:
+            # if state in [0,1,3]:
             self.points_state.emit(
                 self.pointid,
                 ids_list[-1],
@@ -116,9 +121,13 @@ class PointsScheduler(QObject):
             )
 
         # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
-        rospy.loginfo("Finished in state %s", str(state))
+        rospy.loginfo("Finished in state %s %s", str(state), str(len(self.goals)))
+        if state in [1, 0, 3]:
+            if not len(self.goals) == self.goals_count:
+                self.points_left = self.points_left -1
+
         if len(self.goals) == 0:
-            self.patrol_progress.emit(self.current_patrolid, len(self.goals), self.goals_count)
+            self.patrol_progress.emit(self.current_patrolid, self.points_left, self.goals_count, PatrolEndState.FINISHED)
             if self.done_task:
                 self.done_task()
             print("TODAS LOS PUNTOS HAN SIDO RECORRIDOS")
@@ -133,7 +142,7 @@ class PointsScheduler(QObject):
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
-        self.patrol_progress.emit(self.current_patrolid, len(self.goals) + 1, self.goals_count)
+        self.patrol_progress.emit(self.current_patrolid, self.points_left, self.goals_count, PatrolEndState.ACTIVE)
         self.points_state.emit(self.pointid, self.pointid, 0)
 
     def feedback_cb(self, feedback):

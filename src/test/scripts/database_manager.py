@@ -1,11 +1,34 @@
 import psycopg2
 from typing import Optional, List, Tuple
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
+from enum import Enum
 
 
 # cursor.execute("SELECT version();")
 # db_version = cursor.fetchone()
 # print(f"Database version: {db_version[0]}")
+
+
+class AlertStatus(Enum):
+    ERROR = -100
+    WARNING = -50
+    INFO = 0
+
+
+months_abbr = {
+    "ene": "enero",
+    "feb": "febrero",
+    "mar": "marzo",
+    "abr": "abril",
+    "may": "mayo",
+    "jun": "junio",
+    "jul": "julio",
+    "ago": "agosto",
+    "sep": "septiembre",
+    "oct": "octubre",
+    "nov": "noviembre",
+    "dic": "diciembre",
+}
 
 
 class InternalStorageManager:
@@ -17,25 +40,27 @@ class InternalStorageManager:
         self.db_host = "localhost"
         self.db_port = "5432"
 
-    def update_patrol(self,patrol_data: dict):
-            try:
-                with psycopg2.connect(
-                    database=self.db_name,
-                    user=self.db_user,
-                    password=self.db_password,
-                    host=self.db_host,
-                    port=self.db_port,
-                ) as connection:
-                    with connection.cursor() as cursor:
-                        for id, patrol in patrol_data.items():
-                            days = list(patrol.get("days").keys())
-                            time = list(patrol.get("time"))
-                            time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
-                            cursor.execute(f"UPDATE patrol SET time = '{time}', days = '{','.join(days)}'  WHERE id = '{id}';")
-                        connection.commit()  # Commit the transaction
-                # return allpatrols
-            except psycopg2.Error as e:
-                print(f"Database error: {e}")
+    def update_patrol(self, patrol_data: dict):
+        try:
+            with psycopg2.connect(
+                database=self.db_name,
+                user=self.db_user,
+                password=self.db_password,
+                host=self.db_host,
+                port=self.db_port,
+            ) as connection:
+                with connection.cursor() as cursor:
+                    for id, patrol in patrol_data.items():
+                        days = list(patrol.get("days").keys())
+                        time = list(patrol.get("time"))
+                        time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                        cursor.execute(
+                            f"UPDATE patrol SET time = '{time}', days = '{','.join(days)}'  WHERE id = '{id}';"
+                        )
+                    connection.commit()  # Commit the transaction
+            # return allpatrols
+        except psycopg2.Error as e:
+            print(f"Database error: {e}")
 
     def delete_user_patrols(self, ids: List[str]):
         try:
@@ -49,7 +74,9 @@ class InternalStorageManager:
             ) as connection:
                 with connection.cursor() as cursor:
                     for id in ids:
-                        cursor.execute(f"DELETE FROM patrol_link WHERE patrol_id = '{id}'")
+                        cursor.execute(
+                            f"DELETE FROM patrol_link WHERE patrol_id = '{id}'"
+                        )
                     connection.commit()  # Commit the transaction
         except psycopg2.Error as e:
             print(f"Database error: {e}")
@@ -93,12 +120,13 @@ class InternalStorageManager:
                         # print(row)
                         id, time, days = row
                         a = {
-                            id: {
+                            str(id): {
                                 "days": {
                                     day: {
                                         "day": day,
                                         "time": time.strftime("%H%M"),
                                         "finished": False,
+                                        "patrolid": str(id),
                                     }
                                     for day in days.split(",")
                                 },
@@ -181,7 +209,7 @@ class InternalStorageManager:
         except psycopg2.Error as e:
             print(f"Database error: {e}")
 
-####### point
+    ####### point
     def save_points(self, points: dict):
         pass
         try:
@@ -194,19 +222,21 @@ class InternalStorageManager:
             ) as connection:
                 with connection.cursor() as cursor:
                     id1 = list(points.keys())[0]
-                    mapfile = points.get(id1).get('mapfile')
+                    mapfile = points.get(id1).get("mapfile")
 
                     if mapfile:
-                        cursor.execute(f"DELETE FROM point WHERE map_file = '{mapfile}'")
+                        cursor.execute(
+                            f"DELETE FROM point WHERE map_file = '{mapfile}'"
+                        )
 
                     for id, point in points.items():
-                        x = point.get('x_meters')
-                        y = point.get('y_meters')
-                        mapfile = point.get('mapfile')
+                        x = point.get("x_meters")
+                        y = point.get("y_meters")
+                        mapfile = point.get("mapfile")
 
                         cursor.execute(
-                            "INSERT INTO point (x_position,  y_position, map_file) VALUES (%s, %s, %s);",
-                            ( x, y, mapfile),
+                            "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
+                            (id, x, y, mapfile),
                         )
 
                         # cursor.execute(
@@ -231,7 +261,7 @@ class InternalStorageManager:
                 with connection.cursor() as cursor:
                     cursor.execute(f"SELECT * FROM point WHERE map_file = '{mapfile}';")
                     rows = cursor.fetchall()
-                    allpoints.update({'points': rows})
+                    allpoints.update({"points": rows})
                     connection.commit()  # Commit the transaction
 
             # print(allpoints)
@@ -249,7 +279,9 @@ class InternalStorageManager:
                 port=self.db_port,
             ) as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT x_position, y_position, status  FROM alert WHERE date >= CURRENT_DATE - INTERVAL '30 day';")
+                    cursor.execute(
+                        "SELECT x_position, y_position, status  FROM alert WHERE date >= CURRENT_DATE - INTERVAL '30 day';"
+                    )
                     rows = cursor.fetchall()
                     connection.commit()  # Commit the transaction
 
@@ -257,8 +289,9 @@ class InternalStorageManager:
         except psycopg2.Error as e:
             print(f"Database error: {e}")
 
-
-    def get_filtered_alerts(self, date):
+    def get_filtered_alerts(
+        self, status=None, ascendant=True, page_size=11, page_number=0, map=''
+    ):
         try:
             with psycopg2.connect(
                 database=self.db_name,
@@ -268,7 +301,52 @@ class InternalStorageManager:
                 port=self.db_port,
             ) as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT x_position, y_position, status  FROM alert;")
+                    if not map:
+                        map = ''
+
+                    if status is not None:
+                        if ascendant:
+                            cursor.execute(
+                                f"""
+                                           SELECT  x_position, y_position, status, date, time FROM alert
+                                           WHERE status = {status} AND  map_file = '{map}'
+                                            ORDER BY date ASC
+                                            LIMIT {page_size}
+                                            OFFSET {page_number* page_size};
+                                           """
+                            )
+                        else:
+                            cursor.execute(
+                                f"""
+                                           SELECT  x_position, y_position, status, date, time FROM alert
+                                           WHERE status = {status} AND  map_file = '{map}'
+                                            ORDER BY date DESC
+                                            LIMIT {page_size}
+                                            OFFSET {page_number* page_size};
+                                           """
+                            )
+                    else:
+                        if ascendant:
+                            cursor.execute(
+                                f"""
+                                           SELECT  x_position, y_position, status, date, time FROM alert
+                                           WHERE  map_file = '{map}'
+                                            ORDER BY date ASC
+                                            LIMIT {page_size}
+                                            OFFSET {page_number* page_size};
+                                           """
+                            )
+                        else:
+                            cursor.execute(
+                                f"""
+                                           SELECT  x_position, y_position, status, date, time FROM alert
+                                           WHERE  map_file = '{map}'
+                                            ORDER BY date DESC
+                                            LIMIT {page_size}
+                                            OFFSET {page_number* page_size};
+                                           """
+                            )
+
                     rows = cursor.fetchall()
                     connection.commit()  # Commit the transaction
 
@@ -276,6 +354,59 @@ class InternalStorageManager:
         except psycopg2.Error as e:
             print(f"Database error: {e}")
 
+    def get_alerts_months_stats(self):
+        try:
+            with psycopg2.connect(
+                database=self.db_name,
+                user=self.db_user,
+                password=self.db_password,
+                host=self.db_host,
+                port=self.db_port,
+            ) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                            SELECT     EXTRACT(MONTH FROM date) AS month,
+                            COUNT(*) AS total_count FROM   alert 
+                            WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100 
+                            GROUP BY     month ORDER BY     month;
+                            """
+                    )
+                    # return in the format  month | total_count
+                    rows = cursor.fetchall()
+                    connection.commit()  # Commit the transaction
+
+            return rows
+        except psycopg2.Error as e:
+            print(f"Database error: {e}")
+
+    def get_alerts_weeks_stats(self):
+        try:
+            with psycopg2.connect(
+                database=self.db_name,
+                user=self.db_user,
+                password=self.db_password,
+                host=self.db_host,
+                port=self.db_port,
+            ) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+
+                        SELECT     EXTRACT(YEAR FROM date) AS year,    
+                        EXTRACT(MONTH FROM date) AS month,
+                        EXTRACT(WEEK FROM date) - EXTRACT(WEEK FROM DATE_TRUNC('month', date)) + 1 AS week_of_month,
+                        COUNT(*) AS element_count FROM  alert  
+                        GROUP BY     year, month, week_of_month ORDER BY     year, month, week_of_month;
+                            """
+                    )
+                    rows = cursor.fetchall()
+                    connection.commit()  # Commit the transaction
+                    #retrun in the format  year | month | week_of_month | element_count 
+
+            return rows
+        except psycopg2.Error as e:
+            print(f"Database error: {e}")
 
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
@@ -286,7 +417,7 @@ class DataBase(QThread):
         self.data = data
 
     def run(self):
-        print('DATABASE RUNNING', self.action)
+        print("DATABASE RUNNING", self.action)
         self.internal_storage_manager = InternalStorageManager()
 
         if self.action == "save_patrol":
@@ -299,29 +430,30 @@ class DataBase(QThread):
             self.action_completed.emit("Success", data)
             return
 
-        if self.action == 'get_user_patrols':
+        if self.action == "get_user_patrols":
             data = self.internal_storage_manager.get_user_patrols()
-            self.action_completed.emit('SuccessGetAllUserPatrols', data)
+            self.action_completed.emit("SuccessGetAllUserPatrols", data)
             return
 
-        if self.action == 'delete_user_patrols':
-            data = self.internal_storage_manager.delete_user_patrols(self.data.get('ids'))
-            self.action_completed.emit('Success', {})
+        if self.action == "delete_user_patrols":
+            data = self.internal_storage_manager.delete_user_patrols(
+                self.data.get("ids")
+            )
+            self.action_completed.emit("Success", {})
             return
 
-        if self.action == 'update_patrol':
+        if self.action == "update_patrol":
             self.internal_storage_manager.update_patrol(self.data)
-            self.action_completed.emit('Success', {})
-            return 
-        if self.action == 'save_points':
+            self.action_completed.emit("Success", {})
+            return
+        if self.action == "save_points":
             self.internal_storage_manager.save_points(self.data)
-            self.action_completed.emit('Success', {})
+            self.action_completed.emit("SuccessSavePoints", {})
 
-        if self.action == 'get_points':
-            print('DATABASE RUNNING', self.action, self.data)
-            data = self.internal_storage_manager.get_points(self.data.get('map_file'))
-            self.action_completed.emit('SuccessGetPoinst', data)
-
+        if self.action == "get_points":
+            print("DATABASE RUNNING", self.action, self.data)
+            data = self.internal_storage_manager.get_points(self.data.get("map_file"))
+            self.action_completed.emit("SuccessGetPoinst", data)
 
 
 if __name__ == "__main__":

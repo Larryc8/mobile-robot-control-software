@@ -124,7 +124,7 @@ class NodesManager(QObject):
             
             node_instances.update(
                 # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
-                {name: Node(package=package, node_type=exec, name=name, args=args,  respawn=False, output='screen')}
+                {name: Node(package=package, node_type=exec, name=name, args=args,  respawn=False)}
             )
         return node_instances
     # def initNodes(self, nodes: List[dict] = []) -> List[dict]:

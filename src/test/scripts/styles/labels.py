@@ -3,6 +3,11 @@ hover_label_style = ("""
         background-color: green;
     }
 """)
+hover_alert_label_style = ("""
+    QLabel:hover {
+        background-color: lightgray;
+    }
+""")
 inactive_hover_label_style = ("""
     QLabel:hover {
         background-color: green;
@@ -63,8 +68,9 @@ info_label_style = ("""
         padding: 5px;
         border: 1px solid #81d4fa;
         border-radius: 3px;
+        font-weight: bold;
     }
-""")
+""" + hover_alert_label_style)  
 
 # self.warning_label = QLabel()
 # self.warning_label.setText("⚠ WARNING: This action cannot be undone")
@@ -75,8 +81,10 @@ warning_label_style = ("""
         padding: 5px;
         border: 1px solid #ffe082;
         border-radius: 5px;
+        font-weight: bold;
     }
-""")
+""" + hover_alert_label_style
+)
 
 # self.error_label.setText("✖ ERROR: Invalid input detected")
 error_label_style = ("""
@@ -88,7 +96,7 @@ error_label_style = ("""
         border-radius: 5px;
         font-weight: bold;
     }
-""")
+""" + hover_alert_label_style)
 
 # title_label = QLabel("Main Title")
 title_label_style = ("""
@@ -145,7 +153,7 @@ muted_label_style = ("""
 
 muted_mini_label_style = ("""
     QLabel {
-        font-size: 14px;
+        font-size: 13.5px;
         color: #777777;
         padding: 2px 0;
     }

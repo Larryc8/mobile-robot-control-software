@@ -24,11 +24,12 @@ from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime,  QPropertyAnimation, Q
 
 from styles.buttons import primary_button_style, secondary_button_style 
 from styles.labels import inactive_label_style, border_label_style, error_label_style, muted_mini_label_style
+from input_textdialog import CustomDialog
 
 class PatrolsMenu(QMainWindow):
     update_date = pyqtSignal(dict)
 
-    def __init__(self, parent, selected_days, patrolid, time='0000', state=None) -> None:
+    def __init__(self, parent, selected_days, patrolid, time='0000', state=None, current_weekday=None) -> None:
         super().__init__()
         # self.update_date = pyqtSignal(dict)
         # print(parent)
@@ -52,6 +53,7 @@ class PatrolsMenu(QMainWindow):
         self.days_labels = DaySelect(selected_days=selected_days)
         self.time = TimeSelect()
         self.time.setTime(time) 
+        self.current_weekday = current_weekday
 
         buttons_layout = QHBoxLayout()
         close_btn = QPushButton(" Cerrar")
@@ -95,7 +97,7 @@ class PatrolsMenu(QMainWindow):
         days = self.days_labels.get_selected_days()
         # print('patrol menu', days)
         x = {
-                f"{name}": {"day": f"{name}", "time": time, "finished": False, 'patrolid': self.patrolid}
+                f"{name}": {"day": f"{name}", "time": time, "finished": False, 'patrolid': str(self.patrolid)}
             for name in days
             if name
         }
@@ -103,10 +105,11 @@ class PatrolsMenu(QMainWindow):
             self.empty_days_alert.show()
             return 
 
-        a = {'days': x, 'time': time, "state": self.state}
+        a = {'days': x, 'time': time, "state": self.state, 'current_weekday': self.current_weekday}
         print("A MA, FUNCIONA patrool menu", x)
-        self.update_date.emit({self.patrolid: a})
+        self.update_date.emit({str(self.patrolid): a})
         self.hide()
+
 
 
 class TimeSelect(QGroupBox):
