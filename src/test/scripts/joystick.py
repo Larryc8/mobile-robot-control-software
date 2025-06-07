@@ -94,8 +94,8 @@ class Joypad(QGroupBox):
         pass
 
     def update_operation_mode(self, mode):
-        if mode == 'auto':
-            print('auto joystick')
+        # if mode == 'auto':
+            # print('auto joystick')
         pass
 
 

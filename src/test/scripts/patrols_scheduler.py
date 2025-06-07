@@ -420,7 +420,7 @@ class PatrolsEscheduler(QObject):
                 self.patrols_data[id]['delayed'] = None 
                 self.patrols_data[id]['state'] = None 
 
-        # self.update_patrols_view.emit(self.patrols_data)
+        self.update_patrols_view.emit(self.patrols_data)
 
         print(self.patrols)
         self.patrols.sort(key=self.sort_key)

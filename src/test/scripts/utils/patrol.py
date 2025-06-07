@@ -7,3 +7,11 @@ class PatrolEndState(Enum):
     IMCOMPLETE = 3
     FINISHED = 4
 
+class userOperation(Enum):
+    CREATEMAP = 0
+    LOADMAP = 1
+    IDLE = 2
+
+class operationMode(Enum):
+    AUTO = 0
+    MANUAL = 1
