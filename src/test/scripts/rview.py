@@ -142,6 +142,8 @@ class MyViz(QWidget):
     def setUp(self, prop: str, value):  # SCale 562
         if prop == "globalframe":
             self.manager.setFixedFrame(value)
+            if value == 'map':
+                self.view_man.getCurrent().subProp("Angle").setValue(0)
         if prop == "followrobot":
             self.followRobot = value
             self.view_man.getCurrent().subProp("Scale").setValue(self.resize)

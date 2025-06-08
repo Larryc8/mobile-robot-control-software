@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QStyle,
     QLabel,
     QGraphicsOpacityEffect,
-    QGraphicsRectItem
+    QGraphicsRectItem,
 )
 from PyQt5.QtGui import (
     QPixmap,
@@ -171,7 +171,7 @@ class ImageViewer(QMainWindow):
         ]
         buttons_layout.addWidget(self.save_button, 2)
         buttons_layout.addWidget(self.close_button, 1)
-        layout.addLayout(checkpoints_info_layout)
+        # layout.addLayout(checkpoints_info_layout)
         layout.addLayout(buttons_layout)
 
         self.checkpoints_labels_nochecked.setStyleSheet(code_label_style)
@@ -333,6 +333,7 @@ class ImageViewer(QMainWindow):
             )
         self.zoom_factor = 1.0
 
+
 class Example(QGraphicsView):
     send_points = pyqtSignal(dict)
     pointsChanged = pyqtSignal(str)
@@ -341,7 +342,7 @@ class Example(QGraphicsView):
         super().__init__()
         self.squares = {}  # Store square positions and sizes
         self.pointsToCheck = {}
-        self.square_size = 5  # Size of the square to draw
+        self.square_size = 7  # Size of the square to draw
         self.wheel_delta = 0
         self.points_path = []
         self.zoom_factor = 1
@@ -403,6 +404,7 @@ class Example(QGraphicsView):
                         (point["y"]) * self.map_resolution - y0_meters
                     ),  # * self.resolution,
                     "yaw_degrees": 0,
+                    'yaw': point['yaw'],
                     "checked": False,
                     "mapfile": self.mapfile,
                 }
@@ -514,7 +516,7 @@ class Example(QGraphicsView):
                             "color": Qt.red,
                             "x": point_mapped2scene.x(),
                             "y": point_mapped2scene.y(),
-                            'yaw': 0,
+                            "yaw": 0,
                         }
                     }
                 )
@@ -524,12 +526,12 @@ class Example(QGraphicsView):
                         str(sync_id): {
                             "color": Qt.red,
                             "object": obj,
-                            'yaw': 0,
+                            "yaw": 0,
                         }
                     }
                 )
-                self.send_points.emit(self.getPointsInMap())
-                self.pointsChanged.emit("added")
+                # self.send_points.emit(self.getPointsInMap())
+                # self.pointsChanged.emit("added")
                 self.points_count = 1
                 # self.update()
 
@@ -538,14 +540,28 @@ class Example(QGraphicsView):
                 self.poses.update({str(self.point2_id): point_mapped2scene})
                 self.points_count = 0
                 print("id point 2", self.point2_id)
-                self.update()
+                id = self.point2_id
+                if self.pointsToCheck.get(id):
+                    centerx = self.squares[id]["object"].x() + self.square_size / 4
+                    centery = self.squares[id]["object"].y() + self.square_size / 4
+                    finalx = self.poses[id].x() 
+                    finaly = self.poses[id].y() 
+
+                    map_yaw,  yaw = self.getYaw(
+                        centerx=centerx, centery=centery, finalx=finalx, finaly=finaly
+                    )
+
+                    self.squares[id]["yaw"] = yaw
+                    self.pointsToCheck[id]["yaw"] = map_yaw 
+
+                    self.send_points.emit(self.getPointsInMap())
+                    self.pointsChanged.emit("added")
+
+            self.update()
+            self.update_view()
 
             print("poses dict EXAMPLE", self.poses)
 
-            self.scale(1.2, 1.2)
-            self.scale(1 / 1.2, 1 / 1.2)  # force a repaint
-            # self.update()  # Repaint the widget to reflect the updated label
-            # self.updateScene()
         else:
             temp_squares = {}
             temp_points = {}
@@ -562,6 +578,8 @@ class Example(QGraphicsView):
                     temp_points.update({id: self.pointsToCheck[id]})
                 else:
                     # self.send_points.emit(self.getPointsInMap())
+                    self.points_count = 0
+
                     self.pointsChanged.emit("deleted")
                     self.update()
                     self.update_view()
@@ -688,10 +706,16 @@ class Example(QGraphicsView):
             painter.setFont(QFont("Arial", 2))
             painter.setPen(QPen(square["color"], 0.2, Qt.SolidLine))
 
-            centerx = square["object"].x() + self.square_size/4
-            centery = square["object"].y() + self.square_size/4
-            self.drawArrowDirection(painter=painter, squere_id=id, poses=self.poses, centerx=centerx, centery=centery)
-
+            centerx = square["object"].x() + self.square_size / 4
+            centery = square["object"].y() + self.square_size / 4
+            self.drawArrowDirection(
+                painter=painter,
+                squere_id=id,
+                poses=self.poses,
+                centerx=centerx,
+                centery=centery,
+                yaw=square['yaw']
+            )
 
             text = "No revisado"
             if square["color"] == Qt.red:
@@ -703,38 +727,40 @@ class Example(QGraphicsView):
             painter.drawText(square["object"].x(), square["object"].y() + 9, text)
 
             # super().drawForeground(painter, square["object"])
-            painter.drawRect(square['object'])
+            painter.drawRect(square["object"])
         super().drawForeground(painter, rect)
 
-    def getYaw(self):
-        vx = centerx - self.poses.get(squere_id).x()
-        vy = centery - self.poses.get(squere_id).y()
+    def getYaw(self, centerx, centery, finalx, finaly):
+        vx = centerx - finalx
+        vy = centery - finaly
         yaw = math.atan2(vy, vx)
+        map_yaw = math.atan2(vy, -vx)
+        return map_yaw, yaw
 
-    def drawArrowDirection(self, painter, poses, squere_id, centerx, centery):
-        print("POSES LEN", self.poses)
-        if self.poses.get(squere_id):
-            vx = centerx - self.poses.get(squere_id).x()
-            vy = centery - self.poses.get(squere_id).y()
-            yaw = math.atan2(vy, vx)
-            n1 = norm([self.square_size/4, self.square_size/4])
-            offsety = n1*abs(math.sin(yaw))
-            offsetx = n1*abs(math.cos(yaw))
+    def drawArrowDirection(self, painter, poses, squere_id, centerx, centery, yaw):
+        # print("POSES LEN", self.poses)
+        if poses.get(squere_id):
+            # vx = centerx - self.poses.get(squere_id).x()
+            # vy = centery - self.poses.get(squere_id).y()
+            # yaw = math.atan2(vy, vx)
+            n1 = norm([self.square_size / 4, self.square_size / 4])
+            offsety = -n1 * (math.sin(yaw))
+            offsetx = -n1 * (math.cos(yaw))
 
-            vx = -vx
-            vy = -vy
+            vx = offsetx#-vx
+            vy = offsety#-vy
 
-            x = centerx + math.copysign(1, vx) * offsetx
-            y = centery + math.copysign(1, vy) * offsety
+            x = centerx + offsetx
+            y = centery + offsety
             n = norm([vx, vy])
-            vx = (vx/n)*4
-            vy = (vy/n)*4
+            vx = (vx / n) * 4
+            vy = (vy / n) * 4
             dx = -2
             dy = vx * dx / vy
             norm_yaw = norm([dx, dy])
 
-            dx = (dx/norm_yaw)*1
-            dy = (dy/norm_yaw)*1
+            dx = (dx / norm_yaw) * 1
+            dy = (dy / norm_yaw) * 1
 
             points = QPolygonF(
                 [
@@ -745,7 +771,6 @@ class Example(QGraphicsView):
             )
             # points.translate(20, 20)
             painter.drawPolygon(points)
-
 
     def keyPressEvent(self, event):
         move_step = 10
