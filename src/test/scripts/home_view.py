@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QStyle,
     QGraphicsOpacityEffect,
     QToolTip,
+    QStackedLayout
 )
 from PyQt5.QtCore import (
     Qt,
@@ -75,6 +76,7 @@ from patrols_scheduler import PatrolsEscheduler
 from patrol_menu import PatrolsMenu
 from rview import MyViz
 from input_textdialog import InputDialog, CustomDialog
+from robot_camera_view import RobotCamera
 
 from utils.patrol import PatrolEndState, userOperation, operationMode
 
@@ -170,14 +172,31 @@ class VisualizationPanel(QWidget):
         self.layout = QGridLayout()
         self.buttons_layout = QGridLayout()
         self.rviz_options_layout = QHBoxLayout()
+
+        self.stacklayout = QStackedLayout()
+        self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        self.stacked_widgets_container = QWidget()
+        self.stacked_widgets_container.setLayout(self.stacklayout)
+
         self.parent = parent
         self.nodes_manager = nodes_manager
         self.isCreateMap = True
         self.global_state_holder = global_state_holder
-        # ImageViewer()
+        self.mapAsPrincipalView = True
+
+        self.rviz = MyViz(configfile="./config_navigation.rviz")
+
+        self.robotcamera = RobotCamera()
+        self.robotcamera.setFixedSize(200, 150)
+        self.robotcamera.move(50, 50)
+        # self.rviz.setFixedSize(700, 500)
+
+        self.robotcamera.setStyleSheet("background-color: red;")
+
         # self.parent.pointWindow = None
         self.currentOperationMode = operationMode.MANUAL
         # self.global_state_holder.currentUserOperation = userOperation.IDLE
+        # self.mini_display = RobotCamera()
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager, parent=self.parent
         )
@@ -229,9 +248,7 @@ class VisualizationPanel(QWidget):
             for widget in (self.followrobot_check,)
         ]
         self.followrobot_check.setText("Ajustar la vista a los movimientos del robot?")
-        # self.rviz_options_layout.setContentsMargins(0, 0, 0, 0)
-        # self.rviz_options_layout.setSpacing(0)
-        # self.rviz_options_layout.setAlignment(Qt.AlignLeft)
+        self.stack_config_btn = QPushButton('cmabiar')
         # self.followrobot_label.setStyleSheet("background-color: #f0f0f0;")
 
         # self.save_map_button.clicked.connect(self.saveMapClickHandler)
@@ -242,16 +259,49 @@ class VisualizationPanel(QWidget):
         self.save_map_button.hide()
 
         # self.save_button.setEnabled(False)
+        self.stack_config_btn.clicked.connect(self.toggleCameraMapView)
         self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
 
-        self.rviz = MyViz(configfile="./config_navigation.rviz")
+        self.stacklayout.addWidget(self.rviz)
+        self.stacklayout.addWidget(self.robotcamera)
+
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
+        self.layout.addWidget(self.stack_config_btn, 0, 1)
         self.layout.addWidget(BatteryIndicator(), 0, 2)
-        self.layout.addWidget(self.rviz, 1, 0, 1, 3)
+        self.layout.addWidget(self.stacked_widgets_container, 1, 0, 1, 3)
         self.layout.addLayout(self.buttons_layout, 2, 0, 1, 3)
         self.setLayout(self.layout)
+
+    def toggleCameraMapView(self):
+        if self.mapAsPrincipalView:
+            self.stacklayout.setCurrentIndex(1)
+            self.robotcamera.raise_()
+            print(self.stacklayout.currentWidget())
+            self.robotcamera.update()
+            self.mapAsPrincipalView = False
+            self.robotcamera.setMaximumSize(200, 200)
+            self.robotcamera.move(50, 50)
+            self.rviz.setMaximumSize(2000,1000)
+            return 
+
+        self.stacklayout.setCurrentIndex(0)
+        self.rviz.raise_()
+        print(self.stacklayout.currentWidget())
+        self.rviz.update()
+        self.mapAsPrincipalView = True
+        self.rviz.setMaximumSize(200, 200)
+        self.rviz.move(50, 50)
+        self.robotcamera.setMaximumSize(2000, 1000)
+
+    # def resizeEvent(self, event):
+    def paintEvent(self, event):
+        currentWidget = self.stacklayout.currentWidget()
+        currentWidget.raise_()
+        currentWidget.update()
+        super().paintEvent(event)
+
 
     def toggleCreaeteSaveMap(self):
         if self.isCreateMap:

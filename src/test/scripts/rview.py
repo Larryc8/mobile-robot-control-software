@@ -38,7 +38,7 @@ class MyViz(QWidget):
     ## Its constructor creates and configures all the component widgets:
     ## frame, thickness_slider, top_button, and side_button, and adds them
     ## to layouts.
-    def __init__(self, configfile: str, parent=None):
+    def __init__(self, configfile: str, parent=None, mini=False):
         super().__init__(parent)  # Pasa `parent` al constructor de QWidget
         # QWidget.__init__(self)
         self.past_point = QPoint(0, 0)
