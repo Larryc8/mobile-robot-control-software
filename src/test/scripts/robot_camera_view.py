@@ -36,17 +36,19 @@ from robot_vision import ImageMatcheChecker
 
 class RobotCamera(QGroupBox):
     def __init__(self) -> None:
-        super().__init__('Camara del robot')
+        super().__init__("Camara del robot")
         self.layout = QVBoxLayout()
         # self.container.setLayout(self.layout)
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.image_label)
         # self.load_image('./mora1.png')
-        self.close_btn = QPushButton("Cerrar")
+        self.close_btn = QPushButton("Menu")
+        self.close_btn.setMaximumWidth(100)
+        self.layout.addWidget(self.close_btn)
+        self.cv_image = None
 
-        # self.close_btn.clicked.connect(self.close_win)
-        self.setLayout(self.layout)
+        self.close_btn.clicked.connect(self.hide_camera)
 
         # Create CV bridge
         self.bridge = CvBridge()
@@ -60,6 +62,7 @@ class RobotCamera(QGroupBox):
         self.timer.start(60)  # Update at ~30fps
         # Store the latest image
         self.current_image = None
+        self.setLayout(self.layout)
 
     def paintEvent(self, event) -> None:
         # self.pixmap = QPixmap('./mora1.png')
@@ -82,8 +85,8 @@ class RobotCamera(QGroupBox):
     def image_callback(self, msg):
         try:
             # Convert ROS Image message to OpenCV image
-            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            self.current_image = cv_image
+            self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            self.current_image = self.cv_image
         except Exception as e:
             rospy.logerr(f"Error converting image: {e}")
 
@@ -103,6 +106,12 @@ class RobotCamera(QGroupBox):
             # Convert QImage to QPixmap and display
             self.pixmap = QPixmap.fromImage(q_img)
             self.resize_image()
+
+    def hide_camera(self):
+        # self.image_label.hide()
+        # self.setFixedSize(140, 80)
+        print('camer button cliked')
+        pass
 
 
 if __name__ == "__main__":

@@ -113,6 +113,7 @@ class NodesManager(QObject):
         self.bringup = None
         self._launcher = ROSLaunch()
         self.rosbag = None
+        self.started_nodes = {}
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
         node_instances = {}
@@ -126,6 +127,7 @@ class NodesManager(QObject):
                 # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
                 {name: Node(package=package, node_type=exec, name=name, args=args,  respawn=False)}
             )
+            self.started_nodes.update(node_instances)
         return node_instances
     # def initNodes(self, nodes: List[dict] = []) -> List[dict]:
         # node_instances = {}
@@ -151,6 +153,7 @@ class NodesManager(QObject):
                 _subprocess = {name: self._launcher.launch(node)}
                 print(_subprocess)
                 self.nodes_subprocess.update(_subprocess)
+                # self.started_nodes.update({name: node})
         return {}
 
     # def startNodes(self, node_instances: List[dict] = []) -> dict:
@@ -209,9 +212,17 @@ class NodesManager(QObject):
         # print('node manager node to stop', nodeToDelete)
         # if nodeToDelete:
         #     self.nodes_subprocess.pop(nodeToDelete)
-        for node in nodeToDeleteArray:
-            self.nodes_subprocess.pop(node)
+        for node_name in nodeToDeleteArray:
+            self.nodes_subprocess.pop(node_name)
+            self.started_nodes.pop(node_name)
 
+
+    def restartNodes(self):
+        for name, _subprocess in self.nodes_subprocess.items():
+            _subprocess.stop()
+
+        self.nodes_subprocess ={}
+        self.startNodes(self.started_nodes)
 
 
     def bringUpStart(self):

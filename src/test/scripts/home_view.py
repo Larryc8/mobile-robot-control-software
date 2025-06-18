@@ -266,6 +266,7 @@ class VisualizationPanel(QWidget):
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
+        self.toggleCameraMapView()
 
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
         self.layout.addWidget(self.stack_config_btn, 0, 1)

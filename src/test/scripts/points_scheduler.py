@@ -19,6 +19,8 @@ from move_base_msgs.msg import (
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from utils.patrol import PatrolEndState
 
+from robot_navigation_checker import RobotNavigationChecker 
+
 
 class PointsScheduler(QObject):
     points_state = pyqtSignal(
@@ -45,6 +47,10 @@ class PointsScheduler(QObject):
         self.emit_callback = None
         self.client = None
         self.points_left = 999
+
+        self.track = [0]
+        self.navigation_checker = RobotNavigationChecker(self.track)
+
         # actionlib.GoalStatus.SUCCEEDED
 
     def setGoals(self):
@@ -111,6 +117,10 @@ class PointsScheduler(QObject):
                 pose.get("yaw"),
             )
             goal = self.configGoal(x_meters, y_meters, yaw)
+            # self.navigation_checker = RobotNavigationChecker()
+            self.navigation_checker.set_current_goal(goal, self.points_left)
+            self.navigation_checker.start_checker()
+
             self.client = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
             self.client.wait_for_server(rospy.Duration(5))
             self.client.send_goal(goal, self.done_cb, self.active_cb, self.feedback_cb)
@@ -162,6 +172,8 @@ class PointsScheduler(QObject):
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
+        self.track[0] = self.points_left
+        # self.navigation_checker.listen()
         self.patrol_progress.emit(
             self.current_patrolid,
             self.points_left,
