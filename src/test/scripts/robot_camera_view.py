@@ -1,9 +1,12 @@
 import sys
 import typing
 import rospy
-import cv2
+import cv2 as cv
+import tf
+
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
+from nav_msgs.msg import Odometry
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -21,9 +24,11 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect,
     QGraphicsRectItem,
     QGroupBox,
+    QMenu,
+    QAction,
 )
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread,pyqtSignal
 from PyQt5.QtGui import QPixmap
 
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
@@ -32,6 +37,35 @@ from PyQt5.QtGui import QImage, QPixmap
 
 from rview import MyViz
 from robot_vision import ImageMatcheChecker
+from database_manager import DataBase
+
+
+class TaskWorker(QThread):
+    task_completed = pyqtSignal(tuple)
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def run(self):
+        pass
+        try:
+            listener = tf.TransformListener()
+            # rospy.loginfo('waiting for map frame')
+            listener.waitForTransform(
+                target_frame="map",
+                source_frame="base_link",
+                time=rospy.Time(0),
+                timeout=rospy.Duration(4),
+            )
+            trans, rotation_qua = listener.lookupTransform("map", "base_link", rospy.Time(0))
+
+            yaw =  tf.transformations.euler_from_quaternion(rotation_qua) 
+            print("translation", trans, yaw)
+
+            self.task_completed.emit(tuple(trans) + tuple(yaw))
+        except Exception as e:
+            print(e)
+            self.task_completed.emit(tuple([0, 0]))
 
 
 class RobotCamera(QGroupBox):
@@ -43,40 +77,71 @@ class RobotCamera(QGroupBox):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.image_label)
         # self.load_image('./mora1.png')
-        self.close_btn = QPushButton("Menu")
-        self.close_btn.setMaximumWidth(100)
-        self.layout.addWidget(self.close_btn)
+        self.menu_btn = QPushButton("Menu")
+        self.menu_btn.setMaximumWidth(100)
+        self.setup_submenu()
+        self.layout.addWidget(self.menu_btn)
         self.cv_image = None
-
-        self.close_btn.clicked.connect(self.hide_camera)
+        self.database = None
+        self.images_buffer = []
+        self.pose_getter = None
 
         # Create CV bridge
         self.bridge = CvBridge()
 
         # Subscribe to image topic
-        self.image_sub = rospy.Subscriber("image_topic", Image, self.image_callback)
+        self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
 
         # Timer to check for new images
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_display)
-        self.timer.start(60)  # Update at ~30fps
+        self.timer.start(30)  # Update at ~30fps
         # Store the latest image
         self.current_image = None
         self.setLayout(self.layout)
+
+    def setup_submenu(self):
+        menu = QMenu("Transform", self)
+
+        save_image_action = QAction("guardar referencia", self)
+        save_image_action.triggered.connect(self.buffer_reference_image)
+        menu.addAction(save_image_action)
+
+        lowercase_action = QAction("option 2", self)
+        lowercase_action.triggered.connect(self.hide_camera)
+        menu.addAction(lowercase_action)
+        self.menu_btn.setMenu(menu)
+
+    def save_buffered_data(self, map_filename):
+        for i, img in enumerate(self.images_buffer):
+            cv.imwrite(f'./reference_images/reference_image{i}.jpg', img)
+        self.images_buffer = []
+        print(f'Save reference image of map {map_filename}')
+
+    def buffer_reference_image(self):
+        print('SAVE IMAGE REFERENCE')
+        if self.pose_getter and self.pose_getter.isRunning():
+            return
+
+        self.pose_getter = TaskWorker()
+        self.pose_getter.task_completed.connect(self.set_pose)
+        self.pose_getter.start()
+
+    def set_pose(self, pose):
+        if len(self.images_buffer) < 10:
+            self.images_buffer.append(self.current_image)
+
+        print(f'{__name__} pose', pose)
+
+        if self.pose_getter:
+            self.pose_getter.quit()
+            self.pose_getter.wait()
+            self.pose_getter = None
 
     def paintEvent(self, event) -> None:
         # self.pixmap = QPixmap('./mora1.png')
         self.update_display()
         super().paintEvent(event)
-
-    # def load_image(self, image_path):
-    #     self.pixmap = QPixmap(image_path)
-
-    #     if self.pixmap.isNull():
-    #         print(f"Error: Could not load image {image_path}")
-    #         return
-
-    #     self.resize_image()
 
     def resize_image(self):
         self.image_label.setPixmap(self.pixmap)
@@ -108,11 +173,28 @@ class RobotCamera(QGroupBox):
             self.resize_image()
 
     def hide_camera(self):
-        # self.image_label.hide()
+        self.image_label.hide()
         # self.setFixedSize(140, 80)
-        print('camer button cliked')
+        print("camer button cliked")
         pass
 
+    def odom_callback(self, msg):
+        pass
+        # try:
+        #     listener = tf.TransformListener()
+        #     # rospy.loginfo('waiting for map frame')
+        #     listener.waitForTransform(
+        #         target_frame="map",
+        #         source_frame="base_link",
+        #         time=rospy.Time(0),
+        #         timeout=rospy.Duration(4),
+        #     )
+        #     trans, rotation_qua = listener.lookupTransform("map", "base_link", rospy.Time(0))
+
+        #     yaw =  tf.transformations.euler_from_quaternion(rotation_qua) 
+        #     print("translation", trans, yaw)
+        # except Exception as e:
+        #     print(e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

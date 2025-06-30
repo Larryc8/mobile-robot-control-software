@@ -164,6 +164,7 @@ class VisualizationPanel(QWidget):
     map_change = pyqtSignal(bool)
     save_in_database = pyqtSignal(dict)
     enable = pyqtSignal(str, bool)
+    map_saved = pyqtSignal(str)
 
     def __init__(
         self, nodes_manager=None, parent=None, global_state_holder=None
@@ -263,6 +264,7 @@ class VisualizationPanel(QWidget):
         self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
+        self.map_saved.connect(self.robotcamera.save_buffered_data)
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
@@ -442,6 +444,7 @@ class VisualizationPanel(QWidget):
         # self.setCreatMapState()
         self.setMapOperationState()
         toast.show()
+        self.map_saved.emit(mapname)
 
     def setMapOperationState(self):
         icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
