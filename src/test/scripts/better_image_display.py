@@ -407,7 +407,8 @@ class Example(QGraphicsView):
                     'yaw': point['yaw'],
                     "checked": False,
                     "mapfile": self.mapfile,
-                    'type': 0
+                    'type': 0,
+                    'gui_yaw': point['gui_yaw']
                 }
                 for id, point in self.getPointsPath().items()
             }
@@ -554,6 +555,7 @@ class Example(QGraphicsView):
 
                     self.squares[id]["yaw"] = yaw
                     self.pointsToCheck[id]["yaw"] = map_yaw 
+                    self.pointsToCheck[id]["gui_yaw"] = yaw 
 
                     self.send_points.emit(self.getPointsInMap())
                     self.pointsChanged.emit("added")
@@ -603,7 +605,7 @@ class Example(QGraphicsView):
         # print('Example', stored_points)
         if stored_points:
             for point in stored_points.get("points"):
-                id, x_meters, y_meters, map_file = point
+                id, x_meters, y_meters, map_file, yaw, gui_yaw = point
                 if map_file == self.mapfile:
                     x_pix = int(
                         (x_meters - self.botton_left_map[0]) / self.map_resolution
@@ -616,34 +618,35 @@ class Example(QGraphicsView):
                     )  # Origin is set at left-bottom corner, so subtraction from map size is needed
 
                     size = self.mapToScene(self.square_size, self.square_size)
+                    adjust_factor = 1.4
 
                     obj = QRectF(
                         x_pix
                         - size.y()
                         * (224 / max(self.pixmap.width(), self.pixmap.height()))
-                        * 1.7
+                        * adjust_factor
                         // 2,
                         y_pix
                         - size.y()
                         * (224 / max(self.pixmap.width(), self.pixmap.height()))
-                        * 1.7
+                        * adjust_factor
                         // 2,
                         size.y()
                         * (224 / max(self.pixmap.width(), self.pixmap.height()))
-                        * 1.7,
+                        * adjust_factor,
                         size.y()
                         * (224 / max(self.pixmap.width(), self.pixmap.height()))
-                        * 1.7,
+                        * adjust_factor,
                     )
                     # point = QPointF(x_pix, y_pix)
 
                     # id_sync = datetime.now().timestamp()
                     id_sync = id
                     self.squares.update(
-                        {str(id_sync): {"color": Qt.red, "object": obj}}
+                            {str(id_sync): {"color": Qt.red, "object": obj, 'yaw': gui_yaw}}
                     )
                     self.pointsToCheck.update(
-                        {str(id_sync): {"color": Qt.red, "x": x_pix, "y": y_pix}}
+                            {str(id_sync): {"color": Qt.red, "x": x_pix, "y": y_pix, 'yaw': yaw, 'gui_yaw': gui_yaw}}
                     )
         self.update()
         self.send_points.emit(self.getPointsInMap())
@@ -740,38 +743,38 @@ class Example(QGraphicsView):
 
     def drawArrowDirection(self, painter, poses, squere_id, centerx, centery, yaw):
         # print("POSES LEN", self.poses)
-        if poses.get(squere_id):
-            # vx = centerx - self.poses.get(squere_id).x()
-            # vy = centery - self.poses.get(squere_id).y()
-            # yaw = math.atan2(vy, vx)
-            n1 = norm([self.square_size / 4, self.square_size / 4])
-            offsety = -n1 * (math.sin(yaw))
-            offsetx = -n1 * (math.cos(yaw))
+        # if poses.get(squere_id):
+        # vx = centerx - self.poses.get(squere_id).x()
+        # vy = centery - self.poses.get(squere_id).y()
+        # yaw = math.atan2(vy, vx)
+        n1 = norm([self.square_size / 4, self.square_size / 4])
+        offsety = -n1 * (math.sin(yaw))
+        offsetx = -n1 * (math.cos(yaw))
 
-            vx = offsetx#-vx
-            vy = offsety#-vy
+        vx = offsetx#-vx
+        vy = offsety#-vy
 
-            x = centerx + offsetx
-            y = centery + offsety
-            n = norm([vx, vy])
-            vx = (vx / n) * 4
-            vy = (vy / n) * 4
-            dx = -2
-            dy = vx * dx / vy
-            norm_yaw = norm([dx, dy])
+        x = centerx + offsetx
+        y = centery + offsety
+        n = norm([vx, vy])
+        vx = (vx / n) * 4
+        vy = (vy / n) * 4
+        dx = -2
+        dy = vx * dx / vy
+        norm_yaw = norm([dx, dy])
 
-            dx = (dx / norm_yaw) * 1
-            dy = (dy / norm_yaw) * 1
+        dx = (dx / norm_yaw) * 1
+        dy = (dy / norm_yaw) * 1
 
-            points = QPolygonF(
-                [
-                    QPointF(x + dx, y - dy),
-                    QPointF(x + vx, y + vy),
-                    QPointF(x - dx, y + dy),
-                ]
-            )
-            # points.translate(20, 20)
-            painter.drawPolygon(points)
+        points = QPolygonF(
+            [
+                QPointF(x + dx, y - dy),
+                QPointF(x + vx, y + vy),
+                QPointF(x - dx, y + dy),
+            ]
+        )
+        # points.translate(20, 20)
+        painter.drawPolygon(points)
 
     def keyPressEvent(self, event):
         move_step = 10

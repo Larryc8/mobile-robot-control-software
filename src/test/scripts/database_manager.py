@@ -2,12 +2,20 @@ import psycopg2
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+Base = declarative_base()
 
 from typing import Optional, List, Tuple
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from enum import Enum
 
-from tables import  Patrol, Checkpoint, Alert, PatrolLink, CheckpointLink
+from internal_storage.tables import (
+    Patrol,
+    Checkpoint,
+    Alert,
+    PatrolLink,
+    CheckpointLink,
+    Map
+)
 
 # cursor.execute("SELECT version();")
 # db_version = cursor.fetchone()
@@ -35,7 +43,7 @@ months_abbr = {
     "dic": "diciembre",
 }
 
-DATABASE_URL = 'postgresql://postgres:123@localhost:5432/postgres'
+DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
 
 
 class InternalStorageManager:
@@ -55,7 +63,7 @@ class InternalStorageManager:
             for id, patrol in patrols_data.items():
                 patrol_db = session.query(Patrol).filter_by(id=id).first()
                 days = list(patrol.get("days").keys())
-                days = ','.join(days)
+                days = ",".join(days)
                 time = list(patrol.get("time"))
                 time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
                 session.commit()
@@ -63,7 +71,7 @@ class InternalStorageManager:
             session.rollback()
             print(f"Database error: {e}")
         finally:
-            session.close() # Always close the session
+            session.close()  # Always close the session
 
     def delete_user_patrols(self, ids: List[str]):
         engine = create_engine(DATABASE_URL)
@@ -75,7 +83,11 @@ class InternalStorageManager:
                 #     f"DELETE FROM patrol_link WHERE patrol_id = '{id}'"
                 # )
                 # connection.commit()  # Commit the transaction
-                deleted_rows = session.query(PatrolLink).filter(PatrolLink.id == id).delete(synchronize_session=False)
+                deleted_rows = (
+                    session.query(PatrolLink)
+                    .filter(PatrolLink.patrol_id == id)
+                    .delete(synchronize_session=False)
+                )
                 session.commit()
 
                 # if deleted_rows > 0:
@@ -95,7 +107,11 @@ class InternalStorageManager:
         session = Session()
         try:
             for id in ids:
-                deleted_rows = session.query(Patrol).filter(Patrol.id == id).delete(synchronize_session=False)
+                deleted_rows = (
+                    session.query(Patrol)
+                    .filter(Patrol.id == id)
+                    .delete(synchronize_session=False)
+                )
                 session.commit()
 
         except Exception as e:
@@ -113,7 +129,9 @@ class InternalStorageManager:
             # cursor.execute(
             #     "SELECT patrol.id, patrol.time, patrol.days FROM  patrol INNER JOIN patrol_link ON patrol.id  = patrol_link.patrol_id;"
             # )
-            rows = session.query(PatrolLink, Patrol).join(PatrolLink).all()#cursor.fetchall()
+            rows = (
+                session.query(PatrolLink, Patrol).join(PatrolLink).all()
+            )  # cursor.fetchall()
             for patrol_link, patrol in rows:
                 # print(row)
                 id, time, days = patrol.id, patrol.time, patrol.days
@@ -135,7 +153,7 @@ class InternalStorageManager:
                 allpatrols.update(_patrol)
                 # print(a)
             session.commit()  # Commit the transaction
-            return allpatrols 
+            return allpatrols
         except Exception as e:
             session.rollback()
             print(f"An error occurred during direct delete: {e}")
@@ -148,7 +166,7 @@ class InternalStorageManager:
         session = Session()
         try:
             allpatrols = {}
-            rows = session.query(Patrol).all()#cursor.fetchall()
+            rows = session.query(Patrol).all()  # cursor.fetchall()
             for patrol in rows:
                 id, time, days = patrol.id, patrol.time, patrol.days
                 formated_time = time.strftime("%H%M")
@@ -168,7 +186,7 @@ class InternalStorageManager:
                 }
                 allpatrols.update(_patrol)
             session.commit()  # Commit the transaction
-            return allpatrols 
+            return allpatrols
         except Exception as e:
             session.rollback()
             print(f"An error occurred during direct delete: {e}")
@@ -178,6 +196,7 @@ class InternalStorageManager:
     def save_patrol(self, patrol_data: dict):
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
         session = Session()
         try:
             for id, patrol in patrol_data.items():
@@ -186,25 +205,11 @@ class InternalStorageManager:
                 time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
                 days = ",".join(days)
 
-                patrol = Patrol(time=time, days=days)
+                patrol = Patrol(id=id, time=time, days=days)
 
                 session.add(patrol)
                 session.commit()
-                # cursor.execute(
-                #     "INSERT INTO patrol (id, time, days) VALUES (%s, %s, %s);",
-                #     (id, time, ",".join(days)),
-                # )
-                # cursor.execute(f"SELECT * FROM patrol WHERE id = '{id}';")
-                # rows = cursor.fetchall()
-                # for row in rows:
-                    # print(row)
-
-                # cursor.execute(
-                #     f"INSERT INTO patrol_link (patrol_id) VALUES ('{id}');",
-                # )
-                # connection.commit()  # Commit the transaction
-                patrol_link = PatrolLink(patrol_id=id)
-
+                patrol_link = PatrolLink(patrol=patrol)
                 session.add(patrol_link)
                 session.commit()
                 print("Sample data added successfully!")
@@ -217,54 +222,91 @@ class InternalStorageManager:
 
     ####### point
     def save_points(self, points: dict):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
             id1 = list(points.keys())[0]
             mapfile = points.get(id1).get("mapfile")
 
-            if mapfile:
-                cursor.execute(
-                    f"DELETE FROM point WHERE map_file = '{mapfile}'"
-                )
+            map_db = session.query(Map).filter_by(file_path=mapfile).first()
+            session.commit()
 
+            if map_db:
+                joint_rows = (
+                    session.query(CheckpointLink, Checkpoint)
+                    .join(Checkpoint)
+                    .filter(Checkpoint.map_id == map_db.id)
+                )
+                session.commit()
+                for checkpoint_link, checkpoint in joint_rows:
+                    print('points joint', checkpoint_link)
+                    session.delete(checkpoint_link)
+                    session.commit()
+            else:
+                map_db = Map(file_path=mapfile)
+                session.commit()
+
+            _points = []
             for id, point in points.items():
                 x = point.get("x_meters")
                 y = point.get("y_meters")
                 mapfile = point.get("mapfile")
+                yaw = point.get("yaw")
+                gui_yaw = point.get('gui_yaw')
 
-                cursor.execute(
-                    "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
-                    (id, x, y, mapfile),
-                )
+                checkpoint_db = session.query(Checkpoint).filter_by(id=id).first()
+                if not checkpoint_db:
+                    checkpoint = Checkpoint(id=id, x_position=x, y_position=y, yaw=yaw, map=map_db, status=0, gui_yaw=gui_yaw )
+                    session.add(checkpoint)
+                    session.commit()
+
+                    session.add(CheckpointLink(checkpoint=checkpoint))
+                    session.commit()
+                else:
+                    session.add(CheckpointLink(checkpoint=checkpoint_db))
+                    session.commit()
+
+                # cursor.execute(
+                #     "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
+                #     (id, x, y, mapfile),
+                # )
 
                 # cursor.execute(
                 #     f"INSERT INTO point_link (point_id) VALUES ('{id}');",
                 # )
-                connection.commit()  # Commit the transaction
+                # connection.commit()  # Commit the transaction
 
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
 
     def get_points(self, mapfile: str):
-        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
             allpoints = {}
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(f"SELECT * FROM point WHERE map_file = '{mapfile}';")
-                    rows = cursor.fetchall()
-                    allpoints.update({"points": rows})
-                    connection.commit()  # Commit the transaction
+            map_db = session.query(Map).filter_by(file_path=mapfile).first()
+            points = session.query(Checkpoint, CheckpointLink).join(CheckpointLink).all()
+            session.commit()
 
-            # print(allpoints)
+            _points = []
+            for point, _ in points:
+                # id, x_meters, y_meters, map_file, yaw = point
+                _points.append((point.id, point.x_position, point.y_position, mapfile, point.yaw, point.gui_yaw ))
+
+            allpoints.update({"points": _points})
             return allpoints
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
 
     def get_alerts_error(self):
         try:
@@ -287,7 +329,7 @@ class InternalStorageManager:
             print(f"Database error: {e}")
 
     def get_filtered_alerts(
-        self, status=None, ascendant=True, page_size=11, page_number=0, map=''
+        self, status=None, ascendant=True, page_size=11, page_number=0, map=""
     ):
         try:
             with psycopg2.connect(
@@ -299,7 +341,7 @@ class InternalStorageManager:
             ) as connection:
                 with connection.cursor() as cursor:
                     if not map:
-                        map = ''
+                        map = ""
 
                     if status is not None:
                         if ascendant:
@@ -399,11 +441,12 @@ class InternalStorageManager:
                     )
                     rows = cursor.fetchall()
                     connection.commit()  # Commit the transaction
-                    #retrun in the format  year | month | week_of_month | element_count 
+                    # retrun in the format  year | month | week_of_month | element_count
 
             return rows
         except psycopg2.Error as e:
             print(f"Database error: {e}")
+
 
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
@@ -429,6 +472,8 @@ class DataBase(QThread):
 
         if self.action == "get_user_patrols":
             data = self.internal_storage_manager.get_user_patrols()
+            if not data:
+                data = {}
             self.action_completed.emit("SuccessGetAllUserPatrols", data)
             return
 
@@ -450,6 +495,8 @@ class DataBase(QThread):
         if self.action == "get_points":
             print("DATABASE RUNNING", self.action, self.data)
             data = self.internal_storage_manager.get_points(self.data.get("map_file"))
+            if not data:
+                data = {'points': []}
             self.action_completed.emit("SuccessGetPoinst", data)
 
 
@@ -468,4 +515,4 @@ if __name__ == "__main__":
     e.save_patrol(patrols_data)
     # e.get_patrols()
 
-# The with psycopg2.connect(...) as connection: statement establishes a connection to the PostgreSQL database. When the with block is exited, the connection is automatically closed, even if an exception occurs. The with connection.cursor() as cursor: statement creates a cursor object, which is used to execute SQL queries. The cursor is also automatically closed when the with block is exited.
+#session.query(Patrol).all() The with psycopg2.connect(...) as connection: statement establishes a connection to the PostgreSQL database. When the with block is exited, the connection is automatically closed, even if an exception occurs. The with connection.cursor() as cursor: statement creates a cursor object, which is used to execute SQL queries. The cursor is also automatically closed when the with block is exited.
