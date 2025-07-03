@@ -407,6 +407,7 @@ class Example(QGraphicsView):
                     'yaw': point['yaw'],
                     "checked": False,
                     "mapfile": self.mapfile,
+                    'type': 0
                 }
                 for id, point in self.getPointsPath().items()
             }

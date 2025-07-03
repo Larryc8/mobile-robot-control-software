@@ -1,8 +1,13 @@
 import psycopg2
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+
 from typing import Optional, List, Tuple
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from enum import Enum
 
+from tables import  Patrol, Checkpoint, Alert, PatrolLink, CheckpointLink
 
 # cursor.execute("SELECT version();")
 # db_version = cursor.fetchone()
@@ -30,6 +35,8 @@ months_abbr = {
     "dic": "diciembre",
 }
 
+DATABASE_URL = 'postgresql://postgres:123@localhost:5432/postgres'
+
 
 class InternalStorageManager:
     def __init__(self) -> None:
@@ -40,209 +47,199 @@ class InternalStorageManager:
         self.db_host = "localhost"
         self.db_port = "5432"
 
-    def update_patrol(self, patrol_data: dict):
+    def update_patrol(self, patrols_data: dict):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    for id, patrol in patrol_data.items():
-                        days = list(patrol.get("days").keys())
-                        time = list(patrol.get("time"))
-                        time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
-                        cursor.execute(
-                            f"UPDATE patrol SET time = '{time}', days = '{','.join(days)}'  WHERE id = '{id}';"
-                        )
-                    connection.commit()  # Commit the transaction
-            # return allpatrols
-        except psycopg2.Error as e:
+            for id, patrol in patrols_data.items():
+                patrol_db = session.query(Patrol).filter_by(id=id).first()
+                days = list(patrol.get("days").keys())
+                days = ','.join(days)
+                time = list(patrol.get("time"))
+                time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                session.commit()
+        except Exception as e:
+            session.rollback()
             print(f"Database error: {e}")
+        finally:
+            session.close() # Always close the session
 
     def delete_user_patrols(self, ids: List[str]):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
-            allpatrols = {}
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    for id in ids:
-                        cursor.execute(
-                            f"DELETE FROM patrol_link WHERE patrol_id = '{id}'"
-                        )
-                    connection.commit()  # Commit the transaction
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+            for id in ids:
+                # cursor.execute(
+                #     f"DELETE FROM patrol_link WHERE patrol_id = '{id}'"
+                # )
+                # connection.commit()  # Commit the transaction
+                deleted_rows = session.query(PatrolLink).filter(PatrolLink.id == id).delete(synchronize_session=False)
+                session.commit()
+
+                # if deleted_rows > 0:
+                #     print(f"Successfully deleted {deleted_rows} row(s) for user '{username_to_delete}'.")
+                # else:
+                #     print(f"No rows deleted for user '{username_to_delete}'. User not found or already deleted.")
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
 
     def delete_patrols(self, ids: List[str]):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
-            allpatrols = {}
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    for id in ids:
-                        cursor.execute(f"DELETE FROM patrol WHERE id = '{id}'")
-                    connection.commit()  # Commit the transaction
-            # return allpatrols
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+            for id in ids:
+                deleted_rows = session.query(Patrol).filter(Patrol.id == id).delete(synchronize_session=False)
+                session.commit()
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
 
     def get_user_patrols(self):
-        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
             allpatrols = {}
-
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT patrol.id, patrol.time, patrol.days FROM  patrol INNER JOIN patrol_link ON patrol.id  = patrol_link.patrol_id;"
-                    )
-                    rows = cursor.fetchall()
-                    for row in rows:
-                        # print(row)
-                        id, time, days = row
-                        a = {
-                            str(id): {
-                                "days": {
-                                    day: {
-                                        "day": day,
-                                        "time": time.strftime("%H%M"),
-                                        "finished": False,
-                                        "patrolid": str(id),
-                                    }
-                                    for day in days.split(",")
-                                },
-                                "time": time.strftime("%H%M"),
+            # cursor.execute(
+            #     "SELECT patrol.id, patrol.time, patrol.days FROM  patrol INNER JOIN patrol_link ON patrol.id  = patrol_link.patrol_id;"
+            # )
+            rows = session.query(PatrolLink, Patrol).join(PatrolLink).all()#cursor.fetchall()
+            for patrol_link, patrol in rows:
+                # print(row)
+                id, time, days = patrol.id, patrol.time, patrol.days
+                formated_time = time.strftime("%H%M")
+                _patrol = {
+                    str(id): {
+                        "days": {
+                            day: {
+                                "day": day,
+                                "time": formated_time,
+                                "finished": False,
+                                "patrolid": str(id),
                             }
-                        }
-                        allpatrols.update(a)
-                        print(a)
-                    connection.commit()  # Commit the transaction
-            return allpatrols
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+                            for day in days.split(",")
+                        },
+                        "time": formated_time,
+                    }
+                }
+                allpatrols.update(_patrol)
+                # print(a)
+            session.commit()  # Commit the transaction
+            return allpatrols 
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
 
     def get_patrols(self):
-        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
             allpatrols = {}
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT * FROM patrol;")
-                    rows = cursor.fetchall()
-                    for row in rows:
-                        # print(row)
-                        id, time, days = row
-                        a = {
-                            id: {
-                                "days": {
-                                    day: {
-                                        "day": day,
-                                        "time": time.strftime("%H%M"),
-                                        "finished": False,
-                                    }
-                                    for day in days.split(",")
-                                },
-                                "time": time.strftime("%H%M"),
+            rows = session.query(Patrol).all()#cursor.fetchall()
+            for patrol in rows:
+                id, time, days = patrol.id, patrol.time, patrol.days
+                formated_time = time.strftime("%H%M")
+                _patrol = {
+                    str(id): {
+                        "days": {
+                            day: {
+                                "day": day,
+                                "time": formated_time,
+                                "finished": False,
+                                "patrolid": str(id),
                             }
-                        }
-                        allpatrols.update(a)
-                        print(a)
-                    connection.commit()  # Commit the transaction
-            return allpatrols
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+                            for day in days.split(",")
+                        },
+                        "time": formated_time,
+                    }
+                }
+                allpatrols.update(_patrol)
+            session.commit()  # Commit the transaction
+            return allpatrols 
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
 
     def save_patrol(self, patrol_data: dict):
-        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
         try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    for id, patrol in patrol_data.items():
-                        days = list(patrol.get("days").keys())
-                        time = list(patrol.get("time"))
-                        time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
-                        cursor.execute(
-                            "INSERT INTO patrol (id, time, days) VALUES (%s, %s, %s);",
-                            (id, time, ",".join(days)),
-                        )
-                        cursor.execute(f"SELECT * FROM patrol WHERE id = '{id}';")
-                        rows = cursor.fetchall()
-                        for row in rows:
-                            print(row)
+            for id, patrol in patrol_data.items():
+                days = list(patrol.get("days").keys())
+                time = list(patrol.get("time"))
+                time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                days = ",".join(days)
 
-                        cursor.execute(
-                            f"INSERT INTO patrol_link (patrol_id) VALUES ('{id}');",
-                        )
-                        connection.commit()  # Commit the transaction
+                patrol = Patrol(time=time, days=days)
 
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+                session.add(patrol)
+                session.commit()
+                # cursor.execute(
+                #     "INSERT INTO patrol (id, time, days) VALUES (%s, %s, %s);",
+                #     (id, time, ",".join(days)),
+                # )
+                # cursor.execute(f"SELECT * FROM patrol WHERE id = '{id}';")
+                # rows = cursor.fetchall()
+                # for row in rows:
+                    # print(row)
+
+                # cursor.execute(
+                #     f"INSERT INTO patrol_link (patrol_id) VALUES ('{id}');",
+                # )
+                # connection.commit()  # Commit the transaction
+                patrol_link = PatrolLink(patrol_id=id)
+
+                session.add(patrol_link)
+                session.commit()
+                print("Sample data added successfully!")
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
 
     ####### point
     def save_points(self, points: dict):
-        pass
         try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    id1 = list(points.keys())[0]
-                    mapfile = points.get(id1).get("mapfile")
+            id1 = list(points.keys())[0]
+            mapfile = points.get(id1).get("mapfile")
 
-                    if mapfile:
-                        cursor.execute(
-                            f"DELETE FROM point WHERE map_file = '{mapfile}'"
-                        )
+            if mapfile:
+                cursor.execute(
+                    f"DELETE FROM point WHERE map_file = '{mapfile}'"
+                )
 
-                    for id, point in points.items():
-                        x = point.get("x_meters")
-                        y = point.get("y_meters")
-                        mapfile = point.get("mapfile")
+            for id, point in points.items():
+                x = point.get("x_meters")
+                y = point.get("y_meters")
+                mapfile = point.get("mapfile")
 
-                        cursor.execute(
-                            "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
-                            (id, x, y, mapfile),
-                        )
+                cursor.execute(
+                    "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
+                    (id, x, y, mapfile),
+                )
 
-                        # cursor.execute(
-                        #     f"INSERT INTO point_link (point_id) VALUES ('{id}');",
-                        # )
-                        connection.commit()  # Commit the transaction
+                # cursor.execute(
+                #     f"INSERT INTO point_link (point_id) VALUES ('{id}');",
+                # )
+                connection.commit()  # Commit the transaction
 
         except psycopg2.Error as e:
             print(f"Database error: {e}")
