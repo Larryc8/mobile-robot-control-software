@@ -1,4 +1,6 @@
+import math
 import sys
+from datetime import datetime
 import typing
 import rospy
 import cv2 as cv
@@ -62,7 +64,7 @@ class TaskWorker(QThread):
             yaw =  tf.transformations.euler_from_quaternion(rotation_qua) 
             print("translation", trans, yaw)
 
-            self.task_completed.emit(tuple(trans) + tuple(yaw))
+            self.task_completed.emit(tuple(trans[:2]) + tuple([yaw[2]]))
         except Exception as e:
             print(e)
             self.task_completed.emit(tuple([0, 0]))
@@ -83,7 +85,7 @@ class RobotCamera(QGroupBox):
         self.layout.addWidget(self.menu_btn)
         self.cv_image = None
         self.database = None
-        self.images_buffer = []
+        self.data_buffer = []
         self.pose_getter = None
 
         # Create CV bridge
@@ -112,11 +114,43 @@ class RobotCamera(QGroupBox):
         menu.addAction(lowercase_action)
         self.menu_btn.setMenu(menu)
 
-    def save_buffered_data(self, map_filename):
-        for i, img in enumerate(self.images_buffer):
-            cv.imwrite(f'./reference_images/reference_image{i}.jpg', img)
-        self.images_buffer = []
-        print(f'Save reference image of map {map_filename}')
+    def save_buffered_data(self, mapfile):
+        if self.database and self.database.isRunning():
+            return
+
+        print(f'{__name__} map: {mapfile}')
+        print(f'{__name__} number of points: {len(self.data_buffer)}')
+        points = {}
+        for data in self.data_buffer:
+            id = str(datetime.now().timestamp())
+            print(f'{__name__} {data[1]}')
+            x, y, yaw = data[2]
+            image= data[1]
+            cv.imwrite(data[1], data[0])
+            _x, _y = math.cos(yaw), math.sin(yaw)
+            gui_yaw = math.atan2(_y, -_x)
+            points.update({
+                str(id): {
+                "x_meters": x,  # * self.resolution,
+                "y_meters": y,  # * self.resolution,
+                "yaw_degrees": 0,
+                'yaw': yaw,
+                "checked": False,
+                "mapfile": mapfile,
+                'type': 1,
+                'gui_yaw': gui_yaw, 
+                'image': image
+            }})
+        print(f'{__name__} number of _points: {len(points)} {points}')
+        self.database = DataBase(action='add_points', data=points, mapfile=mapfile)
+        self.database.action_completed.connect(self.database_task_completed)
+        self.database.start()
+        # self.data_buffer = []
+
+
+    def database_task_completed(self, x, y):
+        print(x)
+        pass
 
     def buffer_reference_image(self):
         print('SAVE IMAGE REFERENCE')
@@ -124,12 +158,14 @@ class RobotCamera(QGroupBox):
             return
 
         self.pose_getter = TaskWorker()
-        self.pose_getter.task_completed.connect(self.set_pose)
+        self.pose_getter.task_completed.connect(self.set_pose_and_image)
         self.pose_getter.start()
 
-    def set_pose(self, pose):
-        if len(self.images_buffer) < 10:
-            self.images_buffer.append(self.current_image)
+    def set_pose_and_image(self, pose):
+        if len(self.data_buffer) < 10:
+            id = str(datetime.now().timestamp())
+            img_file_path = f'./reference_images/reference_image{id}.jpg'
+            self.data_buffer.append((self.current_image, img_file_path, pose))
 
         print(f'{__name__} pose', pose)
 
@@ -178,23 +214,6 @@ class RobotCamera(QGroupBox):
         print("camer button cliked")
         pass
 
-    def odom_callback(self, msg):
-        pass
-        # try:
-        #     listener = tf.TransformListener()
-        #     # rospy.loginfo('waiting for map frame')
-        #     listener.waitForTransform(
-        #         target_frame="map",
-        #         source_frame="base_link",
-        #         time=rospy.Time(0),
-        #         timeout=rospy.Duration(4),
-        #     )
-        #     trans, rotation_qua = listener.lookupTransform("map", "base_link", rospy.Time(0))
-
-        #     yaw =  tf.transformations.euler_from_quaternion(rotation_qua) 
-        #     print("translation", trans, yaw)
-        # except Exception as e:
-        #     print(e)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -2,6 +2,7 @@ import psycopg2
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+
 Base = declarative_base()
 
 from typing import Optional, List, Tuple
@@ -14,7 +15,7 @@ from internal_storage.tables import (
     Alert,
     PatrolLink,
     CheckpointLink,
-    Map
+    Map,
 )
 
 # cursor.execute("SELECT version();")
@@ -240,7 +241,7 @@ class InternalStorageManager:
                 )
                 session.commit()
                 for checkpoint_link, checkpoint in joint_rows:
-                    print('points joint', checkpoint_link)
+                    print("points joint", checkpoint_link)
                     session.delete(checkpoint_link)
                     session.commit()
             else:
@@ -253,11 +254,19 @@ class InternalStorageManager:
                 y = point.get("y_meters")
                 mapfile = point.get("mapfile")
                 yaw = point.get("yaw")
-                gui_yaw = point.get('gui_yaw')
+                gui_yaw = point.get("gui_yaw")
 
                 checkpoint_db = session.query(Checkpoint).filter_by(id=id).first()
                 if not checkpoint_db:
-                    checkpoint = Checkpoint(id=id, x_position=x, y_position=y, yaw=yaw, map=map_db, status=0, gui_yaw=gui_yaw )
+                    checkpoint = Checkpoint(
+                        id=id,
+                        x_position=x,
+                        y_position=y,
+                        yaw=yaw,
+                        map=map_db,
+                        status=0,
+                        gui_yaw=gui_yaw,
+                    )
                     session.add(checkpoint)
                     session.commit()
 
@@ -267,15 +276,47 @@ class InternalStorageManager:
                     session.add(CheckpointLink(checkpoint=checkpoint_db))
                     session.commit()
 
-                # cursor.execute(
-                #     "INSERT INTO point (id, x_position,  y_position, map_file) VALUES (%s, %s, %s, %s);",
-                #     (id, x, y, mapfile),
-                # )
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
 
-                # cursor.execute(
-                #     f"INSERT INTO point_link (point_id) VALUES ('{id}');",
-                # )
-                # connection.commit()  # Commit the transaction
+    def add_points(self, points, mapfile):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            map_db = Map(file_path=mapfile)#session.query(Map).filter_by(file_path=mapfile).first()
+            print(f'{__name__} {mapfile}')
+            session.add(map_db)
+            session.commit()
+            print(f'{__name__} point number {len(points)}')
+
+            for id, point in points.items():
+                x = point.get("x_meters")
+                y = point.get("y_meters")
+                mapfile = point.get("mapfile")
+                yaw = point.get("yaw")
+                gui_yaw = point.get("gui_yaw")
+                image = point.get("image")
+
+                checkpoint = Checkpoint(
+                    id=id,
+                    x_position=x,
+                    y_position=y,
+                    yaw=yaw,
+                    map=map_db,
+                    status=0,
+                    gui_yaw=gui_yaw,
+                    image=image 
+                )
+                session.add(checkpoint)
+                session.commit()
+
+                checkpoint_link = CheckpointLink(checkpoint=checkpoint)
+                session.add(checkpoint_link)
+                session.commit()
 
         except Exception as e:
             session.rollback()
@@ -283,21 +324,39 @@ class InternalStorageManager:
         finally:
             session.close()
 
-
     def get_points(self, mapfile: str):
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
         try:
             allpoints = {}
-            map_db = session.query(Map).filter_by(file_path=mapfile).first()
-            points = session.query(Checkpoint, CheckpointLink).join(CheckpointLink).all()
-            session.commit()
-
             _points = []
-            for point, _ in points:
-                # id, x_meters, y_meters, map_file, yaw = point
-                _points.append((point.id, point.x_position, point.y_position, mapfile, point.yaw, point.gui_yaw ))
+            mapfile = mapfile.split('/')[-1]
+            mapfile = mapfile.split('.')[0]
+            print(f'{__name__} map {mapfile}')
+            map_db = session.query(Map).filter_by(file_path=mapfile).first()
+            session.commit()
+            if map_db:
+                points = (
+                    session.query(Checkpoint, CheckpointLink)
+                    .join(CheckpointLink)
+                    .filter(Checkpoint.map_id == map_db.id)
+                    .all()
+                )
+                session.commit()
+
+                for point, _ in points:
+                    # id, x_meters, y_meters, map_file, yaw = point
+                    _points.append(
+                        (
+                            point.id,
+                            point.x_position,
+                            point.y_position,
+                            mapfile,
+                            point.yaw,
+                            point.gui_yaw,
+                        )
+                    )
 
             allpoints.update({"points": _points})
             return allpoints
@@ -451,10 +510,12 @@ class InternalStorageManager:
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
 
-    def __init__(self, action: str, data: dict = {}) -> None:
+    def __init__(self, action: str, data: dict = {}, mapfile="", place="") -> None:
         super().__init__()
         self.action = action
         self.data = data
+        self.place = place
+        self.map_file = mapfile
 
     def run(self):
         print("DATABASE RUNNING", self.action)
@@ -492,11 +553,15 @@ class DataBase(QThread):
             self.internal_storage_manager.save_points(self.data)
             self.action_completed.emit("SuccessSavePoints", {})
 
+        if self.action == "add_points":
+            self.internal_storage_manager.add_points(self.data, self.map_file)
+            self.action_completed.emit("SuccessAddPoints", {})
+
         if self.action == "get_points":
             print("DATABASE RUNNING", self.action, self.data)
             data = self.internal_storage_manager.get_points(self.data.get("map_file"))
             if not data:
-                data = {'points': []}
+                data = {"points": []}
             self.action_completed.emit("SuccessGetPoinst", data)
 
 
@@ -515,4 +580,4 @@ if __name__ == "__main__":
     e.save_patrol(patrols_data)
     # e.get_patrols()
 
-#session.query(Patrol).all() The with psycopg2.connect(...) as connection: statement establishes a connection to the PostgreSQL database. When the with block is exited, the connection is automatically closed, even if an exception occurs. The with connection.cursor() as cursor: statement creates a cursor object, which is used to execute SQL queries. The cursor is also automatically closed when the with block is exited.
+# session.query(Patrol).all() The with psycopg2.connect(...) as connection: statement establishes a connection to the PostgreSQL database. When the with block is exited, the connection is automatically closed, even if an exception occurs. The with connection.cursor() as cursor: statement creates a cursor object, which is used to execute SQL queries. The cursor is also automatically closed when the with block is exited.

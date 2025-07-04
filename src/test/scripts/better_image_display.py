@@ -286,6 +286,7 @@ class ImageViewer(QMainWindow):
             self.botton_left_map = (x, y)
             self.graphics_view.botton_left_map = (x, y)
             self.graphics_view.map_resolution = resolution
+            file_path = image.split('.')[0]
             self.graphics_view.mapfile = file_path
             # self.save_button.setEnabled(True)
             self.info_label.show()

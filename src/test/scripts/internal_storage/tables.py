@@ -75,6 +75,7 @@ class Checkpoint(Base):
     yaw = Column(Float)
     gui_yaw = Column(Float)
     status = Column(Integer)  # You should specify enum values, e.g., Enum('active', 'inactive', name='status_enum'))
+    image = Column(String)
 
     alerts = relationship("Alert", back_populates="checkpoint")
     checkpoint_link = relationship("CheckpointLink", back_populates="checkpoint")
