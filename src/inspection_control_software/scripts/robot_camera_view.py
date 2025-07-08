@@ -40,7 +40,10 @@ from PyQt5.QtGui import QImage, QPixmap
 from rview import MyViz
 from robot_vision import ImageMatcheChecker
 from database_manager import DataBase
+from config_model import NodesManager
 
+
+from pyqttoast import Toast, ToastPreset
 
 class TaskWorker(QThread):
     task_completed = pyqtSignal(tuple)
@@ -71,7 +74,8 @@ class TaskWorker(QThread):
 
 
 class RobotCamera(QGroupBox):
-    def __init__(self) -> None:
+    send_buffered_data = pyqtSignal(list)
+    def __init__(self, buffer, parent) -> None:
         super().__init__("Camara del robot")
         self.layout = QVBoxLayout()
         # self.container.setLayout(self.layout)
@@ -86,7 +90,10 @@ class RobotCamera(QGroupBox):
         self.cv_image = None
         self.database = None
         self.data_buffer = []
+        self.parent = parent
         self.pose_getter = None
+        self.data_buffer2 = buffer
+        self.nodes_manager = NodesManager()
 
         # Create CV bridge
         self.bridge = CvBridge()
@@ -121,32 +128,34 @@ class RobotCamera(QGroupBox):
         print(f'{__name__} map: {mapfile}')
         print(f'{__name__} number of points: {len(self.data_buffer)}')
         points = {}
-        for data in self.data_buffer:
-            id = str(datetime.now().timestamp())
-            print(f'{__name__} {data[1]}')
-            x, y, yaw = data[2]
-            image= data[1]
-            cv.imwrite(data[1], data[0])
-            _x, _y = math.cos(yaw), math.sin(yaw)
-            gui_yaw = math.atan2(_y, -_x)
-            points.update({
-                str(id): {
-                "x_meters": x,  # * self.resolution,
-                "y_meters": y,  # * self.resolution,
-                "yaw_degrees": 0,
-                'yaw': yaw,
-                "checked": False,
-                "mapfile": mapfile,
-                'type': 1,
-                'gui_yaw': gui_yaw, 
-                'image': image
-            }})
-        print(f'{__name__} number of _points: {len(points)} {points}')
-        self.database = DataBase(action='add_points', data=points, mapfile=mapfile)
-        self.database.action_completed.connect(self.database_task_completed)
-        self.database.start()
-        # self.data_buffer = []
+        try:
+            for data in self.data_buffer:
+                id = str(datetime.now().timestamp())
+                print(f'{__name__} {data[1]}')
+                x, y, yaw = data[2]
+                image= data[1]
+                cv.imwrite(data[1], data[0])
+                _x, _y = math.cos(yaw), math.sin(yaw)
+                gui_yaw = math.atan2(_y, -_x)
+                points.update({
+                    str(id): {
+                    "x_meters": x,  # * self.resolution,
+                    "y_meters": y,  # * self.resolution,
+                    "yaw_degrees": 0,
+                    'yaw': yaw,
+                    "checked": False,
+                    "mapfile": mapfile,
+                    'type': 1,
+                    'gui_yaw': gui_yaw, 
+                    'image': image
+                }})
+            print(f'{__name__} number of _points: {len(points)} {points}')
+            self.database = DataBase(action='add_points', data=points, mapfile=mapfile)
+            self.database.action_completed.connect(self.database_task_completed)
+            self.database.start()
 
+        except Exception as identifier:
+            pass
 
     def database_task_completed(self, x, y):
         print(x)
@@ -167,7 +176,31 @@ class RobotCamera(QGroupBox):
             img_file_path = f'./reference_images/reference_image{id}.jpg'
             self.data_buffer.append((self.current_image, img_file_path, pose))
 
+            if self.current_image is not None:
+                height, width, channel = self.current_image.shape
+                bytes_per_line = 3 * width
+                q_img = QImage(
+                    self.current_image.data,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format_RGB888,
+                ).rgbSwapped()
+
+                pixmap = QPixmap.fromImage(q_img)
+                self.data_buffer2.append(pixmap)
+                print(f'{__name__} curent image shape', self.current_image.shape)
+                self.send_buffered_data.emit(self.data_buffer2)
+
         print(f'{__name__} pose', pose)
+
+        toast = Toast(self.parent)
+        toast.setDuration(2000)  # Hide after 5 seconds
+        toast.setTitle("Exito!")
+        toast.setText("Se agrego punto de referencia!")
+        toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+        Toast.setPositionRelativeToWidget(self.parent)
+        toast.show()
 
         if self.pose_getter:
             self.pose_getter.quit()

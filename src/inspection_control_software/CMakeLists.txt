@@ -199,8 +199,8 @@ add_definitions(-DQT_NO_KEYWORDS)
 ## The generated MOC files are included automatically as headers.
 set(SRC_FILES
   src/plant_flag_tool.cpp
-  src/imu_display.cpp
-  src/imu_visual.cpp
+  # src/imu_display.cpp
+  # src/imu_visual.cpp
 )
 
 ## An rviz plugin is just a shared library, so here we declare the

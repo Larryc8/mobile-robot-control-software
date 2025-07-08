@@ -46,6 +46,7 @@ from styles.buttons import (
 
 from styles.labels import inactive_label_style, minimal_label_style
 
+from test_user_form2 import UserForm
 
 class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
@@ -160,8 +161,8 @@ class ConfigPanel(QWidget):
         self.advance_config_wrapper = QWidget()
         self.basic_config_wrapper = FriendlyConfig()
         self.advance_config_wrapper.setLayout(self.layout)
-        self.stacklayout.addWidget(self.advance_config_wrapper)
         self.stacklayout.addWidget(self.basic_config_wrapper)
+        self.stacklayout.addWidget(self.advance_config_wrapper)
 
         self.upper_layout = QVBoxLayout()
         # self.upper_layout.addWidget(QPushButton('Advence'))
@@ -377,6 +378,7 @@ class FriendlyConfig(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.layout = QGridLayout()
+        self.layout.addWidget(UserForm(), 1, 0, 3, 1)
         self.layout.addWidget(DescriptionConfigContainer(title="Crecionde mapa"), 1, 1)
         self.layout.addWidget(
             DescriptionConfigContainer(title="Desepeno de localizacion"), 2, 1
@@ -385,7 +387,7 @@ class FriendlyConfig(QWidget):
             DescriptionConfigContainer(title="Desepeno de Navegacion"), 3, 1
         )
         self.layout.addWidget(
-           DataSetConfigContainer(), 4, 1
+           QPushButton('Configuracion avanzada'), 4, 0, 1, 2
         )
         self.setLayout(self.layout)
 

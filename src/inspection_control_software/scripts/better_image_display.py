@@ -62,6 +62,8 @@ from styles.labels import (
     code_label_style,
 )
 
+from config_model import NodesManager 
+
 from PyQt5.QtCore import (
     Qt,
     QRectF,
@@ -102,7 +104,12 @@ class ImageViewer(QMainWindow):
         self.resolution = 0
         self.botton_left_map = (999, 999)
         self.pointsInMap = {}
+
         # self.save_selected_points.connect(self.)
+        # Create a timer
+        # self.timer = QTimer(self)
+        # self.timer.timeout.connect(self.update_counter)
+        # self.timer.start(1000)  # Update every 1000ms (1 second)
 
     def init_ui(self):
         # Central widget and layout
@@ -186,20 +193,14 @@ class ImageViewer(QMainWindow):
         icon = QApplication.style().standardIcon(QStyle.SP_DialogCloseButton)
         self.close_button.setIcon(icon)
 
-        # self.zoom_in_button = QPushButton("Zoom In (+)")
-        # self.zoom_in_button.clicked.connect(self.zoom_in)
-        # layout.addWidget(self.zoom_in_button)
-
-        # self.zoom_out_button = QPushButton("Zoom Out (-)")
-        # self.zoom_out_button.clicked.connect(self.zoom_out)
-        # layout.addWidget(self.zoom_out_button)
-
-        # self.reset_button = QPushButton("Reset View")
-        # self.reset_button.clicked.connect(self.reset_view)
-        # layout.addWidget(self.reset_button)
-        # self.save_button.setEnabled(False)
-
         central_widget.setLayout(layout)
+
+    # def update_counter(self):
+    #     y = './maps/nenen'
+    #     x = self.nodes_manager.save_map(y)
+    #     x.wait()
+    #     self.load_map(y + '.yaml')
+        # self.graphics_view.load_stored_points()
 
     def reset_points_state(self, patrolid=None):
         self.graphics_view.reset_points_state(patrolid)
@@ -252,6 +253,7 @@ class ImageViewer(QMainWindow):
 
     def close_win(self):
         self.hide()
+        # self.timer.start(1000)  # Update every 1000ms (1 second)
 
     def save_points(self, a):
         # a = self.getPointsInMap()
@@ -791,6 +793,8 @@ class Example(QGraphicsView):
             self.centerOn(center.x(), center.y() + move_step)
         else:
             super().keyPressEvent(event)
+
+
 
 
 if __name__ == "__main__":

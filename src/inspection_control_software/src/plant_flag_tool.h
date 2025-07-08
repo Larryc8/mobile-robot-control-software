@@ -71,7 +71,7 @@ public:
   virtual void save( rviz::Config config ) const;
 
 private:
-  void pathCallback(const nav_msgs::Path::ConstPtr &msg);
+  // void pathCallback(const nav_msgs::Path::ConstPtr &msg);
   void makeFlag( const Ogre::Vector3& position );
 
   std::vector<Ogre::SceneNode*> flag_nodes_;

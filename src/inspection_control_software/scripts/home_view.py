@@ -77,6 +77,7 @@ from patrol_menu import PatrolsMenu
 from rview import MyViz
 from input_textdialog import InputDialog, CustomDialog
 from robot_camera_view import RobotCamera
+from test_carrousel import ImageCarousel
 
 from utils.patrol import PatrolEndState, userOperation, operationMode
 
@@ -184,15 +185,18 @@ class VisualizationPanel(QWidget):
         self.isCreateMap = True
         self.global_state_holder = global_state_holder
         self.mapAsPrincipalView = True
+        self.buffer_data_robot_camera = []
 
         self.rviz = MyViz(configfile="./config_navigation.rviz")
 
-        self.robotcamera = RobotCamera()
+        self.robotcamera = RobotCamera(buffer=self.buffer_data_robot_camera, parent=self.parent)
         self.robotcamera.setFixedSize(200, 150)
         self.robotcamera.move(50, 50)
         # self.rviz.setFixedSize(700, 500)
 
         self.robotcamera.setStyleSheet("background-color: red;")
+
+        self.drainage_checkpoints_win = ImageCarousel(buffer=self.buffer_data_robot_camera)
 
         # self.parent.pointWindow = None
         self.currentOperationMode = operationMode.MANUAL
@@ -265,6 +269,7 @@ class VisualizationPanel(QWidget):
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
         self.map_saved.connect(self.robotcamera.save_buffered_data)
+        self.robotcamera.send_buffered_data.connect(self.drainage_checkpoints_win.load_images)
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
@@ -512,7 +517,11 @@ class VisualizationPanel(QWidget):
         # if self.parent.pointsWindow is None:
         # self.parent.pointsWindow = ImageViewer()
         # print('None ;; multiwindows')
-        self.parent.pointsWindow.show_win()
+        if(self.global_state_holder.currentUserOperation == userOperation.CREATEMAP):
+            self.drainage_checkpoints_win.show()
+
+        else:
+            self.parent.pointsWindow.show_win()
         # self.parent.pointsWindow.save_points()
 
     def update_operation_mode(self, mode):

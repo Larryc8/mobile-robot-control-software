@@ -50,7 +50,7 @@
 namespace rviz_plugin_tutorials {
 
 
-void PlantFlagTool::pathCallback(const nav_msgs::Path::ConstPtr &msg) {
+void pathCallback(const nav_msgs::Path::ConstPtr &msg) {
   // Get the number of poses in the path
   int num_poses = msg->poses.size();
   ROS_INFO("Received path with %d poses harold riascos", num_poses);
@@ -135,7 +135,7 @@ void PlantFlagTool::onInitialize() {
   ros::NodeHandle nh;
   ros::NodeHandle nh2;
   pose_pub_ = nh.advertise<nav_msgs::Path>("/target_pose", 3, true);
-  sub_ = nh2.subscribe<nav_msgs::Path>("/robot_path", 2, &pathCallback);
+  // sub_ = nh2.subscribe<nav_msgs::Path>("/robot_path", 2, &pathCallback);
 }
 
 // Activation and deactivation
@@ -159,10 +159,10 @@ void PlantFlagTool::activate() {
   if (moving_flag_node_) {
     moving_flag_node_->setVisible(true);
 
-    current_flag_property_ =
-        new rviz::VectorProperty("Flag " + QString::number(flag_nodes_.size()));
-    current_flag_property_->setReadOnly(true);
-    getPropertyContainer()->addChild(current_flag_property_);
+    // current_flag_property_ =
+        // new rviz::VectorProperty("Flag " + QString::number(flag_nodes_.size()));
+    // current_flag_property_->setReadOnly(true);
+    // getPropertyContainer()->addChild(current_flag_property_);
   }
 }
 
@@ -214,12 +214,11 @@ int PlantFlagTool::processMouseEvent(rviz::ViewportMouseEvent &event) {
       // moving_flag_node_->roll(Ogre::Degree(60), Ogre::Node::TS_WORLD);
       float dx = intersection.x - intersection_saved.x;
       float dy = intersection.y - intersection_saved.y;
-      // float angle = calculateAngle(, );
+      float angle = calculateAngle(dx, dy);
       moving_flag_node_->setVisible(true);
-      // moving_flag_node_->setOrientation(Ogre::Quaternion(Ogre::Degree(angle), Ogre::Vector3(0,0,1)));
-      moving_flag_node_->lookAt(Ogre::Vector3(dx, 0, dy), Ogre::Node::TS_WORLD);
-      // moving_flag_node_->setDirection(intersection.x - intersection_saved.x,
-                                      // intersection.y - intersection_saved.y, 0);
+      // moving_flag_node_->setOrientation(Ogre::Quaternion(Ogre::Degree(angle), Ogre::Vector3(0,1,1)));
+      // moving_flag_node_->lookAt(Ogre::Vector3(dx, dy, 0), Ogre::Node::TS_WORLD);
+      moving_flag_node_->setDirection(dx, dy, 0);
     }
 
     if (event.left()) {
