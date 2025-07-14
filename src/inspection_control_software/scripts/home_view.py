@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (
     QStyle,
     QGraphicsOpacityEffect,
     QToolTip,
-    QStackedLayout
+    QStackedLayout,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -44,6 +44,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QIcon, QPixmap, QTransform, QFontMetrics
 
+from database_manager import AlertStatus
 from pyqttoast import Toast, ToastPreset
 
 from datetime import datetime
@@ -77,10 +78,9 @@ from patrol_menu import PatrolsMenu
 from rview import MyViz
 from input_textdialog import InputDialog, CustomDialog
 from robot_camera_view import RobotCamera
-from test_carrousel import ImageCarousel
+from image_carousel import ImageCarousel
 
 from utils.patrol import PatrolEndState, userOperation, operationMode
-
 
 
 class HomePanel(QWidget):
@@ -134,10 +134,25 @@ class HomePanel(QWidget):
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
             visualization_panel.parent.pointsWindow.reset_points_state
         )
-        select_mode_panel.cancel_user_operation.connect(visualization_panel.setMapOperationState)
+        select_mode_panel.cancel_user_operation.connect(
+            visualization_panel.setMapOperationState
+        )
         # setCreatMapState
 
         visualization_panel.map_loaded.connect(select_mode_panel.checkMap)
+        visualization_panel.map_loaded.connect(
+            self.patrol_panel.patrols_scheduler.points_scheduler.setMap
+        )
+        self.patrol_panel.patrols_scheduler.points_scheduler.alert_generated.connect(visualization_panel.handleAlertGeneration)
+
+
+        self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
+            visualization_panel.drainage_checkpoints_win.update_dreinage_info
+        )
+
+        self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
+            visualization_panel.drainage_checkpoints_win.load_stored_points
+        )
 
         self.layout.addWidget(visualization_panel, 0, 0, 8, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
@@ -156,9 +171,6 @@ class HomePanel(QWidget):
     # self.patrol_panel.update_points(points)
 
 
-
-
-
 class VisualizationPanel(QWidget):
     update_points = pyqtSignal(dict)
     map_loaded = pyqtSignal(str)
@@ -166,6 +178,7 @@ class VisualizationPanel(QWidget):
     save_in_database = pyqtSignal(dict)
     enable = pyqtSignal(str, bool)
     map_saved = pyqtSignal(str)
+    selected_user_operation = pyqtSignal(userOperation)
 
     def __init__(
         self, nodes_manager=None, parent=None, global_state_holder=None
@@ -189,14 +202,18 @@ class VisualizationPanel(QWidget):
 
         self.rviz = MyViz(configfile="./config_navigation.rviz")
 
-        self.robotcamera = RobotCamera(buffer=self.buffer_data_robot_camera, parent=self.parent)
+        self.robotcamera = RobotCamera(
+            buffer=self.buffer_data_robot_camera, parent=self.parent
+        )
         self.robotcamera.setFixedSize(200, 150)
         self.robotcamera.move(50, 50)
         # self.rviz.setFixedSize(700, 500)
 
         self.robotcamera.setStyleSheet("background-color: red;")
 
-        self.drainage_checkpoints_win = ImageCarousel(buffer=self.buffer_data_robot_camera)
+        self.drainage_checkpoints_win = ImageCarousel(
+            buffer=self.buffer_data_robot_camera
+        )
 
         # self.parent.pointWindow = None
         self.currentOperationMode = operationMode.MANUAL
@@ -253,7 +270,7 @@ class VisualizationPanel(QWidget):
             for widget in (self.followrobot_check,)
         ]
         self.followrobot_check.setText("Ajustar la vista a los movimientos del robot?")
-        self.stack_config_btn = QPushButton('cmabiar')
+        self.stack_config_btn = QPushButton("cmabiar")
         # self.followrobot_label.setStyleSheet("background-color: #f0f0f0;")
 
         # self.save_map_button.clicked.connect(self.saveMapClickHandler)
@@ -263,13 +280,25 @@ class VisualizationPanel(QWidget):
         self.followrobot_check.stateChanged.connect(self.setFollowRobot)
         self.save_map_button.hide()
 
+        menu = QMenu("checkpoints", self)
+        show_checkpoints_action = QAction("puntos de interes", self)
+        show_checkpoints_action.triggered.connect(self.show_points_window)
+        menu.addAction(show_checkpoints_action)
+
+        show_dreinage_action = QAction("desagues", self)
+        show_dreinage_action.triggered.connect(self.show_dreinage_window)
+        menu.addAction(show_dreinage_action)
+        self.points_window_btn.setMenu(menu)
         # self.save_button.setEnabled(False)
         self.stack_config_btn.clicked.connect(self.toggleCameraMapView)
-        self.points_window_btn.clicked.connect(self.show_points_window)
+        # self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
         self.map_saved.connect(self.robotcamera.save_buffered_data)
-        self.robotcamera.send_buffered_data.connect(self.drainage_checkpoints_win.load_images)
+        self.robotcamera.send_buffered_data.connect(
+            self.drainage_checkpoints_win.load_images
+        )
+        self.selected_user_operation.connect(self.drainage_checkpoints_win.get_user_operation)
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
@@ -282,6 +311,23 @@ class VisualizationPanel(QWidget):
         self.layout.addLayout(self.buttons_layout, 2, 0, 1, 3)
         self.setLayout(self.layout)
 
+    def handleAlertGeneration(self, message, status):
+        print(f'HOME VIEW ALERT {message}')
+        toast = Toast(self.parent)
+        toast.setDuration(10000)  # Hide after 5 seconds
+        toast.setTitle("Ha ocurrido un Evento")
+        toast.setText(f"{message}")
+
+        if status == AlertStatus.ERROR:
+            toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
+        if status == AlertStatus.WARNING:
+            toast.applyPreset(ToastPreset.WARNING)  # Apply style preset
+        if status == AlertStatus.INFO:
+            toast.applyPreset(ToastPreset.INFORMATION)  # Apply style preset
+
+        Toast.setPositionRelativeToWidget(self.parent)
+        toast.show()
+
     def toggleCameraMapView(self):
         if self.mapAsPrincipalView:
             self.stacklayout.setCurrentIndex(1)
@@ -291,8 +337,8 @@ class VisualizationPanel(QWidget):
             self.mapAsPrincipalView = False
             self.robotcamera.setMaximumSize(200, 200)
             self.robotcamera.move(50, 50)
-            self.rviz.setMaximumSize(2000,1000)
-            return 
+            self.rviz.setMaximumSize(2000, 1000)
+            return
 
         self.stacklayout.setCurrentIndex(0)
         self.rviz.raise_()
@@ -309,7 +355,6 @@ class VisualizationPanel(QWidget):
         currentWidget.raise_()
         currentWidget.update()
         super().paintEvent(event)
-
 
     def toggleCreaeteSaveMap(self):
         if self.isCreateMap:
@@ -396,6 +441,7 @@ class VisualizationPanel(QWidget):
                 Toast.setPositionRelativeToWidget(self.parent)
                 toast.show()
                 self.global_state_holder.currentUserOperation = userOperation.LOADMAP
+                self.selected_user_operation.emit(userOperation.LOADMAP)
                 return
 
             self.rviz.setUp("reset", True)
@@ -458,6 +504,7 @@ class VisualizationPanel(QWidget):
         self.isCreateMap = True
         # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
         self.global_state_holder.currentUserOperation = userOperation.IDLE
+        self.selected_user_operation.emit(userOperation.IDLE)
 
     def handleSavePoints(self, points):
         self.update_points.emit(points)
@@ -505,6 +552,7 @@ class VisualizationPanel(QWidget):
         # self.create_map_btn.setEnabled(False)
         self.nodes_manager.bringUpStart()
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
+        self.selected_user_operation.emit(userOperation.CREATEMAP)
         return
 
         dlg = QMessageBox(self)
@@ -517,12 +565,12 @@ class VisualizationPanel(QWidget):
         # if self.parent.pointsWindow is None:
         # self.parent.pointsWindow = ImageViewer()
         # print('None ;; multiwindows')
-        if(self.global_state_holder.currentUserOperation == userOperation.CREATEMAP):
-            self.drainage_checkpoints_win.show()
-
-        else:
-            self.parent.pointsWindow.show_win()
+        # if self.global_state_holder.currentUserOperation == userOperation.CREATEMAP:
+        self.parent.pointsWindow.show_win()
         # self.parent.pointsWindow.save_points()
+
+    def show_dreinage_window(self, checked):
+        self.drainage_checkpoints_win.show()
 
     def update_operation_mode(self, mode):
         self.currentOperationMode = mode
@@ -636,7 +684,7 @@ class SelectModePanel(QGroupBox):
             return
 
         # self.nodes_manager.stopNodes(["amcl", "move_base", "turtlebot3_slam_gmapping"])
-        print('AUTO MODE', self.map)
+        print("AUTO MODE", self.map)
         if not self.map:
             toast = Toast(self.parent)
             toast.setDuration(5000)  # Hide after 5 seconds
@@ -646,7 +694,6 @@ class SelectModePanel(QGroupBox):
             Toast.setPositionRelativeToWidget(self.parent)
             toast.show()
             return
-
 
         self.nodes_manager.stopNodes(["amcl", "move_base", "turtlebot3_slam_gmapping"])
         self.set_operation_mode.emit(operationMode.AUTO)

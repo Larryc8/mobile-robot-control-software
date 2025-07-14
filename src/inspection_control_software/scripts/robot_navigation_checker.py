@@ -6,6 +6,9 @@ import math
 import logging
 import time
 
+
+from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
+
 import rospy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Path
@@ -54,14 +57,16 @@ def quadratic_median_error(data1, data2):
     bx = np.array(bx)
     by = np.array(by)
 
-    squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > 0.1]
-    squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > 0.1]
+    squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > 0.02]
+    squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > 0.02]
 
     return max(len(squared_diffy), len(squared_diffx))
 
 
-class RobotNavigationChecker:
+class RobotNavigationChecker(QObject):
+    alert_generated = pyqtSignal(str, AlertStatus)
     def __init__(self, track) -> None:
+        super().__init__()
         self.sub_globalplan = None
 
         self.current_pose = None
@@ -70,6 +75,9 @@ class RobotNavigationChecker:
         self.old_plan = None
         self.track = track
         self.alert = AlertGenerator()
+        self.checkpoint_id = None
+        self.patrol_id = None
+        self.map = None
 
     def set_current_goal(self, goal, id):
         print("set current goal navigation checker", goal)
@@ -96,18 +104,36 @@ class RobotNavigationChecker:
                 error = quadratic_median_error(current_path, initial_path)
             self.old_plan = data.poses
 
-            likehood = 100 - error*100/current_path_len
-            if likehood < 80:
-                self.alert.throw_alert('obstacle', AlertStatus.ERROR)
-
+            likehood = 100 - error * 100 / current_path_len
+            if likehood < 80 and self.checkpoint_id:
+                self.alert.throw_alert(
+                    "obstacle", AlertStatus.ERROR.value,
+                    self.patrol_id, self.checkpoint_id, self.map
+                )
+                self.alert_generated.emit('Se detecto un obtaculo!!', AlertStatus.ERROR)
+    
             print(f"dont match, {likehood} {self.track}")
             logger.error(f"dont match, {likehood}, {self.track}")
 
-    def start_checker(self):
+    def start_checker(self, patrol_id, checkpoint_id, map):
         self.old_plan = None
+        self.checkpoint_id = checkpoint_id
+        self.patrol_id = patrol_id
+        self.map = map
+
         self.listen()
 
     def listen(self):
         self.sub_globalplan = rospy.Subscriber(
             "/move_base/NavfnROS/plan", Path, self.callback_globalplan
         )
+
+class StuckDetector:
+    def __init__(self):
+        # Variables to store latest data
+        self.current_velocity = 0.0
+        self.commanded_velocity = 0.0
+        
+        # Subscribers
+        rospy.Subscriber('/odom', Odometry, self.odom_callback)
+        rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)

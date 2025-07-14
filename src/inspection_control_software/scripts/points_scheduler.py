@@ -7,6 +7,10 @@ import rospy
 import actionlib
 from scipy.spatial.transform import Rotation
 import time
+from cv_bridge import CvBridge
+import cv2 as cv
+
+from sensor_msgs.msg import Image
 
 from actionlib_msgs.msg import GoalStatus
 from move_base_msgs.msg import (
@@ -18,15 +22,17 @@ from move_base_msgs.msg import (
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from utils.patrol import PatrolEndState
+from database_manager import AlertStatus
 
-from robot_navigation_checker import RobotNavigationChecker 
+from robot_navigation_checker import RobotNavigationChecker
+import ImageSimilarity.image_similarity as imgsim
 
 
 class PointsScheduler(QObject):
-    points_state = pyqtSignal(
-        str, str, int
-    )  ## current pointid, next point id, numbres of points tha left, total points
+    points_state = pyqtSignal(str, str, int)
+    ## current pointid, next point id, numbres of points tha left, total points
     patrol_progress = pyqtSignal(str, int, int, PatrolEndState)
+    alert_generated = pyqtSignal(str, AlertStatus)
 
     def __init__(self, points=[], done_task=None, feedback_task=None) -> None:
         super().__init__()
@@ -47,11 +53,22 @@ class PointsScheduler(QObject):
         self.emit_callback = None
         self.client = None
         self.points_left = 999
+        self.map = None
+
+        self.bridge = CvBridge()
+        self.camara_image_filepath = "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/reference_images/camera.jpg"
 
         self.track = [0]
         self.navigation_checker = RobotNavigationChecker(self.track)
+        self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
+
+        self.navigation_checker.alert_generated.connect(self.handleAlertGeneration)
 
         # actionlib.GoalStatus.SUCCEEDED
+
+    def  handleAlertGeneration(self, message, status):
+        print(f'POINT SCHEDULER {message}')
+        self.alert_generated.emit(message, status)
 
     def setGoals(self):
         self.goals = self._goals.copy()
@@ -76,6 +93,9 @@ class PointsScheduler(QObject):
 
     def setHomePoint(self):
         pass
+
+    def setMap(self, map):
+        self.map = map
 
     def cancel_points_scheduling(self):
         if self.client:
@@ -110,16 +130,22 @@ class PointsScheduler(QObject):
             # else:
             #     self.points_state.emit(id, ids_list[-1], len(self.goals), len(self._goals))
             # x_meters, y_meters, yaw_degrees, check = pose.values()
-            x_meters, y_meters, check, yaw = (
+            x_meters, y_meters, check, yaw, image = (
                 pose.get("x_meters"),
                 pose.get("y_meters"),
                 pose.get("checked"),
                 pose.get("yaw"),
+                pose.get("image"),
             )
+            self.current_reference_image_path = image
             goal = self.configGoal(x_meters, y_meters, yaw)
             # self.navigation_checker = RobotNavigationChecker()
             self.navigation_checker.set_current_goal(goal, self.points_left)
-            self.navigation_checker.start_checker()
+            self.navigation_checker.start_checker(
+                patrol_id=self.current_patrolid,
+                checkpoint_id=self.pointid,
+                map=self.map,
+            )
 
             self.client = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
             self.client.wait_for_server(rospy.Duration(5))
@@ -150,6 +176,7 @@ class PointsScheduler(QObject):
         if state in [1, 0, 3]:
             if not len(self.goals) == self.goals_count:
                 self.points_left = self.points_left - 1
+                self.subrouting_wrapper()
 
         if len(self.goals) == 0:
             self.patrol_progress.emit(
@@ -199,6 +226,30 @@ class PointsScheduler(QObject):
     def update_points(self, points: list):
         self._goals = points.copy()
         print("from points_scheduler POINTS UPDATE")
+
+    def image_callback(self, msg):
+        try:
+            # Convert ROS Image message to OpenCV image
+            self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            self.current_image = self.cv_image
+        except Exception as e:
+            rospy.logerr(f"Error converting image: {e}")
+
+    def subrouting_wrapper(self):
+        try:
+            cv.imwrite(self.camara_image_filepath, self.current_image)
+            print(f"{__name__} path:{self.camara_image_filepath}")
+            # time.sleep(1000)
+            ImgSim = imgsim.Img2Vec("resnet50", weights="DEFAULT")
+
+            ImgSim.embed_dataset(self.current_reference_image_path)
+            ImgSim.dataset
+
+            r = ImgSim.similar_images(self.camara_image_filepath)
+            print(f"{__name__} {r}")
+            return True
+        except Exception as e:
+            print(e)
 
 
 # Can do other work here

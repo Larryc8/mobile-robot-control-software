@@ -1,5 +1,9 @@
+from datetime import datetime
+
 import psycopg2
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
+from sqlalchemy import and_
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -287,11 +291,13 @@ class InternalStorageManager:
         Session = sessionmaker(bind=engine)
         session = Session()
         try:
-            map_db = Map(file_path=mapfile)#session.query(Map).filter_by(file_path=mapfile).first()
-            print(f'{__name__} {mapfile}')
+            map_db = Map(
+                file_path=mapfile
+            )  # session.query(Map).filter_by(file_path=mapfile).first()
+            print(f"{__name__} {mapfile}")
             session.add(map_db)
             session.commit()
-            print(f'{__name__} point number {len(points)}')
+            print(f"{__name__} point number {len(points)}")
 
             for id, point in points.items():
                 x = point.get("x_meters")
@@ -309,7 +315,7 @@ class InternalStorageManager:
                     map=map_db,
                     status=0,
                     gui_yaw=gui_yaw,
-                    image=image 
+                    image=image,
                 )
                 session.add(checkpoint)
                 session.commit()
@@ -331,9 +337,9 @@ class InternalStorageManager:
         try:
             allpoints = {}
             _points = []
-            mapfile = mapfile.split('/')[-1]
-            mapfile = mapfile.split('.')[0]
-            print(f'{__name__} map {mapfile}')
+            mapfile = mapfile.split("/")[-1]
+            mapfile = mapfile.split(".")[0]
+            print(f"{__name__} map {mapfile}")
             map_db = session.query(Map).filter_by(file_path=mapfile).first()
             session.commit()
             if map_db:
@@ -355,6 +361,7 @@ class InternalStorageManager:
                             mapfile,
                             point.yaw,
                             point.gui_yaw,
+                            point.image,
                         )
                     )
 
@@ -390,67 +397,83 @@ class InternalStorageManager:
     def get_filtered_alerts(
         self, status=None, ascendant=True, page_size=11, page_number=0, map=""
     ):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
         try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    if not map:
-                        map = ""
+            if not map:
+                map = ""
 
-                    if status is not None:
-                        if ascendant:
-                            cursor.execute(
-                                f"""
-                                           SELECT  x_position, y_position, status, date, time FROM alert
-                                           WHERE status = {status} AND  map_file = '{map}'
-                                            ORDER BY date ASC
-                                            LIMIT {page_size}
-                                            OFFSET {page_number* page_size};
-                                           """
-                            )
-                        else:
-                            cursor.execute(
-                                f"""
-                                           SELECT  x_position, y_position, status, date, time FROM alert
-                                           WHERE status = {status} AND  map_file = '{map}'
-                                            ORDER BY date DESC
-                                            LIMIT {page_size}
-                                            OFFSET {page_number* page_size};
-                                           """
-                            )
-                    else:
-                        if ascendant:
-                            cursor.execute(
-                                f"""
-                                           SELECT  x_position, y_position, status, date, time FROM alert
-                                           WHERE  map_file = '{map}'
-                                            ORDER BY date ASC
-                                            LIMIT {page_size}
-                                            OFFSET {page_number* page_size};
-                                           """
-                            )
-                        else:
-                            cursor.execute(
-                                f"""
-                                           SELECT  x_position, y_position, status, date, time FROM alert
-                                           WHERE  map_file = '{map}'
-                                            ORDER BY date DESC
-                                            LIMIT {page_size}
-                                            OFFSET {page_number* page_size};
-                                           """
-                            )
+            map = map.split('/')[-1]
+            map = map.split('.')[0]
+            print(f'{__name__} map: {map}')
 
-                    rows = cursor.fetchall()
-                    connection.commit()  # Commit the transaction
+            if status is not None:
+                if ascendant:
+                    rows = (
+                        session.query(Alert, Map)
+                        .join(Map)
+                        .filter(Map.file_path == map)
+                        .order_by(asc(Alert.date))
+                        .offset(page_size * page_number)
+                        .limit(page_size)
+                        .all()
+                    )
+                    session.commit()
+                else:
+                    rows = (
+                        session.query(Alert, Map)
+                        .join(Map)
+                        .filter(and_(Map.file_path == map, Alert.status == status))
+                        .order_by(desc(Alert.date))
+                        .offset(page_size * page_number)
+                        .limit(page_size)
+                        .all()
+                    )
+                    session.commit()
+
+            else:
+                if ascendant:
+                    rows = (
+                        session.query(Alert, Map)
+                        .join(Map)
+                        .filter(Map.file_path == map)
+                        .order_by(asc(Alert.date))
+                        .offset(page_size * page_number)
+                        .limit(page_size)
+                        .all()
+                    )
+                    session.commit()
+
+                else:
+                    rows = (
+                        session.query(Alert, Map)
+                        .join(Map)
+                        .filter(Map.file_path == map)
+                        .order_by(asc(Alert.date))
+                        .offset(page_size * page_number)
+                        .limit(page_size)
+                        .all()
+                    )
+            rows = [
+                (
+                    alert.x_position,
+                    alert.y_position,
+                    alert.status,
+                    alert.date,
+                    alert.time,
+                    alert.message,
+                )
+                for alert, map in rows
+            ]
 
             return rows
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
 
     def get_alerts_months_stats(self):
         try:
@@ -505,6 +528,45 @@ class InternalStorageManager:
             return rows
         except psycopg2.Error as e:
             print(f"Database error: {e}")
+
+    def save_alerts(self, alerts: list):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        try:
+            map_filepath = alerts[0].get('map')
+            map_filepath = map_filepath.split('/')[-1]
+            map_filepath = map_filepath.split('.')[0]
+            map = session.query(Map).filter_by(file_path=map_filepath).first()
+            
+            session.commit()
+
+            data = [
+                Alert(
+                    checkpoint_id=alert.get('heckpoint_id'),
+                    patrol_id=alert.get('patrol_id'),
+                    message=alert.get('message'),
+                    x_position=alert.get('x_position'),
+                    y_position=alert.get('x_position'),
+                    yaw=alert.get('yaw'),
+                    camera_data=alert.get('camera_data'),
+                    lidar_data=alert.get('lidar_data'),
+                    status=alert.get('status'),
+                    date=alert.get('date'),
+                    time=alert.get('time'),
+                    map=map
+                )
+                for alert in alerts
+            ]
+
+            session.add_all(data)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
 
 
 class DataBase(QThread):
@@ -563,6 +625,11 @@ class DataBase(QThread):
             if not data:
                 data = {"points": []}
             self.action_completed.emit("SuccessGetPoinst", data)
+
+        if self.action == 'save_alerts':
+            print("DATABASE RUNNING", self.action, self.data)
+            data = self.internal_storage_manager.save_alerts(self.data.get('alerts'))
+            self.action_completed.emit("SuccessSaveAlerts", {})
 
 
 if __name__ == "__main__":

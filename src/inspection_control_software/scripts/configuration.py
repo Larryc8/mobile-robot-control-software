@@ -46,7 +46,7 @@ from styles.buttons import (
 
 from styles.labels import inactive_label_style, minimal_label_style
 
-from test_user_form2 import UserForm
+from place_form import UserForm
 
 class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
@@ -164,12 +164,17 @@ class ConfigPanel(QWidget):
         self.stacklayout.addWidget(self.basic_config_wrapper)
         self.stacklayout.addWidget(self.advance_config_wrapper)
 
+        self.basic_config_wrapper.config_type_change.connect(self.handleConfigTypeChange)
+
         self.upper_layout = QVBoxLayout()
         # self.upper_layout.addWidget(QPushButton('Advence'))
         self.upper_layout.addLayout(self.stacklayout)
 
         # self.setLayout(self.layout)
         self.setLayout(self.upper_layout)
+
+    def handleConfigTypeChange(self, x):
+        self.stacklayout.setCurrentIndex(x)
 
     @pyqtSlot()
     def saveClickHandler(self) -> None:
@@ -375,9 +380,13 @@ class ConfigInput(QGroupBox):
 
 
 class FriendlyConfig(QWidget):
+    config_type_change = pyqtSignal(int)
     def __init__(self) -> None:
         super().__init__()
         self.layout = QGridLayout()
+        self.advance_config_btn = QPushButton('Configuracion avanzada')
+        self.advance_config_btn.clicked.connect(self.advance_config_callack)
+
         self.layout.addWidget(UserForm(), 1, 0, 3, 1)
         self.layout.addWidget(DescriptionConfigContainer(title="Crecionde mapa"), 1, 1)
         self.layout.addWidget(
@@ -387,9 +396,12 @@ class FriendlyConfig(QWidget):
             DescriptionConfigContainer(title="Desepeno de Navegacion"), 3, 1
         )
         self.layout.addWidget(
-           QPushButton('Configuracion avanzada'), 4, 0, 1, 2
+           self.advance_config_btn, 4, 0, 1, 2
         )
         self.setLayout(self.layout)
+
+    def advance_config_callack(self, x):
+        self.config_type_change.emit(1)
 
 
 class DescriptionConfigContainer(QGroupBox):

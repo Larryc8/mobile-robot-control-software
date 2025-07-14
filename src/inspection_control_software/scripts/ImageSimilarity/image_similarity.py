@@ -209,10 +209,10 @@ class Img2Vec:
         return sim_dict
 
     def output_images(self, similar, target):
-        self.display_img(target, "original")
+        # self.display_img(target, "original")
 
-        for k, v in similar.items():
-            self.display_img(k, "similarity:" + str(v))
+        # for k, v in similar.items():
+            # self.display_img(k, "similarity:" + str(v))
 
         return
 

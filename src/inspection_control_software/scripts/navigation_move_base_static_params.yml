@@ -23,6 +23,7 @@ local_costmap/cost_scaling_factor: 3.0
 local_costmap/footprint:  [[-0.105, -0.105], [-0.105, 0.105], [0.041, 0.105], [0.041, -0.105]]
 local_costmap/global_frame: map
 local_costmap/height: 3
+local_costmap/width: 3
 local_costmap/inflation_radius: 1.0
 local_costmap/map_type: costmap
 local_costmap/observation_sources: scan
@@ -40,7 +41,6 @@ local_costmap/scan/topic: scan
 local_costmap/static_map: False
 local_costmap/transform_tolerance: 10
 local_costmap/update_frequency: 10.0
-local_costmap/width: 3
 local_costmap/scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
 
 oscillation_distance: 0.2

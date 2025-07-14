@@ -62,7 +62,7 @@ from styles.labels import (
     code_label_style,
 )
 
-from config_model import NodesManager 
+from config_model import NodesManager
 
 from PyQt5.QtCore import (
     Qt,
@@ -200,7 +200,7 @@ class ImageViewer(QMainWindow):
     #     x = self.nodes_manager.save_map(y)
     #     x.wait()
     #     self.load_map(y + '.yaml')
-        # self.graphics_view.load_stored_points()
+    # self.graphics_view.load_stored_points()
 
     def reset_points_state(self, patrolid=None):
         self.graphics_view.reset_points_state(patrolid)
@@ -288,7 +288,7 @@ class ImageViewer(QMainWindow):
             self.botton_left_map = (x, y)
             self.graphics_view.botton_left_map = (x, y)
             self.graphics_view.map_resolution = resolution
-            file_path = image.split('.')[0]
+            file_path = image.split(".")[0]
             self.graphics_view.mapfile = file_path
             # self.save_button.setEnabled(True)
             self.info_label.show()
@@ -407,11 +407,12 @@ class Example(QGraphicsView):
                         (point["y"]) * self.map_resolution - y0_meters
                     ),  # * self.resolution,
                     "yaw_degrees": 0,
-                    'yaw': point['yaw'],
+                    "yaw": point["yaw"],
                     "checked": False,
                     "mapfile": self.mapfile,
-                    'type': 0,
-                    'gui_yaw': point['gui_yaw']
+                    "type": 0,
+                    "gui_yaw": point["gui_yaw"],
+                    "image": point.get("image"),
                 }
                 for id, point in self.getPointsPath().items()
             }
@@ -549,16 +550,16 @@ class Example(QGraphicsView):
                 if self.pointsToCheck.get(id):
                     centerx = self.squares[id]["object"].x() + self.square_size / 4
                     centery = self.squares[id]["object"].y() + self.square_size / 4
-                    finalx = self.poses[id].x() 
-                    finaly = self.poses[id].y() 
+                    finalx = self.poses[id].x()
+                    finaly = self.poses[id].y()
 
-                    map_yaw,  yaw = self.getYaw(
+                    map_yaw, yaw = self.getYaw(
                         centerx=centerx, centery=centery, finalx=finalx, finaly=finaly
                     )
 
                     self.squares[id]["yaw"] = yaw
-                    self.pointsToCheck[id]["yaw"] = map_yaw 
-                    self.pointsToCheck[id]["gui_yaw"] = yaw 
+                    self.pointsToCheck[id]["yaw"] = map_yaw
+                    self.pointsToCheck[id]["gui_yaw"] = yaw
 
                     self.send_points.emit(self.getPointsInMap())
                     self.pointsChanged.emit("added")
@@ -608,7 +609,7 @@ class Example(QGraphicsView):
         # print('Example', stored_points)
         if stored_points:
             for point in stored_points.get("points"):
-                id, x_meters, y_meters, map_file, yaw, gui_yaw = point
+                id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
                 if map_file == self.mapfile:
                     x_pix = int(
                         (x_meters - self.botton_left_map[0]) / self.map_resolution
@@ -646,10 +647,19 @@ class Example(QGraphicsView):
                     # id_sync = datetime.now().timestamp()
                     id_sync = id
                     self.squares.update(
-                            {str(id_sync): {"color": Qt.red, "object": obj, 'yaw': gui_yaw}}
+                        {str(id_sync): {"color": Qt.red, "object": obj, "yaw": gui_yaw}}
                     )
                     self.pointsToCheck.update(
-                            {str(id_sync): {"color": Qt.red, "x": x_pix, "y": y_pix, 'yaw': yaw, 'gui_yaw': gui_yaw}}
+                        {
+                            str(id_sync): {
+                                "color": Qt.red,
+                                "x": x_pix,
+                                "y": y_pix,
+                                "yaw": yaw,
+                                "gui_yaw": gui_yaw,
+                                "image": image,
+                            }
+                        }
                     )
         self.update()
         self.send_points.emit(self.getPointsInMap())
@@ -721,7 +731,7 @@ class Example(QGraphicsView):
                 poses=self.poses,
                 centerx=centerx,
                 centery=centery,
-                yaw=square['yaw']
+                yaw=square["yaw"],
             )
 
             text = "No revisado"
@@ -754,8 +764,8 @@ class Example(QGraphicsView):
         offsety = -n1 * (math.sin(yaw))
         offsetx = -n1 * (math.cos(yaw))
 
-        vx = offsetx#-vx
-        vy = offsety#-vy
+        vx = offsetx  # -vx
+        vy = offsety  # -vy
 
         x = centerx + offsetx
         y = centery + offsety
@@ -793,8 +803,6 @@ class Example(QGraphicsView):
             self.centerOn(center.x(), center.y() + move_step)
         else:
             super().keyPressEvent(event)
-
-
 
 
 if __name__ == "__main__":

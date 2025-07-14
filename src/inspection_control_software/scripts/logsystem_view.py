@@ -722,8 +722,8 @@ class LogPanel(QWidget):
 
     def add_alerts(self, alerts=[]):
         for alert in alerts:
-            x_position, y_position, status, date, time = alert
-            text = f"ERROR: Obstaculo encontrado {date} {time}"
+            x_position, y_position, status, date, time, message = alert
+            text = f"{message} {date} {time}"
             if text:
                 # style = random.choice(
                 #     [error_label_style, warning_label_style, info_label_style]

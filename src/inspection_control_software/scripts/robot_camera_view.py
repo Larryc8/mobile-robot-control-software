@@ -89,10 +89,10 @@ class RobotCamera(QGroupBox):
         self.layout.addWidget(self.menu_btn)
         self.cv_image = None
         self.database = None
-        self.data_buffer = []
+        self.data_buffer = buffer
         self.parent = parent
         self.pose_getter = None
-        self.data_buffer2 = buffer
+        # self.data_buffer2 = buffer
         self.nodes_manager = NodesManager()
 
         # Create CV bridge
@@ -176,21 +176,10 @@ class RobotCamera(QGroupBox):
             img_file_path = f'./reference_images/reference_image{id}.jpg'
             self.data_buffer.append((self.current_image, img_file_path, pose))
 
-            if self.current_image is not None:
-                height, width, channel = self.current_image.shape
-                bytes_per_line = 3 * width
-                q_img = QImage(
-                    self.current_image.data,
-                    width,
-                    height,
-                    bytes_per_line,
-                    QImage.Format_RGB888,
-                ).rgbSwapped()
 
-                pixmap = QPixmap.fromImage(q_img)
-                self.data_buffer2.append(pixmap)
-                print(f'{__name__} curent image shape', self.current_image.shape)
-                self.send_buffered_data.emit(self.data_buffer2)
+                # self.data_buffer2.append(pixmap)
+            # print(f'{__name__} curent image shape', self.current_image.shape)
+            self.send_buffered_data.emit(self.data_buffer)
 
         print(f'{__name__} pose', pose)
 
