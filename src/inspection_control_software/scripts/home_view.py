@@ -154,6 +154,14 @@ class HomePanel(QWidget):
             visualization_panel.drainage_checkpoints_win.load_stored_points
         )
 
+        visualization_panel.change_mode.connect(select_mode_panel.handleChangeMode)
+
+
+        self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
+            visualization_panel.drainage_checkpoints_win.reset_dreinage_info
+        )
+
+
         self.layout.addWidget(visualization_panel, 0, 0, 8, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
 
@@ -179,6 +187,7 @@ class VisualizationPanel(QWidget):
     enable = pyqtSignal(str, bool)
     map_saved = pyqtSignal(str)
     selected_user_operation = pyqtSignal(userOperation)
+    change_mode = pyqtSignal(operationMode)
 
     def __init__(
         self, nodes_manager=None, parent=None, global_state_holder=None
@@ -372,6 +381,20 @@ class VisualizationPanel(QWidget):
         self.save_in_database.emit(data)
 
     def handleLoadMap(self):
+        if self.currentOperationMode == operationMode.AUTO:
+            dg = CustomDialog(
+                self.parent,
+                "No se puede cargar mapa en el modo Auto",
+                message='Para cargar un nuevo mapa cambie al modo manual',
+                positive_response="Seguir en modo Auto",
+                negative_response="Cambiar a Manual",
+                retries=1,
+            )
+            dg.exec_()
+            if not dg.response == "Positive":
+                self.change_mode.emit(operationMode.MANUAL)
+                return
+
         if self.global_state_holder.currentUserOperation == userOperation.CREATEMAP:
             dg = CustomDialog(
                 self.parent,
@@ -643,6 +666,16 @@ class SelectModePanel(QGroupBox):
 
         self.setLayout(self.layout)
         # self.localize_button.hide()
+
+    def handleChangeMode(self, mode):
+        if mode == operationMode.AUTO:
+            self.handleAutoMode()
+            return 
+        if mode == operationMode.MANUAL:
+            self.handleManualMode()
+            return
+
+
 
     def checkMap(self, map_filepath):
         self.map = map_filepath

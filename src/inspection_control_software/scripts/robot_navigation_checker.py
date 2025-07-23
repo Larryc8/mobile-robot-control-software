@@ -57,8 +57,8 @@ def quadratic_median_error(data1, data2):
     bx = np.array(bx)
     by = np.array(by)
 
-    squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > 0.02]
-    squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > 0.02]
+    squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > 0.06]
+    squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > 0.06]
 
     return max(len(squared_diffy), len(squared_diffx))
 

@@ -39,7 +39,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QProgressBar,
     QSlider,
-    QStackedLayout
+    QStackedLayout,
 )
 from PyQt5.QtGui import (
     QPixmap,
@@ -78,7 +78,7 @@ from styles.labels import (
     muted_label_style,
     succes_label_style,
     muted_mini_label_style,
-    section_header_label_style
+    section_header_label_style,
 )
 
 from styles.buttons import (
@@ -125,11 +125,32 @@ class PatrolStatsViewer(QMainWindow):
         layout = QVBoxLayout()
         sc = MplCanvas(self, width=5, height=4, dpi=100)
         data = np.random.randn(1000)
-        sc.axes.hist([1, 2, 3, 1],  bins=30, alpha=0.7, color="blue", edgecolor="black", label='Sine')
-        sc.axes.hist([1, 0, 7, 1],  bins=30, alpha=0.7, color="red", edgecolor="black", label='Sineaaa')
-        sc.axes.hist([1, 4, 1, 1],  bins=30, alpha=0.7, color="green", edgecolor="black", label='Sineddd')
-        sc.axes.legend(title='Functions', framealpha=1, shadow=False)
-        sc.axes.set_title('Function Comparison with Custom Colors')
+        sc.axes.hist(
+            [1, 2, 3, 1],
+            bins=30,
+            alpha=0.7,
+            color="blue",
+            edgecolor="black",
+            label="Sine",
+        )
+        sc.axes.hist(
+            [1, 0, 7, 1],
+            bins=30,
+            alpha=0.7,
+            color="red",
+            edgecolor="black",
+            label="Sineaaa",
+        )
+        sc.axes.hist(
+            [1, 4, 1, 1],
+            bins=30,
+            alpha=0.7,
+            color="green",
+            edgecolor="black",
+            label="Sineddd",
+        )
+        sc.axes.legend(title="Functions", framealpha=1, shadow=False)
+        sc.axes.set_title("Function Comparison with Custom Colors")
 
         layout.addWidget(sc)
         buttons_layout = QHBoxLayout()
@@ -317,9 +338,11 @@ class Example(QGraphicsView):
 
 class AlertItem(QWidget):
     show_details = pyqtSignal(dict)
+
     def __init__(self, text, parent=None, style=None):
         super().__init__(parent)
         self.parent = parent
+        self.text = text
 
         self.label = QLabel(text)
 
@@ -329,10 +352,14 @@ class AlertItem(QWidget):
 
         self.setLayout(layout)
 
-    # def mouseClickEvent(self, event):
     def mousePressEvent(self, event):
-        print('CLicked')
-        self.show_details.emit({})
+        print("CLicked")
+        text = self.text.split(" ")
+        message = text[0]
+        date = text[1]
+        time = text[2]
+
+        self.show_details.emit({"message": message, "date": date, "time": time})
 
 
 class InfoPanel(QGroupBox):
@@ -351,9 +378,7 @@ class InfoPanel(QGroupBox):
         }""")
         self.generate_heatmap_task = None
         self.generate_alerts_stats_task = None
-        msg3 = (
-            '. Seleccione un mapa de la carpeta de "maps", y genere un \nestadisticas de inspección.'
-        )
+        msg3 = '. Seleccione un mapa de la carpeta de "maps", y genere un \nestadisticas de inspección.'
         msg1 = "Recopila estadísticas de diagnóstico relacionadas con la frecuencia y horarios  de los patrullajes del\nrobot asociadas a un mapa  "
         msg1 = msg1 + msg3
         msg2 = "Recopila estadísticas de diagnóstico relacionadas con los  lugares donde se generan alertas en los\npatrullajesdel robot asociadas a un mapa"
@@ -363,7 +388,7 @@ class InfoPanel(QGroupBox):
         self.heatmap_img_filepath = None
         self.patrols_stats = PatrolStatsViewer(parent=parent)
 
-        map_filepath_label = QLabel('x')
+        map_filepath_label = QLabel("x")
         map_filepath_label.hide()
         stats_title_image = QLabel("Estatdiaticas de Monitoreo")
         pixmap = QPixmap("./stats.png").scaled(320, 300)
@@ -372,9 +397,7 @@ class InfoPanel(QGroupBox):
         self.checkpoints_stats = StatContainer(
             title="Estadisticas de puntos de interés", msg=msg2
         )
-        self.alerts_stats = StatContainer(
-            title="Estadisticas  de Alertas", msg=msg1
-        )
+        self.alerts_stats = StatContainer(title="Estadisticas  de Alertas", msg=msg1)
 
         layout.addWidget(map_filepath_label)
         layout.addWidget(stats_title_image, alignment=Qt.AlignCenter)
@@ -392,7 +415,6 @@ class InfoPanel(QGroupBox):
         self.main_layout.addWidget(self.stats_panel)
         self.main_layout.addWidget(self.alert_details)
 
-
         self.setLayout(self.main_layout)
 
     def go2stats(self):
@@ -403,8 +425,6 @@ class InfoPanel(QGroupBox):
 
     def handleShowAlertInfo(self, info_data):
         self.main_layout.setCurrentIndex(1)
-
-
 
     def get_checkpoints_stats(self, map_filepath):
         if self.generate_heatmap_task and self.generate_heatmap_task.isRunning():
@@ -433,18 +453,20 @@ class InfoPanel(QGroupBox):
         self.checkpoints_stats.isUploadMap = True
         self.heatmap_img_filepath = filepath
 
-
     def show_heatmap(self, m):
         if self.heatmap_img_filepath:
             self.heatmap.show_win(self.heatmap_img_filepath)
 
     def set_map(self, map_filepath):
         self.map_loaded.emit(map_filepath)
-        print('map loaded Logsistem')
+        print("map loaded Logsistem")
         self.patrols_stats.show_win()
 
-    def get_alerts_stats(self,map_filepath):
-        if self.generate_alerts_stats_task and self.generate_alerts_stats_task.isRunning():
+    def get_alerts_stats(self, map_filepath):
+        if (
+            self.generate_alerts_stats_task
+            and self.generate_alerts_stats_task.isRunning()
+        ):
             return
 
         self.alerts_stats.generate_stats_button.setText("Cargando...")
@@ -463,32 +485,25 @@ class InfoPanel(QGroupBox):
         self.alerts_stats.progress.hide()
         self.alerts_stats.success_label.show()
 
-        # self.generate_heatmap_task.quit()
-        # self.generate_heatmap_task.wait()
-        # self.generate_heatmap_task = None
-        # self.checkpoints_stats.generate_stats_button.setText("Cargar mapa")
-        # self.checkpoints_stats.isUploadMap = True
-        # self.heatmapimg_filepath = filepath
-
-
-
 
 class AlertDetails(QGroupBox):
     def __init__(self) -> None:
         super().__init__()
-        self.layout = QVBoxLayout()
-        self.title_label = QLabel('ERROR: EL epepe etete')
-        self.datetime_label = QLabel('1234-23-24')
-        self.back2stats_button = QPushButton('Volver a Estadisticas')
-        self.point =   CheckPointDisplay()
+        self.layout = QGridLayout()
+        self.title_label = QLabel("ERROR: EL epepe etete")
+        self.datetime_label = QLabel("1234-23-24")
+        self.back2stats_button = QPushButton("Volver a Estadisticas")
+        self.playdata_button = QPushButton("Play recorded data")
+        self.point = CheckPointDisplay()
 
         self.title_label.setStyleSheet(title_label_style)
         self.datetime_label.setStyleSheet(section_header_label_style)
 
-        self.layout.addWidget(self.title_label)
-        self.layout.addWidget(self.datetime_label)
-        self.layout.addWidget(self.point, 3)
-        self.layout.addWidget(self.back2stats_button)
+        self.layout.addWidget(self.title_label, 0, 2)
+        self.layout.addWidget(self.datetime_label, 1, 2)
+        self.layout.addWidget(self.point, 0, 0, 4, 2)
+        self.layout.addWidget(self.back2stats_button, 4, 0, 1, 3)
+        self.layout.addWidget(self.playdata_button, 3, 2)
         self.setLayout(self.layout)
 
 
@@ -584,6 +599,7 @@ class TaskWorkerHeatmap(QThread):
         self.task_finished.emit(heatmapimg_filepath)
         pass
 
+
 class TaskWorkerAlerts(QThread):
     task_finished = pyqtSignal(str)
 
@@ -615,7 +631,7 @@ class TaskWorkerFilterByTypeAlerts(QThread):
             ascendant=self.ascendant,
             page_size=self.page_size,
             page_number=self.page_number,
-            map=self.map
+            map=self.map,
         )
         if data:
             self.filter_bytype_finished.emit(data)
@@ -696,8 +712,9 @@ class LogPanel(QWidget):
         input_layout.addWidget(order_label)
         input_layout.addWidget(self.filter_bydate_button)
 
-
-        self.info_label = QLabel('Carge un mapa desde Estadisticas de alertas.\n  Para ver las alertas generadas en el mapa')
+        self.info_label = QLabel(
+            "Carge un mapa desde Estadisticas de alertas.\n  Para ver las alertas generadas en el mapa"
+        )
         self.layout.addWidget(self.info_label, 2, 0, alignment=Qt.AlignCenter)
         self.info_label.setStyleSheet(muted_label_style)
 
@@ -735,12 +752,12 @@ class LogPanel(QWidget):
                 else:
                     style = info_label_style
 
-                todo_item = AlertItem(text, self, style=style)
+                alert_item = AlertItem(text, self, style=style)
                 self.alerts_layout.insertWidget(
-                    self.alerts_layout.count() - 1, todo_item
+                    self.alerts_layout.count() - 1, alert_item
                 )
-                todo_item.show_details.connect(self.info_panel.handleShowAlertInfo)
-                self.alerts_items.append(todo_item)
+                alert_item.show_details.connect(self.info_panel.handleShowAlertInfo)
+                self.alerts_items.append(alert_item)
 
     def remove_alert_item(self):
         for item in self.alerts_items:
@@ -829,7 +846,7 @@ class LogPanel(QWidget):
             ascendant=self.ascendant,
             page_number=self.page_number,
             page_size=self.PAGE_ZISE,
-            map=self.map
+            map=self.map,
         )
 
         self.filter_bytype_task.filter_bytype_finished.connect(self.handleTaskFinish)
@@ -849,7 +866,7 @@ class LogPanel(QWidget):
     def set_map(self, map_filepath):
         self.info_label.hide()
         self.map = map_filepath
-        print('Log system set map ')
+        print("Log system set map ")
         self.getAlerts()
 
 

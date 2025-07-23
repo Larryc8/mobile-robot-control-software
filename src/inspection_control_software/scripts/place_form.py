@@ -60,9 +60,6 @@ class UserForm(QGroupBox):
         self.create_button = QPushButton("Crear Lugar")
         self.create_button.clicked.connect(self.create_place)
 
-        self.clear_button = QPushButton("Clear Form")
-        self.clear_button.clicked.connect(self.clear_form)
-
         # Add widgets to layout
         layout.addWidget(self.title_label)
 
@@ -89,7 +86,6 @@ class UserForm(QGroupBox):
         layout.addWidget(select_place_container)
         layout.addWidget(crete_place_container)
         layout.addWidget(self.create_button)
-        layout.addWidget(self.clear_button)
         layout.setSpacing(30)
 
         self.setLayout(layout)

@@ -14,6 +14,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from enum import Enum
 
 from internal_storage.tables import (
+    Place,
     Patrol,
     Checkpoint,
     Alert,
@@ -33,21 +34,6 @@ class AlertStatus(Enum):
     INFO = 0
 
 
-months_abbr = {
-    "ene": "enero",
-    "feb": "febrero",
-    "mar": "marzo",
-    "abr": "abril",
-    "may": "mayo",
-    "jun": "junio",
-    "jul": "julio",
-    "ago": "agosto",
-    "sep": "septiembre",
-    "oct": "octubre",
-    "nov": "noviembre",
-    "dic": "diciembre",
-}
-
 DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
 
 
@@ -59,6 +45,45 @@ class InternalStorageManager:
         self.db_password = "123"
         self.db_host = "localhost"
         self.db_port = "5432"
+
+    def save_places(self, places):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for place in places:
+                name , email, username, institution, phone, address = place
+                place = Place(
+                    name=name,
+                    email=email,
+                    username=username,
+                    institution=institution,
+                    phone=phone,
+                    address=address,
+                )
+                session.add(place)
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
+        finally:
+            session.close()  # Always close the session
+
+    def get_places(self):
+        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            places = session.query(Patrol).all()
+            session.commit()
+            places = [place.name for place in places]
+            return places
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
+        finally:
+            session.close()  # Always close the session
 
     def update_patrol(self, patrols_data: dict):
         engine = create_engine(DATABASE_URL)
@@ -405,9 +430,9 @@ class InternalStorageManager:
             if not map:
                 map = ""
 
-            map = map.split('/')[-1]
-            map = map.split('.')[0]
-            print(f'{__name__} map: {map}')
+            map = map.split("/")[-1]
+            map = map.split(".")[0]
+            print(f"{__name__} map: {map}")
 
             if status is not None:
                 if ascendant:
@@ -535,27 +560,27 @@ class InternalStorageManager:
         session = Session()
 
         try:
-            map_filepath = alerts[0].get('map')
-            map_filepath = map_filepath.split('/')[-1]
-            map_filepath = map_filepath.split('.')[0]
+            map_filepath = alerts[0].get("map")
+            map_filepath = map_filepath.split("/")[-1]
+            map_filepath = map_filepath.split(".")[0]
             map = session.query(Map).filter_by(file_path=map_filepath).first()
-            
+
             session.commit()
 
             data = [
                 Alert(
-                    checkpoint_id=alert.get('heckpoint_id'),
-                    patrol_id=alert.get('patrol_id'),
-                    message=alert.get('message'),
-                    x_position=alert.get('x_position'),
-                    y_position=alert.get('x_position'),
-                    yaw=alert.get('yaw'),
-                    camera_data=alert.get('camera_data'),
-                    lidar_data=alert.get('lidar_data'),
-                    status=alert.get('status'),
-                    date=alert.get('date'),
-                    time=alert.get('time'),
-                    map=map
+                    checkpoint_id=alert.get("heckpoint_id"),
+                    patrol_id=alert.get("patrol_id"),
+                    message=alert.get("message"),
+                    x_position=alert.get("x_position"),
+                    y_position=alert.get("x_position"),
+                    yaw=alert.get("yaw"),
+                    camera_data=alert.get("camera_data"),
+                    lidar_data=alert.get("lidar_data"),
+                    status=alert.get("status"),
+                    date=alert.get("date"),
+                    time=alert.get("time"),
+                    map=map,
                 )
                 for alert in alerts
             ]
@@ -626,9 +651,9 @@ class DataBase(QThread):
                 data = {"points": []}
             self.action_completed.emit("SuccessGetPoinst", data)
 
-        if self.action == 'save_alerts':
+        if self.action == "save_alerts":
             print("DATABASE RUNNING", self.action, self.data)
-            data = self.internal_storage_manager.save_alerts(self.data.get('alerts'))
+            data = self.internal_storage_manager.save_alerts(self.data.get("alerts"))
             self.action_completed.emit("SuccessSaveAlerts", {})
 
 

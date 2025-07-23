@@ -16,7 +16,6 @@ from sqlalchemy.orm import sessionmaker, relationship
 
 Base = declarative_base()
 
-
 class Place(Base):
     __tablename__ = "places"
 

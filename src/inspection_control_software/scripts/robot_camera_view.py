@@ -30,12 +30,12 @@ from PyQt5.QtWidgets import (
     QAction,
 )
 
-from PyQt5.QtCore import Qt, QThread,pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
 
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import QTimer, QRect
+from PyQt5.QtGui import QImage, QPixmap, QBitmap, QPainter, QPen, QColor
 
 from rview import MyViz
 from robot_vision import ImageMatcheChecker
@@ -44,6 +44,7 @@ from config_model import NodesManager
 
 
 from pyqttoast import Toast, ToastPreset
+
 
 class TaskWorker(QThread):
     task_completed = pyqtSignal(tuple)
@@ -62,9 +63,11 @@ class TaskWorker(QThread):
                 time=rospy.Time(0),
                 timeout=rospy.Duration(4),
             )
-            trans, rotation_qua = listener.lookupTransform("map", "base_link", rospy.Time(0))
+            trans, rotation_qua = listener.lookupTransform(
+                "map", "base_link", rospy.Time(0)
+            )
 
-            yaw =  tf.transformations.euler_from_quaternion(rotation_qua) 
+            yaw = tf.transformations.euler_from_quaternion(rotation_qua)
             print("translation", trans, yaw)
 
             self.task_completed.emit(tuple(trans[:2]) + tuple([yaw[2]]))
@@ -75,6 +78,7 @@ class TaskWorker(QThread):
 
 class RobotCamera(QGroupBox):
     send_buffered_data = pyqtSignal(list)
+
     def __init__(self, buffer, parent) -> None:
         super().__init__("Camara del robot")
         self.layout = QVBoxLayout()
@@ -109,6 +113,26 @@ class RobotCamera(QGroupBox):
         self.current_image = None
         self.setLayout(self.layout)
 
+    def add_visual_aid(self, pixmap):
+        if pixmap.isNull():
+            print("Failed to load image")
+            return -1
+
+        masked_pixmap = pixmap.copy()
+        result = pixmap
+
+        painter = QPainter(result)
+        painter.drawPixmap(0, 0, masked_pixmap)
+
+        pen = QPen(QColor(0, 0, 255))  # Red color
+        pen.setWidth(3)  # Border thickness
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)  # No fill
+        painter.drawRect(QRect(60, 60, 170, 150))
+        painter.end()
+
+        return result
+
     def setup_submenu(self):
         menu = QMenu("Transform", self)
 
@@ -125,32 +149,35 @@ class RobotCamera(QGroupBox):
         if self.database and self.database.isRunning():
             return
 
-        print(f'{__name__} map: {mapfile}')
-        print(f'{__name__} number of points: {len(self.data_buffer)}')
+        print(f"{__name__} map: {mapfile}")
+        print(f"{__name__} number of points: {len(self.data_buffer)}")
         points = {}
         try:
             for data in self.data_buffer:
                 id = str(datetime.now().timestamp())
-                print(f'{__name__} {data[1]}')
+                print(f"{__name__} {data[1]}")
                 x, y, yaw = data[2]
-                image= data[1]
+                image_filepath = data[1]
                 cv.imwrite(data[1], data[0])
                 _x, _y = math.cos(yaw), math.sin(yaw)
                 gui_yaw = math.atan2(_y, -_x)
-                points.update({
-                    str(id): {
-                    "x_meters": x,  # * self.resolution,
-                    "y_meters": y,  # * self.resolution,
-                    "yaw_degrees": 0,
-                    'yaw': yaw,
-                    "checked": False,
-                    "mapfile": mapfile,
-                    'type': 1,
-                    'gui_yaw': gui_yaw, 
-                    'image': image
-                }})
-            print(f'{__name__} number of _points: {len(points)} {points}')
-            self.database = DataBase(action='add_points', data=points, mapfile=mapfile)
+                points.update(
+                    {
+                        str(id): {
+                            "x_meters": x,  # * self.resolution,
+                            "y_meters": y,  # * self.resolution,
+                            "yaw_degrees": 0,
+                            "yaw": yaw,
+                            "checked": False,
+                            "mapfile": mapfile,
+                            "type": 1,
+                            "gui_yaw": gui_yaw,
+                            "image": image_filepath,
+                        }
+                    }
+                )
+            print(f"{__name__} number of _points: {len(points)} {points}")
+            self.database = DataBase(action="add_points", data=points, mapfile=mapfile)
             self.database.action_completed.connect(self.database_task_completed)
             self.database.start()
 
@@ -162,7 +189,7 @@ class RobotCamera(QGroupBox):
         pass
 
     def buffer_reference_image(self):
-        print('SAVE IMAGE REFERENCE')
+        print("SAVE IMAGE REFERENCE")
         if self.pose_getter and self.pose_getter.isRunning():
             return
 
@@ -173,15 +200,14 @@ class RobotCamera(QGroupBox):
     def set_pose_and_image(self, pose):
         if len(self.data_buffer) < 10:
             id = str(datetime.now().timestamp())
-            img_file_path = f'./reference_images/reference_image{id}.jpg'
+            img_file_path = f"./reference_images/reference_image{id}.jpg"
             self.data_buffer.append((self.current_image, img_file_path, pose))
 
-
-                # self.data_buffer2.append(pixmap)
+            # self.data_buffer2.append(pixmap)
             # print(f'{__name__} curent image shape', self.current_image.shape)
             self.send_buffered_data.emit(self.data_buffer)
 
-        print(f'{__name__} pose', pose)
+        print(f"{__name__} pose", pose)
 
         toast = Toast(self.parent)
         toast.setDuration(2000)  # Hide after 5 seconds
@@ -228,6 +254,7 @@ class RobotCamera(QGroupBox):
 
             # Convert QImage to QPixmap and display
             self.pixmap = QPixmap.fromImage(q_img)
+            self.pixmap = self.add_visual_aid(self.pixmap)
             self.resize_image()
 
     def hide_camera(self):

@@ -22,7 +22,7 @@ class CustomLabel(QWidget):
     def __init__(self, text, index):
         super().__init__()
         self.label = QLabel()
-        self.status_label = QLabel('Revision')
+        self.status_label = QLabel("Revision")
         self.index = index
         self.id = None
         layout = QVBoxLayout()
@@ -33,7 +33,7 @@ class CustomLabel(QWidget):
         self.setLayout(layout)
 
     def mouseReleaseEvent(self, event):
-        print(f'{__name__} hola ')
+        print(f"{__name__} hola ")
         self.clicked.emit(self.index)
 
     def mouseDoubleClickEvent(self, event):
@@ -58,7 +58,7 @@ class ImageCarousel(QWidget):
 
         # UI Elements
         self.image_label = QLabel()
-        self.page_label = QLabel('0/0')
+        self.page_label = QLabel("0/0")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet("border: 2px solid gray;")
 
@@ -98,7 +98,10 @@ class ImageCarousel(QWidget):
         mini_images_layout = QHBoxLayout()
 
         self.images_thumbnail = [CustomLabel(text="Image", index=i) for i in range(5)]
-        [label.clicked.connect(self.update_thumbnail) for label in self.images_thumbnail]
+        [
+            label.clicked.connect(self.update_thumbnail)
+            for label in self.images_thumbnail
+        ]
 
         for label in self.images_thumbnail:
             label.setStyleSheet("border: 2px solid gray;")
@@ -120,16 +123,25 @@ class ImageCarousel(QWidget):
     def get_user_operation(self, use_operation):
         if use_operation == userOperation.LOADMAP:
             while len(self.buffer_data):
-                self.buffer_data.pop() 
+                self.buffer_data.pop()
             self.display_all_images(data_array=[], use_filepath=False)
 
     def update_dreinage_info(self, current_point_id, next_point_id, point_state):
-        x = [label for label in self.images_thumbnail if label.id == current_point_id]
-        if len(x):
-            x[0].status_label.setText('Revisado!')
-        pass
+        if point_state in [2, 3]:
+            x = [
+                label for label in self.images_thumbnail if label.id == current_point_id
+            ]
+            if len(x):
+                x[0].status_label.setText("Revisado!")
+
+    def reset_dreinage_info(self, x=None, y=None):
+        for thumbnail in self.images_thumbnail:
+            thumbnail.status_label.setText("Pendiente")
 
     def load_stored_points(self, stored_points):
+        while len(self.loaded_images):
+            self.loaded_images.pop()
+
         if stored_points:
             for point in stored_points.get("points"):
                 id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
@@ -179,7 +191,7 @@ class ImageCarousel(QWidget):
                         ).rgbSwapped()
 
                         pixmap = QPixmap.fromImage(q_img)
-                    else: 
+                    else:
                         pixmap = None
 
                     # Scale the image to fit the label while maintaining aspect ratio

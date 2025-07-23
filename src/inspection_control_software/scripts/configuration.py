@@ -25,7 +25,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
+from patrols_scheduler import PatrolsEscheduler
 
+from input_textdialog import CustomDialog
+from pyqttoast import Toast, ToastPreset
 
 from styles.buttons import (
     border_button_style,
@@ -48,12 +51,14 @@ from styles.labels import inactive_label_style, minimal_label_style
 
 from place_form import UserForm
 
+
 class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
 
-    def __init__(self, nodes_manager) -> None:
+    def __init__(self, nodes_manager, parent=None) -> None:
         super().__init__()
         self.stacklayout = QStackedLayout()
+        self.parent = parent
         self.config_mapping = ConfigModel(workspace="/turtlebot3_slam_gmapping/")
         self.config_dwa_planner = ConfigModel(
             param_file="./navigation_dwaplanner_params.yml",
@@ -164,7 +169,9 @@ class ConfigPanel(QWidget):
         self.stacklayout.addWidget(self.basic_config_wrapper)
         self.stacklayout.addWidget(self.advance_config_wrapper)
 
-        self.basic_config_wrapper.config_type_change.connect(self.handleConfigTypeChange)
+        self.basic_config_wrapper.config_type_change.connect(
+            self.handleConfigTypeChange
+        )
 
         self.upper_layout = QVBoxLayout()
         # self.upper_layout.addWidget(QPushButton('Advence'))
@@ -182,14 +189,33 @@ class ConfigPanel(QWidget):
         for panel in self.panels:
             [(name, tab)] = panel.items()
             self.configs.get(name).set_params(tab.getInputsValue())
-        self.apply_config_button.show()
+        # self.apply_config_button.show()
+        dialog = CustomDialog(
+            parent=self.parent,
+            title="Applicar configuracion",
+            message="los cambios han sido guardados, quiere aplicar la nueva configuracion?",
+            positive_response="Aplicar",
+            negative_response="Ahora no",
+        )
+        dialog.exec_()
+
+        if dialog.response == 'Positive':
+            toast = Toast(self)
+            toast.setDuration(5000)  # Hide after 5 seconds
+            toast.setTitle("Reiniciando Nodos...")
+            toast.setText('Los cambios han sido aplicados con exito')
+            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)
+            toast.show()
+
+            self.applyClickHandler()
 
     @pyqtSlot()
     def applyClickHandler(self) -> None:
         # self.nodes_manager.stopNodes(["turtlebot3_slam_gmapping"])
         # self.nodes_manager.bringUpStop()
         self.nodes_manager.restartNodes()
-        time.sleep(2)
+        # time.sleep(2)
         print("RE-START NODES")
         # self.nodes_manager.bringUpStart()
         # self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
@@ -381,23 +407,17 @@ class ConfigInput(QGroupBox):
 
 class FriendlyConfig(QWidget):
     config_type_change = pyqtSignal(int)
+
     def __init__(self) -> None:
         super().__init__()
         self.layout = QGridLayout()
-        self.advance_config_btn = QPushButton('Configuracion avanzada')
+        self.advance_config_btn = QPushButton("Configuracion avanzada")
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
 
-        self.layout.addWidget(UserForm(), 1, 0, 3, 1)
-        self.layout.addWidget(DescriptionConfigContainer(title="Crecionde mapa"), 1, 1)
-        self.layout.addWidget(
-            DescriptionConfigContainer(title="Desepeno de localizacion"), 2, 1
-        )
-        self.layout.addWidget(
-            DescriptionConfigContainer(title="Desepeno de Navegacion"), 3, 1
-        )
-        self.layout.addWidget(
-           self.advance_config_btn, 4, 0, 1, 2
-        )
+        self.layout.addWidget(UserForm(), 1, 0, 4, 1)
+        self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
+        self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
+        self.layout.addWidget(self.advance_config_btn, 5, 0, 1, 2)
         self.setLayout(self.layout)
 
     def advance_config_callack(self, x):
@@ -422,20 +442,19 @@ class DescriptionConfigContainer(QGroupBox):
 
 
 class DataSetConfigContainer(QGroupBox):
-    def __init__(self, parent = None) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__()
         self.main_layout = QVBoxLayout()
-        self.load_dataset_btn = QPushButton('Cargar Dataset')
+        self.load_dataset_btn = QPushButton("Cargar Dataset")
         self.load_dataset_btn.clicked.connect(self.open_file_dialog)
         self.parent = parent
 
         self.main_layout.addWidget(self.load_dataset_btn)
         self.setLayout(self.main_layout)
 
-
     def open_file_dialog(self):
         options = QFileDialog.Options()
-        options |=  QFileDialog.ShowDirsOnly
+        options |= QFileDialog.ShowDirsOnly
         file_name, _ = QFileDialog.getOpenFileName(
             self,
             "Select a File",

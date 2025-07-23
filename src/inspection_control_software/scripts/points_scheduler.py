@@ -2,6 +2,8 @@
 from typing import Callable
 from typing import Any
 
+import logging
+
 import sys
 import rospy
 import actionlib
@@ -26,6 +28,14 @@ from database_manager import AlertStatus
 
 from robot_navigation_checker import RobotNavigationChecker
 import ImageSimilarity.image_similarity as imgsim
+
+
+logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler("checkpoint.log")
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 class PointsScheduler(QObject):
@@ -66,8 +76,8 @@ class PointsScheduler(QObject):
 
         # actionlib.GoalStatus.SUCCEEDED
 
-    def  handleAlertGeneration(self, message, status):
-        print(f'POINT SCHEDULER {message}')
+    def handleAlertGeneration(self, message, status):
+        print(f"POINT SCHEDULER {message}")
         self.alert_generated.emit(message, status)
 
     def setGoals(self):
@@ -123,11 +133,7 @@ class PointsScheduler(QObject):
                 len(self.goals),
                 pose.get("x_meters"),
                 pose.get("y_meters"),
-            )
-            # ids_list = list(self.goals.keys())
-            # if len(ids_list) < 2:
-            #     self.points_state.emit(self.id, None, len(self.goals), len(self._goals))
-            # else:
+            )  # ids_list = list(self.goals.keys()) if len(ids_list) < 2: self.points_state.emit(self.id, None, len(self.goals), len(self._goals)) else:
             #     self.points_state.emit(id, ids_list[-1], len(self.goals), len(self._goals))
             # x_meters, y_meters, yaw_degrees, check = pose.values()
             x_meters, y_meters, check, yaw, image = (
@@ -176,7 +182,7 @@ class PointsScheduler(QObject):
         if state in [1, 0, 3]:
             if not len(self.goals) == self.goals_count:
                 self.points_left = self.points_left - 1
-                self.subrouting_wrapper()
+                self.subroutine_wrapper()
 
         if len(self.goals) == 0:
             self.patrol_progress.emit(
@@ -235,18 +241,37 @@ class PointsScheduler(QObject):
         except Exception as e:
             rospy.logerr(f"Error converting image: {e}")
 
-    def subrouting_wrapper(self):
+    def edit_image(self, path: str):
+        image = cv.imread(path)
+        file_name = path.split('/')[-1]
+        file_path = '/'.join(path.split('/')[:-1]) 
+        name = file_name.split('.')[0]
+        ext = '.'.join(file_name.split('.')[0:]) 
+
+        x, y = 60, 60  # Starting coordinates (top-left corner)
+        width, height = 170, 150  # Width and height of crop
+
+        cropped_image = image[y:y+height, x:x+width]
+        new_path = f'{file_path}/{name}_cropped.{ext}'
+        print(f'{__name__}: {new_path}')
+        cv.imwrite(new_path, cropped_image)
+
+        return new_path
+
+    def subroutine_wrapper(self):
         try:
             cv.imwrite(self.camara_image_filepath, self.current_image)
             print(f"{__name__} path:{self.camara_image_filepath}")
             # time.sleep(1000)
             ImgSim = imgsim.Img2Vec("resnet50", weights="DEFAULT")
 
-            ImgSim.embed_dataset(self.current_reference_image_path)
+            ImgSim.embed_dataset(self.edit_image(self.current_reference_image_path))
             ImgSim.dataset
 
-            r = ImgSim.similar_images(self.camara_image_filepath)
+            r = ImgSim.similar_images(self.edit_image(self.camara_image_filepath))
             print(f"{__name__} {r}")
+
+            logger.error(f'{list(r.keys())[0]},{list(r.values())[0]}')
             return True
         except Exception as e:
             print(e)
