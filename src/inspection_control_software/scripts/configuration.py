@@ -411,10 +411,15 @@ class FriendlyConfig(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.layout = QGridLayout()
+        self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
         self.advance_config_btn = QPushButton("Configuracion avanzada")
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
+        self.test_btn = QPushButton('Test PatrolsEscheduler')
+
+        self.test_btn.clicked.connect(self.test)
 
         self.layout.addWidget(UserForm(), 1, 0, 4, 1)
+        self.layout.addWidget(self.test_btn, 2, 1)
         self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
         self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
         self.layout.addWidget(self.advance_config_btn, 5, 0, 1, 2)
@@ -422,6 +427,10 @@ class FriendlyConfig(QWidget):
 
     def advance_config_callack(self, x):
         self.config_type_change.emit(1)
+
+    def test(self, x):
+        self.patrols_scheduler.load_test_patrols(patrols_count=15)
+        self.patrols_scheduler.start_patrols(on_calibration=True)
 
 
 class DescriptionConfigContainer(QGroupBox):

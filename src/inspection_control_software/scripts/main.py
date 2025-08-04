@@ -80,8 +80,24 @@ class MyTableWidget(QWidget):
             self.tabs_widget[name].layout = QVBoxLayout()
 
         print('main', parent)
-        self.tabs_widget['Home'].layout.addWidget(HomePanel(nodes_manager=self.nodes_manager, parent=parent))
-        self.tabs_widget['Configuracion'].layout.addWidget(ConfigPanel(nodes_manager=self.nodes_manager, parent=parent))
+        home_panel = HomePanel(nodes_manager=self.nodes_manager, parent=parent)
+        config_panel = ConfigPanel(nodes_manager=self.nodes_manager, parent=parent)
+
+        #
+        # home_panel.visualization_panel.map_loaded.connect(
+        #     config_panel.basic_config_wrapper
+        #     .patrols_scheduler.send_points_data
+        # )
+
+        # home_panel.visualization_panel.update_points.connect(self.patrol_panel.update_points)
+        home_panel.visualization_panel.parent.pointsWindow.save_selected_points.connect(
+            config_panel.basic_config_wrapper.patrols_scheduler.setPointsToVisit
+        )
+
+        # self.patrols_scheduler.setPointsToVisit(points)
+
+        self.tabs_widget['Home'].layout.addWidget(home_panel)
+        self.tabs_widget['Configuracion'].layout.addWidget(config_panel)
         self.tabs_widget['Log system'].layout.addWidget(LogPanel(node_manager=self.nodes_manager, parent=parent))
 
         [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]

@@ -35,7 +35,7 @@ class ScheduleChecker(QThread):
         points_scheduler=None,
         forced_exec=False,
         single_patrolid=None,
-        parent=None
+        parent=None,
     ):
         super().__init__()
         self.task_id = task_id
@@ -115,20 +115,25 @@ class ScheduleChecker(QThread):
                 scheduled_patrol = self.patrols[self.index["currentpatrol_index"]]
                 now = datetime.now()
                 day, hour, minute = self.getDatetime(scheduled_patrol)
+                calibration = scheduled_patrol.get("calibration")
                 print(
                     "TASK WORKER index day hour minute",
                     self.index["currentpatrol_index"],
                     day - now.weekday(),
                     (hour - now.hour),
                     (minute - now.minute),
+                    f"-- patroldata: d {day} h {hour} m {minute}",
                 )
 
-                if day == now.weekday() and hour == now.hour and minute == now.minute:
+                if (
+                    day == now.weekday() and hour == now.hour and minute == now.minute
+                ) or calibration:
                     # continue
 
                     # print('PATRULLAJE', scheduled_patrol)
 
                     if not self.isDispatching:
+                        print(f'patrol state {scheduled_patrol["finished"]}')
                         print("worker thread points schedule: ", scheduled_patrol)
                         if not scheduled_patrol["finished"]:
                             self.patrol_state.emit(scheduled_patrol.get("patrolid"))
@@ -145,7 +150,7 @@ class ScheduleChecker(QThread):
                     if hour - now.hour < 0:
                         self.movePatrolsIndex = True
                         self.patrol_delayed.emit(scheduled_patrol["patrolid"])
-                    elif  hour - now.hour == 0:
+                    elif hour - now.hour == 0:
                         if minute - now.minute < 0:
                             self.movePatrolsIndex = True
                             self.patrol_delayed.emit(scheduled_patrol["patrolid"])
@@ -204,7 +209,7 @@ class PatrolsEscheduler(QObject):
     patrol_delayed = pyqtSignal(str)
     # add_patrol_view = pyqtSignal(dict)
 
-    def __init__(self, id=5, date=None, parent=None):
+    def __init__(self, id=5, date=None, parent=None, load_user_patrols=True):
         super().__init__()
         self.id = id
         self.date = date
@@ -247,10 +252,30 @@ class PatrolsEscheduler(QObject):
         self.isPatrolArrayModified = False
         self.forceExec = False
 
-        self.send_database_action(action="get_user_patrols")
+        if load_user_patrols:
+            self.send_database_action(action="get_user_patrols")
 
     # def patrols_schedule_generator(self):
     # for patrol in self.
+    def load_test_patrols(self, patrols_count):
+        self.patrols_data = {
+            str(id): {
+                "days": {
+                    "Lun": {
+                        "day": "Lun",
+                        "time": "0208",
+                        "finished": False,
+                        "calibration": True,
+                        'patrolid': str(id)
+                    }
+                },
+                "time": "0208",
+                "state": "encurso",
+                "finished": False,
+            }
+            for id in range(patrols_count)
+        }
+
     def send_database_action(self, action: str, data: dict = {}):
         if self.database and self.database.isRunning():
             self.actions_queue.append((action, data))
@@ -269,7 +294,7 @@ class PatrolsEscheduler(QObject):
         if state == "SuccessSavePatrol":
             pass
 
-        if state =='SuccessSavePoints':
+        if state == "SuccessSavePoints":
             toast = Toast(self.parent)
             toast.setDuration(5000)  # Hide after 5 seconds
             toast.setTitle("Puntos Guardados exitosamente")
@@ -300,7 +325,7 @@ class PatrolsEscheduler(QObject):
             currentpatrol=self.indexKeeper,
             patrols=self.patrols,
             points_scheduler=self.points_scheduler,
-            parent=self.parent
+            parent=self.parent,
         )
         self.scheduler.progress_updated.connect(self.update_progress)
         self.scheduler.task_completed.connect(self.task_finished)
@@ -325,7 +350,7 @@ class PatrolsEscheduler(QObject):
             forced_exec=True,
             # patrols=[self.patrols_data.get(patrolid)],
             points_scheduler=self.points_scheduler,
-            parent=self.parent
+            parent=self.parent,
         )
         print("FORCED EXECUTION patrol id:", self.single_patrolid)
         # self.scheduler.start(QThread.IdlePriority)
@@ -411,14 +436,14 @@ class PatrolsEscheduler(QObject):
         )
         return int(f'{days_until}{patrol["time"]}')
 
-    def start_patrols(self):
+    def start_patrols(self, on_calibration=False):
         self.patrols = []
 
         for id, patrol in self.patrols_data.items():
             for patrol_day in patrol["days"].values():
                 self.patrols.append(patrol_day)
-                self.patrols_data[id]['delayed'] = None 
-                self.patrols_data[id]['state'] = None 
+                self.patrols_data[id]["delayed"] = None
+                self.patrols_data[id]["state"] = None
 
         self.update_patrols_view.emit(self.patrols_data)
 
@@ -435,7 +460,12 @@ class PatrolsEscheduler(QObject):
 
         [
             patrol.update(
-                {"date_day": (days_shortname.index(patrol.get("day")) - now.weekday())%7}
+                {
+                    "date_day": (
+                        days_shortname.index(patrol.get("day")) - now.weekday()
+                    )
+                    % 7
+                }
             )
             for patrol in ontime
         ]
@@ -483,8 +513,8 @@ class PatrolsEscheduler(QObject):
     def handleSavePointsInDatabase(self, points_to_save):
         self.send_database_action(action="save_points", data=points_to_save)
 
-    def send_points_data(self, m):
-        self.send_database_action(action="get_points", data={"map_file": m})
+    def send_points_data(self, map_file):
+        self.send_database_action(action="get_points", data={"map_file": map_file})
         # self.get_stored_database_points.emit()
 
     def handleWeekDayChanged(self, current_weekday):

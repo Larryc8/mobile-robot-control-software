@@ -117,6 +117,7 @@ class PointsScheduler(QObject):
         print("points canceled from points sche")
 
     def dispatch(self, patrolid=None):
+        print(f'{__name__} dispatched!! len(goals): {len(self.goals)}')
         self.current_patrolid = patrolid
         self.patrol_progress.emit(
             self.current_patrolid,

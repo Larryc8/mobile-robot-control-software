@@ -94,7 +94,7 @@ class HomePanel(QWidget):
         # [self.layout.addWidget(element) for element in (VisualizationPanel(), PatrolsPanel())]
         # print("home panel", parent)
 
-        visualization_panel, self.patrol_panel, joypad = (
+        self.visualization_panel, self.patrol_panel, joypad = (
             VisualizationPanel(
                 nodes_manager=nodes_manager, parent=parent, global_state_holder=self
             ),
@@ -114,55 +114,55 @@ class HomePanel(QWidget):
         # joypad.setEnabled(True)
         select_mode_panel.set_operation_mode.connect(joypad.update_operation_mode)
         select_mode_panel.set_operation_mode.connect(
-            visualization_panel.update_operation_mode
+            self.visualization_panel.update_operation_mode
         )
-        visualization_panel.update_points.connect(self.patrol_panel.update_points)
-        visualization_panel.enable.connect(select_mode_panel.enable)
-        visualization_panel.save_in_database.connect(
+        self.visualization_panel.update_points.connect(self.patrol_panel.update_points)
+        self.visualization_panel.enable.connect(select_mode_panel.enable)
+        self.visualization_panel.save_in_database.connect(
             self.patrol_panel.patrols_container.handleSavePointsInDatabase
         )
-        visualization_panel.map_loaded.connect(
+        self.visualization_panel.map_loaded.connect(
             self.patrol_panel.patrols_container.patrols_scheduler.send_points_data
         )
         self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
-            visualization_panel.parent.pointsWindow.load_stored_points
+            self.visualization_panel.parent.pointsWindow.load_stored_points
         )
 
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
-            visualization_panel.parent.pointsWindow.update_points_state
+            self.visualization_panel.parent.pointsWindow.update_points_state
         )
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
-            visualization_panel.parent.pointsWindow.reset_points_state
+            self.visualization_panel.parent.pointsWindow.reset_points_state
         )
         select_mode_panel.cancel_user_operation.connect(
-            visualization_panel.setMapOperationState
+            self.visualization_panel.setMapOperationState
         )
         # setCreatMapState
 
-        visualization_panel.map_loaded.connect(select_mode_panel.checkMap)
-        visualization_panel.map_loaded.connect(
+        self.visualization_panel.map_loaded.connect(select_mode_panel.checkMap)
+        self.visualization_panel.map_loaded.connect(
             self.patrol_panel.patrols_scheduler.points_scheduler.setMap
         )
-        self.patrol_panel.patrols_scheduler.points_scheduler.alert_generated.connect(visualization_panel.handleAlertGeneration)
+        self.patrol_panel.patrols_scheduler.points_scheduler.alert_generated.connect(self.visualization_panel.handleAlertGeneration)
 
 
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
-            visualization_panel.drainage_checkpoints_win.update_dreinage_info
+            self.visualization_panel.drainage_checkpoints_win.update_dreinage_info
         )
 
         self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
-            visualization_panel.drainage_checkpoints_win.load_stored_points
+            self.visualization_panel.drainage_checkpoints_win.load_stored_points
         )
 
-        visualization_panel.change_mode.connect(select_mode_panel.handleChangeMode)
+        self.visualization_panel.change_mode.connect(select_mode_panel.handleChangeMode)
 
 
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
-            visualization_panel.drainage_checkpoints_win.reset_dreinage_info
+            self.visualization_panel.drainage_checkpoints_win.reset_dreinage_info
         )
 
 
-        self.layout.addWidget(visualization_panel, 0, 0, 8, 1)
+        self.layout.addWidget(self.visualization_panel, 0, 0, 8, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
 
         self.layout.addWidget(self.patrol_panel, 1, 2, 6, 1)
