@@ -1,3 +1,38 @@
+menu_style = ("""
+    QMenu {
+        background-color: white;
+        border: 1px solid #bdc3c7;
+        border-radius: 3px;
+        padding: 5px;
+        color: gray;
+    }
+    QMenu::item {
+        padding: 5px 18px;
+        border-radius: 3px;
+        background-color: transparent;
+    }
+    QMenu::item:selected {
+        background-color: #3498db;
+        color: white;
+    }
+    QMenu::separator {
+        height: 2px;
+        background-color: black;
+        margin: 5px 0px;
+    }
+""")
+
+button_with_menu_style = ("""
+    QPushButton::menu-indicator {
+        image: url(public/menu-4-fill-svgrepo-com.svg);
+        subcontrol-position: right center;
+        subcontrol-origin: padding;
+        padding-right: 15px;
+        width: 16px;
+        height: 16px;
+    }
+""")
+
 border_button_style = ("""
     QPushButton {
         background: transparent;

@@ -52,6 +52,7 @@ import rospy
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
+    menu_style,
     primary_button_style,
     secondary_button_style,
     colored_button_style,
@@ -59,6 +60,7 @@ from styles.buttons import (
     toggle_button_style,
     minimal_button_style,
     patrol_checkbox_style,
+    button_with_menu_style
 )
 
 from styles.labels import (
@@ -215,10 +217,10 @@ class VisualizationPanel(QWidget):
             buffer=self.buffer_data_robot_camera, parent=self.parent
         )
         self.robotcamera.setFixedSize(200, 150)
-        self.robotcamera.move(50, 50)
+        self.robotcamera.move(200, 50)
         # self.rviz.setFixedSize(700, 500)
 
-        self.robotcamera.setStyleSheet("background-color: red;")
+
 
         self.drainage_checkpoints_win = ImageCarousel(
             buffer=self.buffer_data_robot_camera
@@ -263,7 +265,7 @@ class VisualizationPanel(QWidget):
             )
         ]
         self.load_map_button.setStyleSheet(primary_button_style)
-        self.points_window_btn.setStyleSheet(secondary_button_style)
+        self.points_window_btn.setStyleSheet(secondary_button_style + button_with_menu_style)
         self.create_map_btn.setStyleSheet(border_button_style)
         self.save_map_button.setStyleSheet(primary_button_style)
 
@@ -290,6 +292,7 @@ class VisualizationPanel(QWidget):
         self.save_map_button.hide()
 
         menu = QMenu("checkpoints", self)
+        menu.setStyleSheet(menu_style)
         show_checkpoints_action = QAction("puntos de interes", self)
         show_checkpoints_action.triggered.connect(self.show_points_window)
         menu.addAction(show_checkpoints_action)
@@ -307,6 +310,7 @@ class VisualizationPanel(QWidget):
         self.robotcamera.send_buffered_data.connect(
             self.drainage_checkpoints_win.load_images
         )
+        self.robotcamera.custom_option_clicked.connect(self.toggleCameraMapView)
         self.selected_user_operation.connect(self.drainage_checkpoints_win.get_user_operation)
 
         self.stacklayout.addWidget(self.rviz)
@@ -314,7 +318,7 @@ class VisualizationPanel(QWidget):
         self.toggleCameraMapView()
 
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
-        self.layout.addWidget(self.stack_config_btn, 0, 1)
+        # self.layout.addWidget(self.stack_config_btn, 0, 1)
         self.layout.addWidget(BatteryIndicator(), 0, 2)
         self.layout.addWidget(self.stacked_widgets_container, 1, 0, 1, 3)
         self.layout.addLayout(self.buttons_layout, 2, 0, 1, 3)
@@ -1427,7 +1431,7 @@ class Patrol(QGroupBox):
         self.patrol_time_label = QLabel(f"{self.time[:2]}:{self.time[2:]}")
 
         (self.menu_button, self.checkbox) = (
-            QPushButton("❖ menu"),
+            QPushButton("menu"),
             QCheckBox(),
         )
 
@@ -1443,7 +1447,8 @@ class Patrol(QGroupBox):
         # pixmapi = QStyle.SP_MessageBoxInformation
         # icon = self.style().standardIcon(pixmapi)
         # self.menu_button.setIcon(icon)
-        self.menu_button.setStyleSheet(tertiary_button_style)
+        self.menu.setStyleSheet(menu_style)
+        self.menu_button.setStyleSheet(tertiary_button_style + button_with_menu_style)
         self.checkbox.setStyleSheet(patrol_checkbox_style)
         self.schedule_label.setStyleSheet(muted_mini_label_style)
         self.patrol_status_label.setStyleSheet(muted_mini_label_style)

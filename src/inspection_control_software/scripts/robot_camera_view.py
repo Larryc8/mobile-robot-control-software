@@ -37,14 +37,30 @@ from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtCore import QTimer, QRect
 from PyQt5.QtGui import QImage, QPixmap, QBitmap, QPainter, QPen, QColor
 
-from rview import MyViz
 from robot_vision import ImageMatcheChecker
 from database_manager import DataBase
 from config_model import NodesManager
 
 
-from pyqttoast import Toast, ToastPreset
+from styles.buttons import border_button_style, button_with_menu_style, tertiary_button_style, menu_style
 
+
+groupbox_style = """
+            QGroupBox {
+                background-color: #f8f9fa;
+                border: 1px solid lightgray;
+                padding: 1px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 10px;
+                background-color: white;
+                left: -1px;
+                right: -1px;
+            }
+        """
 
 class TaskWorker(QThread):
     task_completed = pyqtSignal(tuple)
@@ -78,17 +94,21 @@ class TaskWorker(QThread):
 
 class RobotCamera(QGroupBox):
     send_buffered_data = pyqtSignal(list)
+    custom_option_clicked = pyqtSignal()
 
     def __init__(self, buffer, parent) -> None:
-        super().__init__("Camara del robot")
+        super().__init__(parent)
         self.layout = QVBoxLayout()
         # self.container.setLayout(self.layout)
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.image_label)
+        self.setStyleSheet(groupbox_style)
         # self.load_image('./mora1.png')
-        self.menu_btn = QPushButton("Menu")
+        self.menu_btn = QPushButton("menu")
         self.menu_btn.setMaximumWidth(100)
+        self.menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style )
+        self.menu_btn.hide()
         self.setup_submenu()
         self.layout.addWidget(self.menu_btn)
         self.cv_image = None
@@ -113,6 +133,16 @@ class RobotCamera(QGroupBox):
         self.current_image = None
         self.setLayout(self.layout)
 
+    def enterEvent(self, event):
+        self.menu_btn.show()
+
+        super().enterEvent(event)
+        
+    def leaveEvent(self, event):
+        self.menu_btn.hide()
+
+        super().leaveEvent(event)
+
     def add_visual_aid(self, pixmap):
         if pixmap.isNull():
             print("Failed to load image")
@@ -135,13 +165,14 @@ class RobotCamera(QGroupBox):
 
     def setup_submenu(self):
         menu = QMenu("Transform", self)
+        menu.setStyleSheet(menu_style)
 
-        save_image_action = QAction("guardar referencia", self)
-        save_image_action.triggered.connect(self.buffer_reference_image)
-        menu.addAction(save_image_action)
+        self.save_image_action = QAction("guardar referencia", self)
+        self.save_image_action.triggered.connect(self.buffer_reference_image)
+        menu.addAction(self.save_image_action)
 
-        lowercase_action = QAction("option 2", self)
-        lowercase_action.triggered.connect(self.hide_camera)
+        lowercase_action = QAction("maximizar/minimizar", self)
+        lowercase_action.triggered.connect(self.toggleSize)
         menu.addAction(lowercase_action)
         self.menu_btn.setMenu(menu)
 
@@ -257,8 +288,8 @@ class RobotCamera(QGroupBox):
             self.pixmap = self.add_visual_aid(self.pixmap)
             self.resize_image()
 
-    def hide_camera(self):
-        self.image_label.hide()
+    def toggleSize(self):
+        self.custom_option_clicked.emit()
         # self.setFixedSize(140, 80)
         print("camer button cliked")
         pass
