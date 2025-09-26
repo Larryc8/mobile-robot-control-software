@@ -25,6 +25,48 @@ class Joypad(QGroupBox):
         self.y_value = 0.0
         self.pressed = False
         self.robot_vel_controller = ControlDynamicPose()
+        self.grabKeyboard()
+
+    def keyPressEvent(self, event):
+        """This event handler is called whenever a key is pressed."""
+        print('key pressed joystick')
+        
+        key = event.key()
+        pos = QPoint(0,0)
+
+        if key == Qt.Key.Key_Up:
+            print("Key Pressed: Up Arrow")
+            pos = QPointF(0, -100) + self.center
+            self.moveThumb(pos)
+            self.update()
+            
+        elif key == Qt.Key.Key_Down:
+            print("Key Pressed: Down Arrow")
+            pos = QPointF(0,(100)) + self.center
+            self.moveThumb(pos)
+            self.update()
+            
+        elif key == Qt.Key.Key_Left:
+            print("Key Pressed: Left Arrow")
+            pos = QPointF(-100, 0) + self.center
+            self.moveThumb(pos)
+            self.update()
+            
+        elif key == Qt.Key.Key_Right:
+            print("Key Pressed: Right Arrow")
+            pos = QPointF((100),0) + self.center
+        
+            self.moveThumb(pos)
+            self.update()
+        # If any other key is pressed, pass the event to the parent class
+        else:
+            super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        self.moveThumb(self.center)
+        self.update()
+        print('key realeased joystick')
+        # super().keyReleaseEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -80,6 +122,7 @@ class Joypad(QGroupBox):
             vector = QPointF(vector.x() * scale, vector.y() * scale)
 
         self.thumb_pos = self.center + vector
+        print(f'move thumb {self.thumb_pos.x()} {self.thumb_pos.y()}')
 
         # Calculate normalized values (-1.0 to 1.0)
         self.x_value = vector.x() / self.max_distance
