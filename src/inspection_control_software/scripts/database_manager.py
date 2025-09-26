@@ -21,6 +21,7 @@ from internal_storage.tables import (
     PatrolLink,
     CheckpointLink,
     Map,
+    Calibration
 )
 
 # cursor.execute("SELECT version();")
@@ -593,6 +594,33 @@ class InternalStorageManager:
         finally:
             session.close()
 
+    def save_calibration(self, calibration_data: dict):
+        ''''
+        Save Save Calibrations
+
+        parameter:
+        Calibration_data --> 
+        '''
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            calibration_value = calibration_data.get('value')
+            checkpoint_id = calibration_data.get('checkpoint_id')
+            calibration = Calibration(checkpoint_id=checkpoint_id,  calibration_value=calibration_value )
+
+            session.add(calibration )
+            session.commit()
+            
+            print("Sample data added successfully!")
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
 
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
@@ -655,6 +683,10 @@ class DataBase(QThread):
             print("DATABASE RUNNING", self.action, self.data)
             data = self.internal_storage_manager.save_alerts(self.data.get("alerts"))
             self.action_completed.emit("SuccessSaveAlerts", {})
+
+        if self.action == "save_calibration":
+            data = self.internal_storage_manager.save_calibration(self.data) 
+            self.action_completed.emit("SuccessSaveCalibration", {})
 
 
 if __name__ == "__main__":

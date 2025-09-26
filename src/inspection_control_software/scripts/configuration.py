@@ -1,3 +1,4 @@
+from fileinput import isstdin
 from typing import List
 import numpy as np
 import time
@@ -414,14 +415,20 @@ class FriendlyConfig(QWidget):
         self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
         self.advance_config_btn = QPushButton("Configuracion avanzada")
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
+        self.isStart = True
         self.test_btn = QPushButton('Test PatrolsEscheduler')
 
         self.test_btn.clicked.connect(self.test)
+        self.test_btn.setStyleSheet(border_button_style)
+        self.advance_config_btn.setStyleSheet(primary_button_style)
+
+        self.test_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
+
 
         self.layout.addWidget(UserForm(), 1, 0, 4, 1)
         self.layout.addWidget(self.test_btn, 2, 1)
-        self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
-        self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
+        # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
+        # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
         self.layout.addWidget(self.advance_config_btn, 5, 0, 1, 2)
         self.setLayout(self.layout)
 
@@ -429,8 +436,29 @@ class FriendlyConfig(QWidget):
         self.config_type_change.emit(1)
 
     def test(self, x):
-        self.patrols_scheduler.load_test_patrols(patrols_count=15)
+        if self.isStart:
+            self.start_calibrations()
+            self.isStart = False
+            return 
+
+        self.stop_calibrations()
+        self.isStart = True
+
+
+
+    def start_calibrations(self):
+        icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
+        self.test_btn.setIcon(icon_stop)
+        self.test_btn.setText("Parar")
+        self.patrols_scheduler.load_test_patrols(patrols_count=20)
         self.patrols_scheduler.start_patrols(on_calibration=True)
+        pass
+
+    def stop_calibrations(self)->None:
+        self.patrols_scheduler.cancel_task()
+        icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+        self.test_btn.setIcon(icon_start)
+        self.test_btn.setText("Comenzar")
 
 
 class DescriptionConfigContainer(QGroupBox):

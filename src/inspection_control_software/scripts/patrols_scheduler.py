@@ -76,6 +76,8 @@ class ScheduleChecker(QThread):
                 self.points_scheduler.setDoneTask(
                     done_task=self.handlePatrolsForcedExec
                 )
+                if not self.points_scheduler.setup(on_calibration=False):
+                    return
                 self.patrol_state.emit(str(self.single_patrolid))
                 self.points_scheduler.dispatch(self.single_patrolid)
 
@@ -140,6 +142,9 @@ class ScheduleChecker(QThread):
                             self.points_scheduler.setDoneTask(
                                 done_task=self.free_points_dispatcher
                             )
+                            if not self.points_scheduler.setup(on_calibration=calibration):
+                                return
+
                             self.points_scheduler.dispatch(scheduled_patrol["patrolid"])
                             self.isDispatching = True
                             scheduled_patrol["finished"] = True
@@ -219,6 +224,7 @@ class PatrolsEscheduler(QObject):
         self.forced_scheduler = None
         self.single_patrolid = None
         self.patrolIsRunning = False
+        self.on_calibration = False
         self.indexKeeper = {"currentpatrol_index": 0}  # to pass as a pointer
         self._points_to_visit = []
         self.points_scheduler = PointsScheduler()
@@ -438,6 +444,7 @@ class PatrolsEscheduler(QObject):
 
     def start_patrols(self, on_calibration=False):
         self.patrols = []
+        self.on_calibration = on_calibration
 
         for id, patrol in self.patrols_data.items():
             for patrol_day in patrol["days"].values():
@@ -458,17 +465,6 @@ class PatrolsEscheduler(QObject):
             patrol for patrol in self.patrols if not self.filter_delayed_patrols(patrol)
         ]
 
-        [
-            patrol.update(
-                {
-                    "date_day": (
-                        days_shortname.index(patrol.get("day")) - now.weekday()
-                    )
-                    % 7
-                }
-            )
-            for patrol in ontime
-        ]
 
         self.patrols = []
         self.patrols.extend(ontime)
@@ -479,10 +475,10 @@ class PatrolsEscheduler(QObject):
 
         print("ORDER PATROL", len(ontime), len(delayed), self.patrols)
 
-        self.points_scheduler.setGoals()
-        self.start_patrols_scheduling()
-        self.patrols_scheduling_state.emit("start")
-        self.weekday_changed.emit(datetime.now().weekday())
+        if self.points_scheduler.setGoals():
+            self.start_patrols_scheduling()
+            self.patrols_scheduling_state.emit("start")
+            self.weekday_changed.emit(datetime.now().weekday())
 
     def filter_delayed_patrols(self, patrol):
         day, hour, minute = self.getDatetime(patrol)
@@ -506,7 +502,11 @@ class PatrolsEscheduler(QObject):
     def handlePatrolDelayed(self, patrolid):
         self.patrol_delayed.emit(patrolid)
 
-    def setPointsToVisit(self, points):
+    def setPointsToVisit(self, points: dict):
+        '''
+        points are a dict the keys are the checkpoints ids 
+        '''
+
         self._points_to_visit = points
         self.points_scheduler.update_points(points)
 

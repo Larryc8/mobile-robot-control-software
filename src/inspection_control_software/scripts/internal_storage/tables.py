@@ -90,6 +90,7 @@ class Checkpoint(Base):
     checkpoint_link = relationship("CheckpointLink", back_populates="checkpoint")
     map = relationship("Map", back_populates="checkpoint")
 
+    calibrations = relationship("Calibration", back_populates="checkpoint_cal")
 
 class CheckpointLink(Base):
     __tablename__ = "checkpoints_link"
@@ -122,6 +123,15 @@ class Alert(Base):
     map = relationship("Map", back_populates="alerts")
     
 
+class Calibration(Base):
+    __tablename__ = 'calibrations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    checkpoint_id = Column(String, ForeignKey("checkpoints.id"))
+    calibration_value = Column(Float)
+
+    checkpoint_cal = relationship("Checkpoint", back_populates="calibrations")
 
 if __name__ == "__main__":
     DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
@@ -129,15 +139,18 @@ if __name__ == "__main__":
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)  # Create tables if they don't exist
     session = Session()
-    # patrol = Patrol(id="jhfjhsjbfjs", time="12:23:00", days="Lun,Mar")
+    patrol = Patrol(id="jhfjhsjbfjs", time="12:23:00", days="Lun,Mar")
 
-    # session.add(patrol)
-    # session.commit()
+    session.add(patrol)
+    session.commit()
     # session = Session()
     map = Map(file_path="/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/mymap.yaml")
 
     session.add(map)
     session.commit()
+
+
+
 
     status_options = [-100, -50, 0]  # 0=active, 1=resolved, 2=ignored
     checkpoint_ids = [f"cp_{i}" for i in range(1, 11)]  # 10 checkpoints

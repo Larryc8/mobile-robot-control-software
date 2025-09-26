@@ -411,7 +411,7 @@ class Example(QGraphicsView):
                     "checked": False,
                     "mapfile": self.mapfile,
                     "type": 0,
-                    "gui_yaw": point["gui_yaw"],
+                    "gui_yaw": point.get("gui_yaw"),
                     "image": point.get("image"),
                 }
                 for id, point in self.getPointsPath().items()
