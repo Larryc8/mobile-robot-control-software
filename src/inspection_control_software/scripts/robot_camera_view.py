@@ -6,6 +6,8 @@ import rospy
 import cv2 as cv
 import tf
 
+from pyqttoast import Toast, ToastPreset
+
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
@@ -49,14 +51,15 @@ groupbox_style = """
             QGroupBox {
                 background-color: #f8f9fa;
                 border: 1px solid lightgray;
+                margin-top: 2ex;
                 padding: 1px;
                 color: black;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
-                padding: 10px;
-                background-color: white;
+                padding: 0 10px;
+                background-color: blue;
                 left: -1px;
                 right: -1px;
             }
@@ -97,7 +100,7 @@ class RobotCamera(QGroupBox):
     custom_option_clicked = pyqtSignal()
 
     def __init__(self, buffer, parent) -> None:
-        super().__init__(parent)
+        super().__init__("Camara del robot", parent)
         self.layout = QVBoxLayout()
         # self.container.setLayout(self.layout)
         self.image_label = QLabel()

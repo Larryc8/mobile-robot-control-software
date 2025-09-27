@@ -1,8 +1,10 @@
 import sys
 import asyncio
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QGroupBox, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QGroupBox, QPushButton, QShortcut
 from PyQt5.QtCore import Qt, QPoint, QPointF
 from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QPainterPath
+
+from PyQt5.QtGui import QKeySequence
 
 from manual_control_node import ControlDynamicPose
 
@@ -25,42 +27,52 @@ class Joypad(QGroupBox):
         self.y_value = 0.0
         self.pressed = False
         self.robot_vel_controller = ControlDynamicPose()
-        self.grabKeyboard()
 
-    def keyPressEvent(self, event):
-        """This event handler is called whenever a key is pressed."""
-        print('key pressed joystick')
-        
-        key = event.key()
-        pos = QPoint(0,0)
+        key_sequence = QKeySequence("Ctrl+Up")
+        self.shortcut = QShortcut(key_sequence, self)
+        self.shortcut.activated.connect(self.on_shortcut_triggered)
 
-        if key == Qt.Key.Key_Up:
-            print("Key Pressed: Up Arrow")
-            pos = QPointF(0, -100) + self.center
-            self.moveThumb(pos)
-            self.update()
-            
-        elif key == Qt.Key.Key_Down:
-            print("Key Pressed: Down Arrow")
-            pos = QPointF(0,(100)) + self.center
-            self.moveThumb(pos)
-            self.update()
-            
-        elif key == Qt.Key.Key_Left:
-            print("Key Pressed: Left Arrow")
-            pos = QPointF(-100, 0) + self.center
-            self.moveThumb(pos)
-            self.update()
-            
-        elif key == Qt.Key.Key_Right:
-            print("Key Pressed: Right Arrow")
-            pos = QPointF((100),0) + self.center
-        
-            self.moveThumb(pos)
-            self.update()
-        # If any other key is pressed, pass the event to the parent class
-        else:
-            super().keyPressEvent(event)
+    def on_shortcut_triggered(self):
+        """This function (slot) is called when the shortcut is pressed."""
+        print("Shortcut 'Ctrl+Right' was triggered!")
+        pos = QPointF(0, -100) + self.center
+        self.moveThumb(pos)
+        self.update()
+
+    # def keyPressEvent(self, event):
+    #     """This event handler is called whenever a key is pressed."""
+    #     print('key pressed joystick')
+    #
+    #     key = event.key()
+    #     pos = QPoint(0,0)
+    #
+    #     if key == Qt.Key.Key_Up:
+    #         print("Key Pressed: Up Arrow")
+    #         pos = QPointF(0, -100) + self.center
+    #         self.moveThumb(pos)
+    #         self.update()
+    #
+    #     elif key == Qt.Key.Key_Down:
+    #         print("Key Pressed: Down Arrow")
+    #         pos = QPointF(0,(100)) + self.center
+    #         self.moveThumb(pos)
+    #         self.update()
+    #
+    #     elif key == Qt.Key.Key_Left:
+    #         print("Key Pressed: Left Arrow")
+    #         pos = QPointF(-100, 0) + self.center
+    #         self.moveThumb(pos)
+    #         self.update()
+    #
+    #     elif key == Qt.Key.Key_Right:
+    #         print("Key Pressed: Right Arrow")
+    #         pos = QPointF((100),0) + self.center
+    #
+    #         self.moveThumb(pos)
+    #         self.update()
+    #     # If any other key is pressed, pass the event to the parent class
+    #     else:
+    #         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
         self.moveThumb(self.center)
