@@ -2,6 +2,8 @@ from fileinput import isstdin
 from typing import List
 import numpy as np
 import time
+import json
+import os
 
 import sys
 import rospy
@@ -23,8 +25,10 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QStackedLayout,
     QFileDialog,
+    QSlider,
+    QProgressBar
 )
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTimer
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 from patrols_scheduler import PatrolsEscheduler
 
@@ -51,6 +55,94 @@ from styles.buttons import (
 from styles.labels import inactive_label_style, minimal_label_style
 
 from place_form import UserForm
+
+
+
+class JSONFileManager:
+    def __init__(self, filename):
+        self.filename = filename
+        self.ensure_file_exists()
+    
+    def ensure_file_exists(self):
+        """Create file with empty structure if it doesn't exist"""
+        if not os.path.exists(self.filename):
+            initial_data = {}
+            self.write_data(initial_data)
+    
+    def read_data(self):
+        """Read data from JSON file"""
+        try:
+            with open(self.filename, 'r') as file:
+                return json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error reading file: {e}")
+            return {}
+    
+    def write_data(self, data):
+        """Write data to JSON file"""
+        try:
+            with open(self.filename, 'w') as file:
+                json.dump(data, file, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error writing file: {e}")
+            return False
+    
+    def update_value(self, key_path, new_value):
+        """Update a specific value using key path"""
+        data = self.read_data()
+        
+        # Navigate to the nested key
+        current_level = data
+        keys = key_path.split('.')
+        
+        for key in keys[:-1]:
+            if key not in current_level:
+                current_level[key] = {}
+            current_level = current_level[key]
+        
+        # Update the final key
+        current_level[keys[-1]] = new_value
+        
+        return self.write_data(data)
+    
+    def add_to_array(self, array_path, new_item):
+        """Add item to an array in the JSON structure"""
+        data = self.read_data()
+        
+        # Navigate to the array
+        current_level = data
+        keys = array_path.split('.')
+        
+        for key in keys:
+            if key not in current_level:
+                current_level[key] = []
+            current_level = current_level[key]
+        
+        # Add new item
+        current_level.append(new_item)
+        
+        return self.write_data(data)
+
+# Usage example
+# if __name__ == "__main__":
+#     # Initialize the JSON manager
+#     manager = JSONFileManager('config.json')
+#
+#     # Update nested values
+#     manager.update_value('app.theme', 'dark')
+#     manager.update_value('app.language', 'en')
+#     manager.update_value('user.preferences.font_size', 14)
+#
+#     # Add items to arrays
+#     manager.add_to_array('user.favorites', 'python')
+#     manager.add_to_array('user.favorites', 'json')
+#     manager.add_to_array('app.recent_files', 'document1.txt')
+#
+#     # Display the final configuration
+#     final_data = manager.read_data()
+#     print("Final configuration:")
+#     print(json.dumps(final_data, indent=2))
 
 
 class ConfigPanel(QWidget):
@@ -138,6 +230,10 @@ class ConfigPanel(QWidget):
         self.save_config_button = QPushButton("Guardar Configuracion")
         self.apply_config_button = QPushButton("Aplicar Cambios")
         self.reset_config_btn = QPushButton("Restaurar valores")
+        self.back_btn = QPushButton("↤ Atras")
+        self.back_btn.setFixedWidth(100)
+
+
         self.buttons_layout.addWidget(self.save_config_button, 2)
         # self.buttons_layout.addWidget(self.reset_config_btn, 1 )
         self.buttons_layout.addWidget(self.apply_config_button, 1)
@@ -146,8 +242,11 @@ class ConfigPanel(QWidget):
 
         self.save_config_button.clicked.connect(self.saveClickHandler)
         self.apply_config_button.clicked.connect(self.applyClickHandler)
+        self.back_btn.clicked.connect(self.setFriendlyConfig)
+
         self.save_config_button.setStyleSheet(colored_button_style)
         self.apply_config_button.setStyleSheet(primary_button_style)
+        self.back_btn.setStyleSheet(primary_button_style)
         # self.reset_config_btn.setStyleSheet(secondary_button_style)
         # self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
         # btn.setIcon(QApplication.style().standardIcon()) SP_BrowserReload
@@ -159,6 +258,7 @@ class ConfigPanel(QWidget):
         icon = QApplication.style().standardIcon(QStyle.SP_BrowserReload)
         self.reset_config_btn.setIcon(icon)
 
+        self.layout.addWidget(self.back_btn)
         self.layout.addWidget(self.filter_text)
         self.layout.addWidget(self.tabs)
         # self.layout.addWidget(self.reset_config_btn)
@@ -183,6 +283,10 @@ class ConfigPanel(QWidget):
 
     def handleConfigTypeChange(self, x):
         self.stacklayout.setCurrentIndex(x)
+
+    def setFriendlyConfig(self, x):
+        self.stacklayout.setCurrentIndex(0)
+
 
     @pyqtSlot()
     def saveClickHandler(self) -> None:
@@ -416,7 +520,26 @@ class FriendlyConfig(QWidget):
         self.advance_config_btn = QPushButton("Configuracion avanzada")
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
         self.isStart = True
+        self.calibration_periods = 10
         self.test_btn = QPushButton('Test PatrolsEscheduler')
+
+
+        self.text = QLabel('Se ejecuraran periodos de calibracion')
+        self.text.setFixedHeight(30)
+
+        self.h_slider = QSlider(Qt.Horizontal)
+        self.h_slider.setMinimum(0)
+        self.h_slider.setMaximum(100)
+        self.h_slider.setValue(50)
+        self.h_slider.setTickPosition(QSlider.TicksBelow)
+        self.h_slider.setTickInterval(10)
+        self.h_slider.valueChanged.connect(self.update_all)
+
+        # Create and setup progress bar
+        self.progress = QProgressBar()
+        self.progress.setValue(50)  # Set to 50%
+
+        self.value = 0
 
         self.test_btn.clicked.connect(self.test)
         self.test_btn.setStyleSheet(border_button_style)
@@ -425,12 +548,23 @@ class FriendlyConfig(QWidget):
         self.test_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
 
 
-        self.layout.addWidget(UserForm(), 1, 0, 4, 1)
-        self.layout.addWidget(self.test_btn, 2, 1)
+        self.layout.addWidget(UserForm(), 1, 0)
+        self.layout.addWidget(self.test_btn, 2, 0)
+        self.layout.addWidget(self.h_slider, 3, 0)
+        self.layout.addWidget(self.text, 4, 0)
+        self.layout.addWidget(self.progress, 5, 0)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
         self.layout.addWidget(self.advance_config_btn, 5, 0, 1, 2)
         self.setLayout(self.layout)
+
+    def update_all(self, value):
+        self.calibration_periods = int(value)
+        self.text.setText(f'La calibracion se jcecutara drante {self.calibration_periods} periodo')
+
+    def animate(self):
+        self.value = (self.value + 5) % 105
+        self.progress.setValue(self.value)
 
     def advance_config_callack(self, x):
         self.config_type_change.emit(1)
@@ -450,7 +584,7 @@ class FriendlyConfig(QWidget):
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
         self.test_btn.setIcon(icon_stop)
         self.test_btn.setText("Parar")
-        self.patrols_scheduler.load_test_patrols(patrols_count=20)
+        self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
         self.patrols_scheduler.start_patrols(on_calibration=True)
         pass
 

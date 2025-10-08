@@ -50,6 +50,7 @@ class InputDialog(QDialog):
 
     def initUI(self):
         layout = QVBoxLayout()
+        buttons_layout = QHBoxLayout()
 
         # Label
         self.label = QLabel("Ponle un nombre a tu feo mama!")
@@ -65,11 +66,19 @@ class InputDialog(QDialog):
         layout.addWidget(self.text_input)
 
         # Submit button
+        self.discard_btn = QPushButton('Descartar')
         self.submit_btn = QPushButton("Continuar")
+        self.discard_btn.clicked.connect(self.on_discard)
         self.submit_btn.clicked.connect(self.on_submit)
-        self.submit_btn.setStyleSheet(primary_button_style)
-        layout.addWidget(self.submit_btn)
 
+        self.discard_btn.setStyleSheet(secondary_button_style)
+        self.submit_btn.setStyleSheet(primary_button_style)
+
+        buttons_layout.addWidget(self.discard_btn)
+        buttons_layout.addWidget(self.submit_btn)
+
+
+        layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
     def on_submit(self):
@@ -85,6 +94,10 @@ class InputDialog(QDialog):
             self.accept()  # Close the dialog
             return
         self.atempts = self.atempts + 1
+
+    def on_discard(self):
+        self.filename = None
+        self.accept()
 
 
 class CustomDialog(QDialog):

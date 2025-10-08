@@ -47,7 +47,7 @@ class CustomLabel(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                background-color: gray;
+                background-color: #DCDCDC;
                 border-radius: 5px;
                 font-weight: bold;
             }
@@ -73,6 +73,7 @@ class ImageCarousel(QWidget):
         # Image variables
         self.buffer_data = []
         self.buffer_data = buffer
+        self.use_filepath = False
         self.current_index = 0
         self.MAX_THUMBNAILS = 4
         self.loaded_images = []
@@ -106,6 +107,7 @@ class ImageCarousel(QWidget):
         button_layout = QHBoxLayout()
         # button_layout.addWidget(self.page_label)
         button_layout.addWidget(self.delete_button)
+        self.delete_button.hide()
 
 
         layout = QHBoxLayout()
@@ -118,7 +120,7 @@ class ImageCarousel(QWidget):
         ]
 
         for label in self.images_thumbnail:
-            label.setStyleSheet("border: 2px solid gray; background-color: gray")
+            label.setStyleSheet("border: 2px solid #A9A9A9; background-color: #A9A9A9")
             thumbnails_layout.addWidget(label)
             label.setFixedSize(200, 170)
 
@@ -140,14 +142,20 @@ class ImageCarousel(QWidget):
             thumbnail.setStyleSheet("border: 2px solid gray;")
 
         label = self.images_thumbnail[index]
-        label.setStyleSheet("border: 3px solid blue;")
+        label.setStyleSheet("border: 3px solid blue; background-color: #A9A9A9")
         self.select_image(index)
 
     def get_user_operation(self, use_operation):
+        if use_operation == userOperation.CREATEMAP:
+            self.delete_button.show()
+            return
+
         if use_operation == userOperation.LOADMAP:
+            self.use_filepath = True
             while len(self.buffer_data):
                 self.buffer_data.pop()
-            self.display_all_images(data_array=[], use_filepath=False)
+            self.display_all_images(data_array=[], use_filepath=self.use_filepath)
+        self.delete_button.hide()
 
     def update_dreinage_info(self, current_point_id, next_point_id, point_state):
         if point_state in [2, 3]:
@@ -165,12 +173,14 @@ class ImageCarousel(QWidget):
         while len(self.buffer_data):
             self.buffer_data.pop()
 
+        self.use_filepath = True
+
         if stored_points:
             for point in stored_points.get("points"):
                 id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
                 self.buffer_data.append((id, image))
 
-            self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=True)
+            self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
 
     def show_empty_image(self):
         # Create a blank pixmap
@@ -183,11 +193,13 @@ class ImageCarousel(QWidget):
     def discard_buffered_data(self):
         if self.current_index < len(self.buffer_data):
             self.buffer_data.pop(self.current_index)
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=False)
+        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
 
     def load_images(self, images: list = []):
+        self.use_filepath = False
         self.display_current_image()
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=False)
+        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        pass
 
     def display_all_images(self, data_array, use_filepath):
         self.data_container = data_array
@@ -269,14 +281,25 @@ class ImageCarousel(QWidget):
         self.image_label.setPixmap(scaled_pixmap)
 
     def show_next_image(self):
+        print(f'buffer dat len {len(self.buffer_data)}')
         if self.buffer_data is None:
             return
 
         if not len(self.buffer_data):
             return
 
-        self.current_index = (self.current_index + 1) % (len(self.buffer_data)//self.MAX_THUMBNAILS)
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=True)
+        if  (len(self.buffer_data) % self.MAX_THUMBNAILS):
+            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS) + 1
+        else:
+            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS)
+
+        if len(self.buffer_data) < self.MAX_THUMBNAILS:
+            self.current_index = 0#(self.current_index - 1) % 1 
+        else:
+            self.current_index = (self.current_index + 1) % pages 
+
+        # self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        self.display_all_images(data_array=self.buffer_data[self.current_index * self.MAX_THUMBNAILS : self.current_index * self.MAX_THUMBNAILS + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
 
     def show_previous_image(self):
         if self.buffer_data is None:
@@ -285,8 +308,17 @@ class ImageCarousel(QWidget):
         if not len(self.buffer_data):
             return
 
-        self.current_index = (self.current_index - 1) % (len(self.buffer_data)//self.MAX_THUMBNAILS)
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=True)
+        if  (len(self.buffer_data) % self.MAX_THUMBNAILS):
+            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS) + 1
+        else:
+            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS)
+
+        if not (len(self.buffer_data)//self.MAX_THUMBNAILS):
+            self.current_index = 0#(self.current_index - 1) % 1 
+        else:
+            self.current_index = (self.current_index - 1) % pages
+
+        self.display_all_images(data_array=self.buffer_data[self.current_index * self.MAX_THUMBNAILS : self.current_index * self.MAX_THUMBNAILS + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
 
     def select_image(self, index):
         if self.buffer_data is None:

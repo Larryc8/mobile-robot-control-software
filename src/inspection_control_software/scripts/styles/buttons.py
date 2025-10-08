@@ -1,3 +1,22 @@
+#000000 - Black
+
+#696969 - Dim Gray
+
+#808080 - Gray
+
+#A9A9A9 - Dark Gray
+
+#C0C0C0 - Silver
+
+#D3D3D3 - Light Gray
+
+#DCDCDC - Gainsboro
+
+#F5F5F5 - White Smoke
+
+#FFFFFF - White
+
+
 menu_style = ("""
     QMenu {
         background-color: white;
@@ -12,7 +31,7 @@ menu_style = ("""
         background-color: transparent;
     }
     QMenu::item:selected {
-        background-color: #3498db;
+        background-color: #C0C0C0;
         color: white;
     }
     QMenu::separator {
@@ -126,7 +145,7 @@ secondary_button_style = ("""
 
 tertiary_button_style = ("""
     QPushButton {
-        background: none;
+        background: #DCDCDC ;
         color: gray;
         border: none;
         padding: 5px;
@@ -134,8 +153,7 @@ tertiary_button_style = ("""
         font-size: 16px;
     }
     QPushButton:hover {
-        color: magenta;
-        text-decoration: underline;
+        background: #F5F5F5;
     }
 """)
 

@@ -504,25 +504,27 @@ class VisualizationPanel(QWidget):
         dialog.exec_()
         print("VizPanel,dialog", dialog.filename)
         mapname = dialog.filename
-        self.nodes_manager.save_map(mapname)
-        # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
-        toast = Toast(self.parent)
-        toast.setDuration(4000)  # Hide after 5 seconds
-        toast.setTitle("Se guardo el mapa exitosamente")
-        toast.setText("Ahora puedes usar tu mapa para la navegacion")
-        toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
-        Toast.setPositionRelativeToWidget(self.parent)
+        if mapname:
+            self.nodes_manager.save_map(mapname)
+            # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
+            toast = Toast(self.parent)
+            toast.setDuration(4000)  # Hide after 5 seconds
+            toast.setTitle("Se guardo el mapa exitosamente")
+            toast.setText("Ahora puedes usar tu mapa para la navegacion")
+            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)
 
-        # icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
-        # self.create_map_btn.setIcon(icon)
-        # self.create_map_btn.setText("Crear Mapa")
-        # self.isCreateMap = True
-        # # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
-        # self.global_state_holder.currentUserOperation = userOperation.IDLE
-        # self.setCreatMapState()
+            # icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+            # self.create_map_btn.setIcon(icon)
+            # self.create_map_btn.setText("Crear Mapa")
+            # self.isCreateMap = True
+            # # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
+            # self.global_state_holder.currentUserOperation = userOperation.IDLE
+            # self.setCreatMapState()
+            toast.show()
+            self.map_saved.emit(mapname)
+
         self.setMapOperationState()
-        toast.show()
-        self.map_saved.emit(mapname)
 
     def setMapOperationState(self):
         icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)

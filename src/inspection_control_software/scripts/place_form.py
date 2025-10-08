@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (
     QGroupBox,
 )
 
+from PyQt5.QtCore import Qt
+
 
 from  database_manager import DataBase
 
@@ -20,7 +22,8 @@ class GroupWrapper(QGroupBox):
         super().__init__(text)
         self.layout = QVBoxLayout()
         for child in children:
-            self.layout.addWidget(child)
+            self.layout.addWidget(child, alignment=Qt.AlignTop)
+        self.setMaximumHeight(100)
 
         self.setLayout(self.layout)
 
@@ -84,7 +87,7 @@ class UserForm(QGroupBox):
 
 
         layout.addWidget(select_place_container)
-        layout.addWidget(crete_place_container)
+        # layout.addWidget(crete_place_container)
         layout.addWidget(self.create_button)
         layout.setSpacing(30)
 

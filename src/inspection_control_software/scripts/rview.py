@@ -51,6 +51,7 @@ class MyViz(QWidget):
         self.minHeight = self.height()
         self.minWidth = self.width()
         self.resize = 145
+        self.var = False
         # rospy.init_node('harolsito')
 
         ## rviz.VisualizationFrame is the main container widget of the
@@ -149,6 +150,7 @@ class MyViz(QWidget):
             if value == 'map':
                 self.view_man.getCurrent().subProp("Angle").setValue(0)
         if prop == "followrobot":
+            self.frame.hideLeftDock(not self.var)
             self.followRobot = value
             self.view_man.getCurrent().subProp("Scale").setValue(self.resize)
             self.manager.setFixedFrame("odom")

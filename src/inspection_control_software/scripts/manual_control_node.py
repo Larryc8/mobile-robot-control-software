@@ -29,14 +29,14 @@ class ControlDynamicPose:
         self.stop = False
 
         # self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
-        self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.imu_callback)
-        self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=3)
+        self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.laser_callback)
+        self.cmd_vel_pub = rospy.Publisher("/RosAria/cmd_vel", Twist, queue_size=3)
 
         rospy.loginfo("IMU to cmd_vel node started")
 
-    def imu_callback(self, msg):
+    def laser_callback(self, msg):
         # print(len(msg.ranges))
-        self.distance = min(msg.ranges[:90] + msg.ranges[270:])
+        # self.distance = min(msg.ranges[:90] + msg.ranges[270:])
         self.cmd_vel.linear.x = self.max_linear_velocity * self.y
         self.cmd_vel.angular.z = self.max_angular_velocity * -self.x
 
@@ -52,6 +52,9 @@ class ControlDynamicPose:
         self.x = x
         self.y = y
 
+        # self.cmd_vel.linear.x = self.max_linear_velocity * self.y
+        # self.cmd_vel.angular.z = self.max_angular_velocity * -self.x
+        # self.cmd_vel_pub.publish(self.cmd_vel)
         if not (self.x == 0 and self.y == 0):
             self.stop = False 
 
