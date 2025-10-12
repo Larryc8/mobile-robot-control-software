@@ -81,6 +81,8 @@ from rview import MyViz
 from input_textdialog import InputDialog, CustomDialog
 from robot_camera_view import RobotCamera
 from image_carousel import ImageCarousel
+from robot_actions_logger import RobotActionsLoggerView
+import  robot_actions_logger
 
 from utils.patrol import PatrolEndState, userOperation, operationMode
 
@@ -220,7 +222,9 @@ class VisualizationPanel(QWidget):
         self.robotcamera.move(200, 50)
         # self.rviz.setFixedSize(700, 500)
 
-
+        self.robot_actions_logger = RobotActionsLoggerView()
+        self.logger = robot_actions_logger.logger
+        self.logger.log_changed.connect(self.robot_actions_logger.update_log)
 
         self.drainage_checkpoints_win = ImageCarousel(
             buffer=self.buffer_data_robot_camera
@@ -313,16 +317,23 @@ class VisualizationPanel(QWidget):
         self.robotcamera.custom_option_clicked.connect(self.toggleCameraMapView)
         self.selected_user_operation.connect(self.drainage_checkpoints_win.get_user_operation)
 
+
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
         self.toggleCameraMapView()
+
+        
 
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
         # self.layout.addWidget(self.stack_config_btn, 0, 1)
         self.layout.addWidget(BatteryIndicator(), 0, 2)
         self.layout.addWidget(self.stacked_widgets_container, 1, 0, 1, 3)
-        self.layout.addLayout(self.buttons_layout, 2, 0, 1, 3)
+        self.layout.addWidget(self.robot_actions_logger, 2,0, 1, 3)
+        self.layout.addLayout(self.buttons_layout, 3, 0, 1, 3)
         self.setLayout(self.layout)
+
+    def show_log(self):
+        self.stacklayout.setCurrentIndex(2)
 
     def handleAlertGeneration(self, message, status):
         print(f'HOME VIEW ALERT {message}')

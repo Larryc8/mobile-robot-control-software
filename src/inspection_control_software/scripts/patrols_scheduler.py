@@ -2,6 +2,8 @@
 import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
+import queue
+from enum import Enum
 # Import your action message, for example: from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
@@ -10,8 +12,8 @@ import time
 
 from points_scheduler import PointsScheduler
 from database_manager import DataBase
-import queue
-from enum import Enum
+import robot_actions_logger
+
 
 
 from pyqttoast import Toast, ToastPreset
@@ -193,6 +195,7 @@ class ScheduleChecker(QThread):
     def handlePatrolsForcedExec(self):
         self.isSinglePatrolFinished = True
         self.points_scheduler.restart()
+        robot_actions_logger.logger.log()
         pass
 
     def forced_cancel(self, x):
