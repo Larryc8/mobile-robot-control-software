@@ -58,72 +58,6 @@ from place_form import UserForm
 
 
 
-class JSONFileManager:
-    def __init__(self, filename):
-        self.filename = filename
-        self.ensure_file_exists()
-    
-    def ensure_file_exists(self):
-        """Create file with empty structure if it doesn't exist"""
-        if not os.path.exists(self.filename):
-            initial_data = {}
-            self.write_data(initial_data)
-    
-    def read_data(self):
-        """Read data from JSON file"""
-        try:
-            with open(self.filename, 'r') as file:
-                return json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"Error reading file: {e}")
-            return {}
-    
-    def write_data(self, data):
-        """Write data to JSON file"""
-        try:
-            with open(self.filename, 'w') as file:
-                json.dump(data, file, indent=4)
-            return True
-        except Exception as e:
-            print(f"Error writing file: {e}")
-            return False
-    
-    def update_value(self, key_path, new_value):
-        """Update a specific value using key path"""
-        data = self.read_data()
-        
-        # Navigate to the nested key
-        current_level = data
-        keys = key_path.split('.')
-        
-        for key in keys[:-1]:
-            if key not in current_level:
-                current_level[key] = {}
-            current_level = current_level[key]
-        
-        # Update the final key
-        current_level[keys[-1]] = new_value
-        
-        return self.write_data(data)
-    
-    def add_to_array(self, array_path, new_item):
-        """Add item to an array in the JSON structure"""
-        data = self.read_data()
-        
-        # Navigate to the array
-        current_level = data
-        keys = array_path.split('.')
-        
-        for key in keys:
-            if key not in current_level:
-                current_level[key] = []
-            current_level = current_level[key]
-        
-        # Add new item
-        current_level.append(new_item)
-        
-        return self.write_data(data)
-
 # Usage example
 # if __name__ == "__main__":
 #     # Initialize the JSON manager
@@ -148,7 +82,7 @@ class JSONFileManager:
 class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
 
-    def __init__(self, nodes_manager, parent=None) -> None:
+    def __init__(self, nodes_manager, parent=None, patrols_scheduler = None) -> None:
         super().__init__()
         self.stacklayout = QStackedLayout()
         self.parent = parent
@@ -242,7 +176,7 @@ class ConfigPanel(QWidget):
 
         self.save_config_button.clicked.connect(self.saveClickHandler)
         self.apply_config_button.clicked.connect(self.applyClickHandler)
-        self.back_btn.clicked.connect(self.setFriendlyConfig)
+        self.back_btn.clicked.connect(self.set_friendly_config)
 
         self.save_config_button.setStyleSheet(colored_button_style)
         self.apply_config_button.setStyleSheet(primary_button_style)
@@ -265,7 +199,7 @@ class ConfigPanel(QWidget):
         self.layout.addLayout(self.buttons_layout)
         # self.stacklayout.addLayout(self.layout)
         self.advance_config_wrapper = QWidget()
-        self.basic_config_wrapper = FriendlyConfig()
+        self.basic_config_wrapper = FriendlyConfig(patrols_scheduler=patrols_scheduler)
         self.advance_config_wrapper.setLayout(self.layout)
         self.stacklayout.addWidget(self.basic_config_wrapper)
         self.stacklayout.addWidget(self.advance_config_wrapper)
@@ -284,7 +218,7 @@ class ConfigPanel(QWidget):
     def handleConfigTypeChange(self, x):
         self.stacklayout.setCurrentIndex(x)
 
-    def setFriendlyConfig(self, x):
+    def set_friendly_config(self, x):
         self.stacklayout.setCurrentIndex(0)
 
 
@@ -512,65 +446,65 @@ class ConfigInput(QGroupBox):
 
 class FriendlyConfig(QWidget):
     config_type_change = pyqtSignal(int)
+    calibration_started = pyqtSignal(bool)
 
-    def __init__(self) -> None:
+    def __init__(self, patrols_scheduler: PatrolsEscheduler ) -> None:
         super().__init__()
+        self.patrols_scheduler: PatrolsEscheduler = patrols_scheduler
         self.layout = QGridLayout()
-        self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
+        #self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
         self.advance_config_btn = QPushButton("Configuracion avanzada")
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
         self.isStart = True
-        self.calibration_periods = 10
-        self.test_btn = QPushButton('Test PatrolsEscheduler')
+        self.calibration_periods = 1
+        self.start_calibrations_btn = QPushButton('Test PatrolsEscheduler')
+        self.debug = QLabel('debug')
 
 
         self.text = QLabel('Se ejecuraran periodos de calibracion')
         self.text.setFixedHeight(30)
 
         self.h_slider = QSlider(Qt.Horizontal)
-        self.h_slider.setMinimum(0)
-        self.h_slider.setMaximum(100)
-        self.h_slider.setValue(50)
         self.h_slider.setTickPosition(QSlider.TicksBelow)
         self.h_slider.setTickInterval(10)
         self.h_slider.valueChanged.connect(self.update_all)
 
-        # Create and setup progress bar
-        self.progress = QProgressBar()
-        self.progress.setValue(50)  # Set to 50%
+        self.calibrations_progress: QProgressBar = QProgressBar()
+        self.calibrations_progress.setMinimum(0)
 
-        self.value = 0
+        self.start_calibrations_btn.clicked.connect(self.test)
+        self.patrols_scheduler.points_scheduler.check_done.connect(self.update_progress)
+        self.patrols_scheduler.patrol_finished.connect(self.stop_calibrations)
 
-        self.test_btn.clicked.connect(self.test)
-        self.test_btn.setStyleSheet(border_button_style)
+
+        self.start_calibrations_btn.setStyleSheet(border_button_style)
         self.advance_config_btn.setStyleSheet(primary_button_style)
 
-        self.test_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
+        self.start_calibrations_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
 
 
         self.layout.addWidget(UserForm(), 1, 0)
-        self.layout.addWidget(self.test_btn, 2, 0)
-        self.layout.addWidget(self.h_slider, 3, 0)
-        self.layout.addWidget(self.text, 4, 0)
-        self.layout.addWidget(self.progress, 5, 0)
+        self.layout.addWidget(self.start_calibrations_btn, 2, 1)
+        self.layout.addWidget(self.h_slider, 3, 1)
+        self.layout.addWidget(self.text, 4, 1)
+        self.layout.addWidget(self.calibrations_progress, 5, 1)
+        self.layout.addWidget(self.debug, 6, 1)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
-        self.layout.addWidget(self.advance_config_btn, 5, 0, 1, 2)
+        self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
         self.setLayout(self.layout)
 
     def update_all(self, value):
         self.calibration_periods = int(value)
+        self.calibrations_progress.setMaximum(self.calibration_periods*7)
         self.text.setText(f'La calibracion se jcecutara drante {self.calibration_periods} periodo')
-
-    def animate(self):
-        self.value = (self.value + 5) % 105
-        self.progress.setValue(self.value)
 
     def advance_config_callack(self, x):
         self.config_type_change.emit(1)
 
     def test(self, x):
         if self.isStart:
+            self.calibrations_progress.setValue(0)
             self.start_calibrations()
             self.isStart = False
             return 
@@ -578,21 +512,28 @@ class FriendlyConfig(QWidget):
         self.stop_calibrations()
         self.isStart = True
 
+    def update_progress(self, x)->None:
+        if not self.isStart:
+            self.calibrations_progress.setValue(self.calibrations_progress.value() + 1)
+            self.debug.setText(f'debug {self.calibrations_progress.value()}')
+
 
 
     def start_calibrations(self):
+        self.calibration_started.emit(False)
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
-        self.test_btn.setIcon(icon_stop)
-        self.test_btn.setText("Parar")
+        self.start_calibrations_btn.setIcon(icon_stop)
+        self.start_calibrations_btn.setText("Parar")
         self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
         self.patrols_scheduler.start_patrols(on_calibration=True)
         pass
 
     def stop_calibrations(self)->None:
+        self.calibration_started.emit(True)
         self.patrols_scheduler.cancel_task()
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
-        self.test_btn.setIcon(icon_start)
-        self.test_btn.setText("Comenzar")
+        self.start_calibrations_btn.setIcon(icon_start)
+        self.start_calibrations_btn.setText("Comenzar")
 
 
 class DescriptionConfigContainer(QGroupBox):

@@ -30,7 +30,7 @@ class ControlDynamicPose:
 
         # self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
         self.laser_sub = rospy.Subscriber("/scan", LaserScan, self.laser_callback)
-        self.cmd_vel_pub = rospy.Publisher("/RosAria/cmd_vel", Twist, queue_size=3)
+        self.cmd_vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=3)
 
         rospy.loginfo("IMU to cmd_vel node started")
 

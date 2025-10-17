@@ -4,6 +4,8 @@ from typing import List
 import rospy
 import yaml
 import subprocess
+import os
+import json
 import time
 
 from roslaunch.core import Node
@@ -13,6 +15,75 @@ from roslaunch import configure_logging
 from roslaunch.scriptapi import ROSLaunch
 
 from PyQt5.QtCore import QThread, pyqtSignal, QObject
+
+
+
+class UserConfigFileManager:
+    def __init__(self, filename):
+        self.filename = filename
+        self.ensure_file_exists()
+    
+    def ensure_file_exists(self):
+        """Create file with empty structure if it doesn't exist"""
+        if not os.path.exists(self.filename):
+            initial_data = {}
+            self.write_data(initial_data)
+    
+    def read_data(self):
+        """Read data from JSON file"""
+        try:
+            with open(self.filename, 'r') as file:
+                return json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error reading file: {e}")
+            return {}
+    
+    def write_data(self, data):
+        """Write data to JSON file"""
+        try:
+            with open(self.filename, 'w') as file:
+                json.dump(data, file, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error writing file: {e}")
+            return False
+    
+    def update_value(self, key_path, new_value):
+        """Update a specific value using key path"""
+        data = self.read_data()
+        
+        # Navigate to the nested key
+        current_level = data
+        keys = key_path.split('.')
+        
+        for key in keys[:-1]:
+            if key not in current_level:
+                current_level[key] = {}
+            current_level = current_level[key]
+        
+        # Update the final key
+        current_level[keys[-1]] = new_value
+        
+        return self.write_data(data)
+    
+    def add_to_array(self, array_path, new_item):
+        """Add item to an array in the JSON structure"""
+        data = self.read_data()
+        
+        # Navigate to the array
+        current_level = data
+        keys = array_path.split('.')
+        
+        for key in keys:
+            if key not in current_level:
+                current_level[key] = []
+            current_level = current_level[key]
+        
+        # Add new item
+        current_level.append(new_item)
+        
+        return self.write_data(data)
+
 
 
 class StaticParamsConfigLoader:

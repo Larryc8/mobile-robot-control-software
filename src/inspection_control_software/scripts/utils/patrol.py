@@ -15,3 +15,9 @@ class userOperation(Enum):
 class operationMode(Enum):
     AUTO = 0
     MANUAL = 1
+
+class checkpointEndState(Enum):
+    PENDING = "<span style='color: red; font-weight: bold'>Pendiente</span>"
+    CHECKED = "<span style='color: green; font-weight: bold'>Revisado</span>"
+    NEXT = "<span style='color: yellow; font-weight: bold'>Siguiente</span>"
+    NONE = "<span style='color: black; font-weight: bold'>NoA</span>"

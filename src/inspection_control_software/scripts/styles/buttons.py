@@ -1,23 +1,23 @@
-#000000 - Black
+# 000000 - Black
 
-#696969 - Dim Gray
+# 696969 - Dim Gray
 
-#808080 - Gray
+# 808080 - Gray
 
-#A9A9A9 - Dark Gray
+# A9A9A9 - Dark Gray
 
-#C0C0C0 - Silver
+# C0C0C0 - Silver
 
-#D3D3D3 - Light Gray
+# D3D3D3 - Light Gray
 
-#DCDCDC - Gainsboro
+# DCDCDC - Gainsboro
 
-#F5F5F5 - White Smoke
+# F5F5F5 - White Smoke
 
-#FFFFFF - White
+# FFFFFF - White
 
 
-menu_style = ("""
+menu_style = """
     QMenu {
         background-color: white;
         border: 1px solid #bdc3c7;
@@ -39,9 +39,9 @@ menu_style = ("""
         background-color: black;
         margin: 5px 0px;
     }
-""")
+"""
 
-button_with_menu_style = ("""
+button_with_menu_style = """
     QPushButton::menu-indicator {
         image: url(public/menu-4-fill-svgrepo-com.svg);
         subcontrol-position: right center;
@@ -50,9 +50,9 @@ button_with_menu_style = ("""
         width: 16px;
         height: 16px;
     }
-""")
+"""
 
-border_button_style = ("""
+border_button_style = """
     QPushButton {
         background: transparent;
         color: #3498db;
@@ -64,13 +64,18 @@ border_button_style = ("""
     QPushButton:hover {
         background: #3498db;
         color: white;
-    }    
+    }
     QPushButton:pressed {
         background-color: #3e8e41;
     }
-""")
 
-border_button_style_danger = ("""
+    QPushButton:disabled {
+        border-color: gray;
+        color: gray
+    }
+"""
+
+border_button_style_danger = """
     QPushButton {
         background: transparent;
         color: #3498db;
@@ -82,16 +87,14 @@ border_button_style_danger = ("""
     QPushButton:hover {
         background: #3498db;
         color: white;
-    }    
+    }
     QPushButton:pressed {
         background-color: red;
     }
-""")
+"""
 
 
-
-
-colored_button_style = ("""
+colored_button_style = """
     QPushButton {
         background-color: #2C3E50;
         border-radius: 2px;
@@ -106,10 +109,10 @@ colored_button_style = ("""
     QPushButton:pressed {
         background-color: #3e8e41;
     }
-""")
+"""
 
 
-primary_button_style = ("""
+primary_button_style = """
     QPushButton {
         background-color: #4682B4;
         border-radius: 2px;
@@ -124,9 +127,9 @@ primary_button_style = ("""
     QPushButton:pressed {
         background-color: #4682B4;
     }
-""")
+"""
 
-secondary_button_style = ("""
+secondary_button_style = """
     QPushButton {
         background-color: lightgray;
         border-radius: 2px;
@@ -141,9 +144,9 @@ secondary_button_style = ("""
     QPushButton:pressed {
         background-color: #3e8e41;
     }
-""")
+"""
 
-tertiary_button_style = ("""
+tertiary_button_style = """
     QPushButton {
         background: #DCDCDC ;
         color: gray;
@@ -155,7 +158,7 @@ tertiary_button_style = ("""
     QPushButton:hover {
         background: #F5F5F5;
     }
-""")
+"""
 
 toggle_button_style = """
     QPushButton {
@@ -169,15 +172,14 @@ toggle_button_style = """
         background-color: lightgray;
     }
     QPushButton:disabled {
-        border: 1px solid #8f8f91;
         border-radius: 2px;
         background-color: #4682B4;
-        color: #E0E0E0;
+        color: white;
     }
 
 """
-# minimal_button_style = 
-minimal_button_style = ("""
+# minimal_button_style =
+minimal_button_style = """
     QPushButton {
         background-color: lightgray;
         border-radius: 2px;
@@ -193,9 +195,13 @@ minimal_button_style = ("""
     QPushButton:pressed {
         background-color: lightgray;
     }
-""")
+    QPushButton:disabled {
+        border: 1px solid gray;
+        color: gray
+    }
+"""
 
-tag_button_style = ("""
+tag_button_style = """
     QPushButton {
         background-color: #e0e0e0;
         border: 1px solid #b0b0b0;
@@ -204,18 +210,18 @@ tag_button_style = ("""
         color: #333333;
         font-size: 14px;
     }
-    
+
     QPushButton:hover {
         background-color: #d0d0d0;
     }
-    
+
     QPushButton:pressed {
         background-color: #c0c0c0;
     }
-""")
+"""
 
 
-tag_selected_button_style = ("""
+tag_selected_button_style = """
             QPushButton {
                 background-color: #4682B4;
                 border: 1px solid #90caf9;
@@ -225,9 +231,9 @@ tag_selected_button_style = ("""
                 font-size: 14px;
                 font-weight: bold;
             }
-        """)
+        """
 
-patrol_checkbox_style = ("""
+patrol_checkbox_style = """
     QCheckBox {
         font-size: 14px;
         color: #424242;
@@ -252,9 +258,9 @@ patrol_checkbox_style = ("""
     QCheckBox::indicator:unchecked:hover {
         background: lightgray;
     }
-""")
+"""
 
-modern_checkbox_style = ("""
+modern_checkbox_style = """
     QCheckBox {
         spacing: 8px;
         font-size: 14px;
@@ -278,9 +284,9 @@ modern_checkbox_style = ("""
         background-color: #3700b3;
         border: 2px solid #3700b3;
     }
-""")
+"""
 
-common_slider_style = ("""    
+common_slider_style = """
     QSlider::handle:horizontal {
         width: 20px;
         height: 12px;
@@ -295,36 +301,42 @@ common_slider_style = ("""
         width: 1px;
         background: #999;
     }
-""" )
+"""
 
 
-simple_slider_rightleft_style  = ("""
+simple_slider_rightleft_style = (
+    """
     QSlider::groove:horizontal {
         height: 8px;
         background:  #4682B4;
         border-radius: 1px;
     }
-    
+
     QSlider::sub-page:horizontal {
         background: lightgray;
         border-radius: 1px;
     }
-""" + common_slider_style)
+"""
+    + common_slider_style
+)
 
-simple_slider_leftright_style  = ("""
+simple_slider_leftright_style = (
+    """
     QSlider::groove:horizontal {
         height: 8px;
         background: lightgray;
         border-radius: 1px;
     }
-    
+
     QSlider::sub-page:horizontal {
         background: #4682B4;
         border-radius: 1px;
     }
-""" + common_slider_style) 
+"""
+    + common_slider_style
+)
 
-modern_line_edit_style = ("""
+modern_line_edit_style = """
     QLineEdit {
         border: none;
         border-bottom: 2px solid #bdbdbd;
@@ -332,12 +344,12 @@ modern_line_edit_style = ("""
         padding: 5px;
         font-size: 16px;
     }
-    
+
     QLineEdit:focus {
         border-bottom: 2px solid #2196F3;
     }
-""")
-simple_line_edit_style = ("""
+"""
+simple_line_edit_style = """
     QLineEdit {
         background-color: #f0f0f0;
         border: 2px solid #ccc;
@@ -345,22 +357,21 @@ simple_line_edit_style = ("""
         padding: 5px;
         font-size: 14px;
     }
-    
+
     QLineEdit:focus {
         border: 2px solid #6a9fb5;
         background-color: #fff;
     }
-""")
-error_simple_line_edit_style = ("""
+"""
+error_simple_line_edit_style = """
     QLineEdit {
         background-color: #fff3f3;
         border: 1px solid #ffcccc;
         border-radius: 3px;
         padding: 5px;
     }
-    
+
     QLineEdit:focus {
         border: 1px solid #ff9999;
     }
-""")
-
+"""

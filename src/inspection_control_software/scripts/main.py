@@ -41,11 +41,13 @@ class MyTableWidget(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.nodes_manager = NodesManager()
         self.tabs_names = ["Home", "Configuracion", "Log system"]
+        
         # self.tabs_names = ["Home", "Configuracion"]
         self.parent = parent
         self.parent.w = None
 
         self.tabs = QTabWidget()
+        # self.tabs.setTabPosition(QTabWidget.West) 
         self.tabs_widget = {name: QWidget() for name in self.tabs_names}
 
         [
@@ -80,7 +82,10 @@ class MyTableWidget(QWidget):
 
         print('main', parent)
         home_panel = HomePanel(nodes_manager=self.nodes_manager, parent=parent)
-        config_panel = ConfigPanel(nodes_manager=self.nodes_manager, parent=parent)
+        patrols_scheduler = home_panel.patrol_panel.patrols_container.patrols_scheduler
+        config_panel = ConfigPanel(nodes_manager=self.nodes_manager, parent=parent, patrols_scheduler=patrols_scheduler)
+
+        config_panel.basic_config_wrapper.calibration_started.connect(home_panel.patrol_panel.enable_components)
 
         #
         # home_panel.visualization_panel.map_loaded.connect(
@@ -89,9 +94,9 @@ class MyTableWidget(QWidget):
         # )
 
         # home_panel.visualization_panel.update_points.connect(self.patrol_panel.update_points)
-        home_panel.visualization_panel.parent.pointsWindow.save_selected_points.connect(
-            config_panel.basic_config_wrapper.patrols_scheduler.setPointsToVisit
-        )
+        # home_panel.visualization_panel.parent.pointsWindow.save_selected_points.connect(
+        #     config_panel.basic_config_wrapper.patrols_scheduler.setPointsToVisit
+        # )
 
         # self.patrols_scheduler.setPointsToVisit(points)
 

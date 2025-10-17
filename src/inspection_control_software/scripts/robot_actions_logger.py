@@ -1,6 +1,11 @@
+from ctypes import alignment
 import typing
 import sys
+import datetime
 from datetime import datetime
+import csv
+import os
+
 from PyQt5.QtWidgets import (
     QApplication,
     QGroupBox,
@@ -11,37 +16,214 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QLabel,
-    QFileDialog
+    QFileDialog,
+    QLineEdit,
+    QComboBox,
+    QTextEdit,
+    QScrollArea,
 )
-from PyQt5.QtCore import QObject, Qt, pyqtSignal
+from PyQt5.QtCore import QObject, Qt, pyqtSignal, QTimer
+from PyQt5.QtGui import QFont, QTextCursor, QColor, QPalette, QDesktopServices
+
+
+
+from config_model import UserConfigFileManager
+
+from styles.buttons import border_button_style, secondary_button_style
+
+
+class CsvHandler:
+    """
+    A class to handle creating and writing to a CSV file.
+    
+    It creates the file with a specified header only if the file
+    does not already exist.
+    """
+    def __init__(self, filepath, header):
+        """
+        Initializes the CsvHandler with a file path and header.
+        
+        Args:
+            filepath (str): The path to the CSV file.
+            header (list): A list of strings for the CSV header.
+        """
+        self.filepath = filepath
+        self.header = header
+        self._create_file_if_not_exists()
+
+    def _create_file_if_not_exists(self):
+        """
+        Checks if the file exists. If not, creates it and writes the header.
+        This is a private method, intended for internal use by the class.
+        """
+        # os.path.exists() checks if a file or directory exists at the path
+        if not os.path.exists(self.filepath):
+            print(f"File '{self.filepath}' not found. Creating it now... ✍️")
+            with open(self.filepath, mode='w', newline='') as csv_file:
+                writer = csv.writer(csv_file)
+                writer.writerow(self.header) # Write the header row
+        else:
+            print(f"File '{self.filepath}' already exists.")
+
+    def append_row(self, row_data):
+        """
+        Appends a single row of data to the CSV file.
+        
+        Args:
+            row_data (list): A list of values for the new row.
+        """
+        if len(row_data) != len(self.header):
+            print("Error: Row data does not match header length.")
+            return
+            
+        # 'a' mode stands for append
+        with open(self.filepath, mode='a', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(row_data)
+        print(f"Appended row: {row_data}")
+
+# from PyQt5.QtGui import QDesktopServices
+# from PyQt5.QtCore import QUrl
+# import os
+#
+# # ... (your PyQt application setup)
+#
+# file_path = "path/to/your/document.pdf"  # Replace with your file path
+# if os.path.exists(file_path):
+#     url = QUrl.fromLocalFile(file_path)
+#     QDesktopServices.openUrl(url)
+# else:
+#     print("File not found:", file_path)
+#
+#
+#
+# options = QFileDialog.Options()
+# You can use QFileDialog.DontUseNativeDialog if you prefer
+# options |= QFileDialog.DontUseNativeDialog
+
+# The method returns a tuple: (fileName, filter)
+
+
+def add_color(msg):
+    if isinstance(msg, bool):
+        return f"<span style='color:#196F3D;font-weight: bold'>bool {msg}</span>"
+    if isinstance(msg, str):
+        return f"<span style='color:#196F3D;font-weight: bold'>str {msg}</span>"
+    if isinstance(msg, (int, float)):
+        return f"<span style='color:#633974;font-weight: bold'>num {msg}</span>"
+
+
+class FixedMessage(QGroupBox):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setStyleSheet("""
+            QGroupBox {
+                background-color: #fafafa;
+                border: 2px dashed blue;
+                border-radius: 4px;
+                font-style: italic;
+                padding: 0px;
+            }
+        """)
+
+        # self.setContentsMargins(0, 0, 0, 0)
+        self.user_config = UserConfigFileManager("./config/app_config.json")
+        self.setFlat(True)
+        config = self.user_config.read_data()
+
+        layout = QHBoxLayout()
+        self.text = QLabel(
+            f"Para ver el historil revise <span style='color: royalblue; text-decoration: underline'>{config['log_history_filepath']}</span>"
+        )
+
+        layout.setContentsMargins(6, 6, 6, 6)
+        self.show_btn = QPushButton("Mostrar")
+        self.export_btn = QPushButton("Exportar")
+
+        self.export_btn.clicked.connect(self.export_log)
+
+        self.export_btn.setStyleSheet(secondary_button_style)
+
+        layout.addWidget(self.text, 7)
+        # layout.addWidget(self.show_btn, 1)
+        layout.addWidget(self.export_btn, 1)
+        self.setLayout(layout)
+
+    def export_log(self, x):
+        options = QFileDialog.Options()
+        fileName, _ = QFileDialog.getSaveFileName(
+            self,
+            "Donde quieres gauradar el archivo de log",
+            "",  # Default directory
+            "All Files (*);;Text Files (*.txt);;Python Files (*.py)",  # Filter
+            options=options,
+        )
+        print(fileName)
+        self.text.setText(
+            f"Para ver el historil revise <span style='color: royalblue; text-decoration: underline'>{fileName}</span>"
+        )
+        self.user_config.update_value("log_history_filepath", fileName)
+
 
 class RobotActionsLoggerView(QGroupBox):
     """
     A reusable widget for displaying application log messages.
     It automatically adds timestamps and provides options to clear or save the log.
     """
+
     def __init__(self, parent=None):
-        super().__init__('Logger', parent)
-        msgs: list[str] = ["<span style='color: red; font-weight: bold'>Riascos Manyoma the best lastnames of the world</span>" for i in range(4)]
-        self.labels = [QLabel(msg) for msg in msgs]
+        super().__init__(parent)
+        self._queue_size = 5
+        self.log_queue = []
+        msgs: list[str] = ["" for i in range(self._queue_size)]
+        self.labels: QLabel = [QLabel(msg) for msg in msgs]
         layout = QVBoxLayout()
+        layout.setSpacing(2)
+
+        self.setStyleSheet("""
+            QGroupBox {
+                background-color:  white;
+                border-radius: 2px;
+                border: 1px solid gray;
+                padding:4px;
+            }
+        """)
 
         for l in self.labels:
             layout.addWidget(l)
 
+        lb = FixedMessage()  # QLabel("Para ver el historil revise <span style='color: royalblue; text-decoration: underline'>/home/user/log_history.log</span>")
+        layout.addWidget(lb)
+
+        # layout.addWidget(self.log_display)
         self.setLayout(layout)
 
-    def update_log(self, log_msgs: list) -> None:
-        for i, text in enumerate(log_msgs):
+    def update_log(self, log_msg: str) -> None:
+        if len(self.log_queue) == self._queue_size:
+            self.log_queue.pop(0)
+
+        self.log_queue = [*self.log_queue, log_msg]
+
+        # self.log_display.clear()
+        for i, text in enumerate(self.log_queue):
+            print(text)
             self.labels[i].setText(text)
 
+
 class Logger(QObject):
-    log_changed: pyqtSignal = pyqtSignal(list)
+    log_changed: pyqtSignal = pyqtSignal(str)
 
-    def __init__(self, parent: typing.Optional['QObject'] = None) -> None:
+    def __init__(self, parent: QObject = None) -> None:
         super().__init__(parent)
+        self.user_config = UserConfigFileManager("./config/app_config.json")
+        config = self.user_config.read_data()
+        self._logger = CsvHandler(header=['time', 'level', 'msg'], filepath='./log/app.csv')
 
-    def log(self) -> None:
-        self.log_changed.emit(['Harold el mejor del mundo' for i in range(4)])
+    def log(self, msg: str = "Chala es suepr linda!") -> None:
+        now = datetime.now()
+        timestamp = now.strftime("%A, %B %d, %Y - %I:%M %p")
+        self.log_changed.emit(f"<span style='color: #141414;'>{timestamp}</span> {msg}")
+        self._logger.append_row([timestamp, 'INFO', msg])
+
 
 logger = Logger()

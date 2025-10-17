@@ -137,7 +137,7 @@ class RobotCamera(QGroupBox):
         self.setLayout(self.layout)
 
     def enterEvent(self, event):
-        self.menu_btn.show()
+        # self.menu_btn.show()
 
         super().enterEvent(event)
         

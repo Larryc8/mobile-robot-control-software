@@ -3,7 +3,7 @@ from datetime import datetime
 import psycopg2
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy import and_
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 
@@ -21,7 +21,7 @@ from internal_storage.tables import (
     PatrolLink,
     CheckpointLink,
     Map,
-    Calibration
+    Calibration,
 )
 
 # cursor.execute("SELECT version();")
@@ -53,7 +53,7 @@ class InternalStorageManager:
         session = Session()
         try:
             for place in places:
-                name , email, username, institution, phone, address = place
+                name, email, username, institution, phone, address = place
                 place = Place(
                     name=name,
                     email=email,
@@ -514,8 +514,8 @@ class InternalStorageManager:
                     cursor.execute(
                         """
                             SELECT     EXTRACT(MONTH FROM date) AS month,
-                            COUNT(*) AS total_count FROM   alert 
-                            WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100 
+                            COUNT(*) AS total_count FROM   alert
+                            WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100
                             GROUP BY     month ORDER BY     month;
                             """
                     )
@@ -540,10 +540,10 @@ class InternalStorageManager:
                     cursor.execute(
                         """
 
-                        SELECT     EXTRACT(YEAR FROM date) AS year,    
+                        SELECT     EXTRACT(YEAR FROM date) AS year,
                         EXTRACT(MONTH FROM date) AS month,
                         EXTRACT(WEEK FROM date) - EXTRACT(WEEK FROM DATE_TRUNC('month', date)) + 1 AS week_of_month,
-                        COUNT(*) AS element_count FROM  alert  
+                        COUNT(*) AS element_count FROM  alert
                         GROUP BY     year, month, week_of_month ORDER BY     year, month, week_of_month;
                             """
                     )
@@ -595,29 +595,66 @@ class InternalStorageManager:
             session.close()
 
     def save_calibration(self, calibration_data: dict):
-        ''''
+        """'
         Save Save Calibrations
 
         parameter:
-        Calibration_data --> 
-        '''
+        Calibration_data -->
+        """
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         # Base.metadata.create_all(engine) # Create tables if they don't exist
         session = Session()
         try:
-            calibration_value = calibration_data.get('value')
-            checkpoint_id = calibration_data.get('checkpoint_id')
-            calibration = Calibration(checkpoint_id=checkpoint_id,  calibration_value=calibration_value )
+            calibration_value = calibration_data.get("value")
+            checkpoint_id = calibration_data.get("checkpoint_id")
+            calibration = Calibration(
+                checkpoint_id=checkpoint_id, calibration_value=calibration_value
+            )
 
-            session.add(calibration )
+            session.add(calibration)
             session.commit()
-            
+
             print("Sample data added successfully!")
 
+            session.close()
         except Exception as e:
             session.rollback()
             print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def get_calibration(self) -> dict:
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            print("--- Running Calculation Query ---")
+
+            # Use sqlalchemy.func to call SQL functions like AVG and STDDEV
+            # We query for the average (mean) and standard deviation of the column.
+            calculation_query = session.query(
+                func.avg(Calibration.calibration_value).label("mean_value"),
+                func.stddev(Calibration.calibration_value).label("std_dev_value"),
+            )
+
+            # Execute the query and get the single result row
+            results = calculation_query.one()
+
+            # 6. Display the Results
+            mean_val = results.mean_value
+            std_dev_val = results.std_dev_value
+
+            print("📊 Statistics for 'calibratio_value':")
+            print(f" -> Mean: {mean_val:.4f}")
+            print(f" -> Standard Deviation: {std_dev_val:.4f}")
+            session.close()
+            return {"std_dev_value": std_dev_val, "mean_value": mean_val}
+        except:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+            return {}
         finally:
             session.close()
 
@@ -685,8 +722,11 @@ class DataBase(QThread):
             self.action_completed.emit("SuccessSaveAlerts", {})
 
         if self.action == "save_calibration":
-            data = self.internal_storage_manager.save_calibration(self.data) 
+            data = self.internal_storage_manager.save_calibration(self.data)
             self.action_completed.emit("SuccessSaveCalibration", {})
+        if self.action == "get_calibration":
+            data = self.internal_storage_manager.get_calibration()
+            self.action_completed.emit("SuccessGetCalibration", data)
 
 
 if __name__ == "__main__":

@@ -11,10 +11,7 @@ from datetime import datetime
 import time
 
 from points_scheduler import PointsScheduler
-from database_manager import DataBase
-import robot_actions_logger
-
-
+from database_manager import DataBase 
 
 from pyqttoast import Toast, ToastPreset
 
@@ -195,7 +192,6 @@ class ScheduleChecker(QThread):
     def handlePatrolsForcedExec(self):
         self.isSinglePatrolFinished = True
         self.points_scheduler.restart()
-        robot_actions_logger.logger.log()
         pass
 
     def forced_cancel(self, x):
@@ -233,6 +229,7 @@ class PatrolsEscheduler(QObject):
         self.points_scheduler = PointsScheduler()
         self.database = None
         self.actions_queue = []
+        self.patrols_data_test = None
 
         # self.patrols_data = {
         #     "0": {
@@ -255,6 +252,7 @@ class PatrolsEscheduler(QObject):
         #     },
         # }
         self.patrols_data = {}
+        self.patrols_data_copy = {}
         self.patrols_for_scheduling = self.patrols.copy()
         self.scheduled_patrols = []
         self.isScheduling = True
@@ -267,7 +265,7 @@ class PatrolsEscheduler(QObject):
     # def patrols_schedule_generator(self):
     # for patrol in self.
     def load_test_patrols(self, patrols_count):
-        self.patrols_data = {
+        self.patrols_data_test = {
             str(id): {
                 "days": {
                     "Lun": {
@@ -298,6 +296,7 @@ class PatrolsEscheduler(QObject):
         # self.patrols_data.update(data)
         if state == "SuccessGetAllUserPatrols":
             self.patrols_data.update(data)
+            self.patrols_data_copy = self.patrols_data.copy()
             self.update_patrols_view.emit(self.patrols_data)
 
         if state == "SuccessSavePatrol":
@@ -397,6 +396,7 @@ class PatrolsEscheduler(QObject):
         self.indexKeeper["currentpatrol_index"] = 0
         self.patrolIsRunning = False
         print(message)
+        self.patrols_data = self.patrols_data_copy
         # self.start_button.setEnabled(True)
         # self.cancel_button.setEnabled(False)
         if self.scheduler:
@@ -449,13 +449,20 @@ class PatrolsEscheduler(QObject):
         self.patrols = []
         self.on_calibration = on_calibration
 
+        if self.on_calibration:
+            self.patrols_data = self.patrols_data_test
+        else:
+            self.patrols_data  = self.patrols_data_copy
+
+
         for id, patrol in self.patrols_data.items():
             for patrol_day in patrol["days"].values():
                 self.patrols.append(patrol_day)
                 self.patrols_data[id]["delayed"] = None
                 self.patrols_data[id]["state"] = None
 
-        self.update_patrols_view.emit(self.patrols_data)
+        if not self.on_calibration:
+            self.update_patrols_view.emit(self.patrols_data)
 
         print(self.patrols)
         self.patrols.sort(key=self.sort_key)
@@ -480,8 +487,9 @@ class PatrolsEscheduler(QObject):
 
         if self.points_scheduler.setGoals():
             self.start_patrols_scheduling()
-            self.patrols_scheduling_state.emit("start")
-            self.weekday_changed.emit(datetime.now().weekday())
+            if not self.on_calibration:
+                self.patrols_scheduling_state.emit("start")
+                self.weekday_changed.emit(datetime.now().weekday())
 
     def filter_delayed_patrols(self, patrol):
         day, hour, minute = self.getDatetime(patrol)

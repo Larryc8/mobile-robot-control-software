@@ -15,6 +15,7 @@ from cv_bridge import CvBridge
 import cv2 as cv
 import tf
 from math import radians, degrees
+from random import randint
 
 
 from sensor_msgs.msg import Image
@@ -34,8 +35,11 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from utils.patrol import PatrolEndState
 from database_manager import AlertStatus
+import robot_actions_logger
+from robot_actions_logger import add_color
 
 from robot_navigation_checker import RobotNavigationChecker
+
 if __name__ != "__main__":
     import ImageSimilarity.image_similarity as imgsim
 from database_manager import DataBase
@@ -55,6 +59,7 @@ class PointsScheduler(QObject):
     ## current pointid, next point id, numbres of points tha left, total points
     patrol_progress = pyqtSignal(str, int, int, PatrolEndState)
     alert_generated = pyqtSignal(str, AlertStatus)
+    check_done = pyqtSignal(int)
 
     def __init__(self, points=[], done_task=None, feedback_task=None) -> None:
         super().__init__()
@@ -69,6 +74,7 @@ class PointsScheduler(QObject):
         self.scan_angles = [180, 100, 90, 60, 30, 0]
         self.current_yaw = None
         self.target_yaw = None
+        self.current_point_calibration = None
         self.database = None
         self.on_calibration = False
         self.current_patrolid = None
@@ -92,36 +98,54 @@ class PointsScheduler(QObject):
         self.track = [0]
         self.navigation_checker = RobotNavigationChecker(self.track)
         self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
-        self.pose_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.amcl_pose_callback)
-        self.odom_sun = rospy.Subscriber('/odom', Odometry, self.odom_callback)
-        self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=3)
-        self.simple_goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, )
+        self.pose_sub = rospy.Subscriber(
+            "/amcl_pose", PoseWithCovarianceStamped, self.amcl_pose_callback
+        )
+        self.odom_sun = rospy.Subscriber("/odom", Odometry, self.odom_callback)
+        self.cmd_vel_pub = rospy.Publisher("cmd_vel", Twist, queue_size=3)
+        self.simple_goal_pub = rospy.Publisher(
+            "/move_base_simple/goal",
+            PoseStamped,
+        )
 
         self.navigation_checker.alert_generated.connect(self.handleAlertGeneration)
 
         # actionlib.GoalStatus.SUCCEEDED
         #
-    def setup(self, on_calibration: bool =False) -> int:
-        '''
+
+    def setup(self, on_calibration: bool = False) -> int:
+        """
         this function sets the initials conditions for the patrols scheduler
         sort the point to make the robot follow the shrortest path
-        '''
+        """
         points: dict = self._goals.copy()
         new_goals: dict
         self.on_calibration = on_calibration
         self.cancelled = False
 
         if on_calibration:
-            new_goals = { id: points.get(id) for id in points.keys() if points.get(id).get('image') }
+            new_goals = {
+                id: points.get(id)
+                for id in points.keys()
+                if points.get(id).get("image")
+            }
         else:
             new_goals = points
 
+        print("NEW POIINT", new_goals)
 
-        print('NEW POIINT', new_goals)
+        new_goals, new_goals_original = sort_nearest_neighbor(
+            new_goals,
+            current_position=(
+                "1",
+                {
+                    "x_meters": self.current_position_x,
+                    "y_meters": self.current_position_y,
+                },
+            ),
+        )
 
-        new_goals, new_goals_original  = sort_nearest_neighbor(new_goals, current_position=('1', {'x_meters':self.current_position_x, 'y_meters':self.current_position_y}))
-
-        print('NEW POIINT', new_goals)
+        print("NEW POIINT", new_goals)
         self._goals = new_goals_original.copy()
         self.goals = new_goals.copy()
 
@@ -174,7 +198,7 @@ class PointsScheduler(QObject):
         print("points canceled from points sche", self.cancelled)
 
     def dispatch(self, patrolid=None):
-        print(f'{__name__} dispatched!! len(goals): {len(self.goals)}')
+        print(f"{__name__} dispatched!! len(goals): {len(self.goals)}")
         self.current_patrolid = patrolid
         self.patrol_progress.emit(
             self.current_patrolid,
@@ -235,6 +259,11 @@ class PointsScheduler(QObject):
                 ids_list[-1],
                 state,
             )
+
+        robot_actions_logger.logger.log(
+            f"Punto revisado con exito {self.goals_count - len(self.goals)} de {self.goals_count}"
+        )
+        self.check_done.emit(1)
 
         # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
         rospy.loginfo("Finished in state %s %s", str(state), str(len(self.goals)))
@@ -301,34 +330,43 @@ class PointsScheduler(QObject):
 
     def edit_image(self, path: str):
         image = cv.imread(path)
-        file_name = path.split('/')[-1]
-        file_path = '/'.join(path.split('/')[:-1]) 
-        name = file_name.split('.')[0]
-        ext = '.'.join(file_name.split('.')[0:]) 
+        file_name = path.split("/")[-1]
+        file_path = "/".join(path.split("/")[:-1])
+        name = file_name.split(".")[0]
+        ext = ".".join(file_name.split(".")[0:])
 
         x, y = 60, 60  # Starting coordinates (top-left corner)
         width, height = 170, 150  # Width and height of crop
 
-        cropped_image = image[y:y+height, x:x+width]
-        new_path = f'{file_path}/{name}_cropped.{ext}'
-        print(f'{__name__}: {new_path}')
+        cropped_image = image[y : y + height, x : x + width]
+        new_path = f"{file_path}/{name}_cropped.{ext}"
+        print(f"{__name__}: {new_path}")
         cv.imwrite(new_path, cropped_image)
 
         return new_path
 
     def subroutines_wrapper(self):
         x, y, yaw = self.currrent_pose
-        yaw_degrees = round(degrees(yaw)%360) 
-        delta_yaw = 60
-        self.scan_angles = [angle%360 for angle in range(yaw_degrees - delta_yaw, yaw_degrees + delta_yaw, 5)] 
-        self.get_image_similarity()
-        print('cuurent yaw: ', yaw_degrees)
+        yaw_degrees = round(degrees(yaw) % 360)
+        delta_yaw = 40
+        self.scan_angles = [
+            angle % 360
+            for angle in range(yaw_degrees - delta_yaw, yaw_degrees + delta_yaw, 10)
+        ]
+        # self.get_image_similarity()
+        print("cuurent yaw: ", yaw_degrees)
         print(self.scan_angles)
+        robot_actions_logger.logger.log(f"Comenzando scaneo....")
         r = self.scan_subroutine(x, y, self.scan_angles.copy())
-        print(r)
+        robot_actions_logger.logger.log(
+            f"Scaneo finalizado resultado de la similaridad en{max(r)}"
+        )
 
         if self.on_calibration:
             self.save_calibration(max(r))
+        else:
+            self.current_point_calibration = max(r)
+            self.get_calibration()
 
     def odom_callback(self, msg):
         """
@@ -337,31 +375,38 @@ class PointsScheduler(QObject):
         # --- Position ---
         position_x = msg.pose.pose.position.x
         position_y = msg.pose.pose.position.y
-        
+
         # --- Orientation (Quaternion to Euler) ---
         orientation_q = msg.pose.pose.orientation
-        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        orientation_list = [
+            orientation_q.x,
+            orientation_q.y,
+            orientation_q.z,
+            orientation_q.w,
+        ]
         (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(orientation_list)
-        
+
         # Convert yaw from radians to degrees
         yaw_deg = degrees(yaw)
-        self.current_yaw = yaw_deg%360
+        self.current_yaw = yaw_deg % 360
 
         # --- Velocities ---
         linear_velocity_x = msg.twist.twist.linear.x
-        angular_velocity_z = msg.twist.twist.angular.z # Yaw rate
+        angular_velocity_z = msg.twist.twist.angular.z  # Yaw rate
 
     def scan_subroutine(self, x: float, y: float, target_yaws_array: list) -> list:
         """
         Creates an action client, sends a goal to the move_base server, and waits for completion.
         """
         timeout: float = 4
-        yaw_tolerance = degrees(rospy.get_param('/move_base/DWAPlannerROS/yaw_goal_tolerance')) % 360
+        yaw_tolerance = (
+            degrees(rospy.get_param("/move_base/DWAPlannerROS/yaw_goal_tolerance"))
+            % 360
+        )
 
         if self.cancelled:
-            print('scan scan_subroutine cancelled')
+            print("scan scan_subroutine cancelled")
             return [0]
-
 
         target_yaw = target_yaws_array.pop()
         theta_degrees = target_yaw
@@ -377,37 +422,37 @@ class PointsScheduler(QObject):
         theta_rad = radians(theta_degrees)
 
         quaternion = tf.transformations.quaternion_from_euler(0, 0, theta_rad)
-        
+
         goal.pose.orientation.x = quaternion[0]
         goal.pose.orientation.y = quaternion[1]
         goal.pose.orientation.z = quaternion[2]
         goal.pose.orientation.w = quaternion[3]
 
-        rospy.loginfo("Sending goal (X: %.2f, Y: %.2f, Theta: %.2f)..." % (x, y, theta_degrees))
+        rospy.loginfo(
+            "Sending goal (X: %.2f, Y: %.2f, Theta: %.2f)..." % (x, y, theta_degrees)
+        )
         # self.client1.send_goal(goal)
 
         start = time.time()
         self.simple_goal_pub.publish(goal)
-        #time.sleep(3)
+        # time.sleep(3)
 
-
-        while abs(self.current_yaw - theta_degrees) > yaw_tolerance :
+        while abs(self.current_yaw - theta_degrees) > yaw_tolerance:
             if self.cancelled:
-                print('cancelled set_target_pose')
-                return
+                print("cancelled set_target_pose")
+                return [0]
 
             if abs(time.time() - start) > timeout:
                 break
-        
+
         rate: float = self.get_image_similarity()
 
         if not target_yaws_array:
             rospy.loginfo("Termino el scaneo.....")
-            print('el grado de similariddad es: ', rate)
+            print("el grado de similariddad es: ", rate)
             return [rate]
 
-
-        return  [*self.scan_subroutine(x, y, target_yaws_array.copy()),  *[rate]]
+        return [*self.scan_subroutine(x, y, target_yaws_array.copy()), *[rate]]
 
     def get_image_similarity(self) -> float:
         similarity_rate: float = 0
@@ -426,26 +471,41 @@ class PointsScheduler(QObject):
                 [similarity_rate] = list(r.values())
                 if self.on_calibration:
                     pass
-  
 
-                logger.error(f'{list(r.keys())[0]},{list(r.values())[0]}')
+                logger.error(f"{list(r.keys())[0]},{list(r.values())[0]}")
             return similarity_rate
         except Exception as e:
-            print('subroutine_wrapper: ', e)
+            print("subroutine_wrapper: ", e)
             return 0
 
     def save_calibration(self, calibration_value: float) -> None:
-        self.database = DataBase(action='save_calibration', data={'checkpoint_id':self.pointid, 'value': calibration_value})
+        self.database = DataBase(
+            action="save_calibration",
+            data={"checkpoint_id": self.pointid, "value": calibration_value},
+        )
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
+    def get_calibration(self):
+        self.database = DataBase(action="get_calibration", data={})
+        self.database.action_completed.connect(self.database_task_finished)
+        self.database.start()
 
     def database_task_finished(self, msg, data):
-        print('datbase calibration Finished: ', msg)
+        print("datbase calibration Finished: ", msg)
+
+        if msg == "SuccessGetCalibration":
+            mean = data["mean_value"]
+            std = data["std_dev_value"]
+            ref = self.current_point_calibration > (mean - std * 3)
+            robot_actions_logger.logger.log(
+                f"Scaneo finalizados. std: {std} mean: {mean} - is good {ref}"
+            )
 
         self.database.quit()
         self.database.wait()
         self.database = None
+
 
 # Can do other work here
 if __name__ == "__main__":
@@ -457,7 +517,7 @@ if __name__ == "__main__":
         print("SOy un callback de FEEDBACK")
         print(x)
 
-    rospy.init_node('amcl_pose_chatter', anonymous=True)
+    rospy.init_node("amcl_pose_chatter", anonymous=True)
     ex = PointsScheduler(done_task=cbdone, feedback_task=cbfeeback)
     # ex.dispatch()
     # ex.set_target_pose(0.5, 0.5, 200)

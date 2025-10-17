@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
-from utils.patrol import PatrolEndState, userOperation, operationMode
+from utils.patrol import PatrolEndState, userOperation, operationMode, checkpointEndState
 
 from styles.buttons import border_button_style, secondary_button_style, border_button_style_danger
 
@@ -47,7 +47,7 @@ class CustomLabel(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                background-color: #DCDCDC;
+                background-color: lightgray;
                 border-radius: 5px;
                 font-weight: bold;
             }
@@ -80,6 +80,7 @@ class ImageCarousel(QWidget):
         self.data_container = []
         self.imaages_to_show = []
         self.use_filepath = False
+        self.data_model = {}
 
         # UI Elements
         self.image_label = QLabel()
@@ -120,7 +121,7 @@ class ImageCarousel(QWidget):
         ]
 
         for label in self.images_thumbnail:
-            label.setStyleSheet("border: 2px solid #A9A9A9; background-color: #A9A9A9")
+            label.setStyleSheet("border: 2px solid #A9A9A9; background-color: #808080")
             thumbnails_layout.addWidget(label)
             label.setFixedSize(200, 170)
 
@@ -136,6 +137,9 @@ class ImageCarousel(QWidget):
 
         self.setLayout(main_layout)
         self.show_empty_image()
+
+    def create_data_model(self) ->None:
+        pass
 
     def update_thumbnail(self, index):
         for thumbnail in self.images_thumbnail:
@@ -162,12 +166,16 @@ class ImageCarousel(QWidget):
             x = [
                 label for label in self.images_thumbnail if label.id == current_point_id
             ]
+            self.data_model[current_point_id] = checkpointEndState.CHECKED.value#"<span style='color: green; font-weight: bold'>Bueno</span>"
             if len(x):
-                x[0].status_label.setText("Revisado!")
+                x[0].status_label.setText(checkpointEndState.CHECKED.value)
 
-    def reset_dreinage_info(self, x=None, y=None):
+    def reset_dreinage_status(self, x=None, y=None):
         for thumbnail in self.images_thumbnail:
-            thumbnail.status_label.setText("Pendiente")
+            thumbnail.status_label.setText(checkpointEndState.PENDING.value)
+
+        for key, value in self.data_model.items():
+            self.data_model[key] = checkpointEndState.PENDING.value
 
     def load_stored_points(self, stored_points):
         while len(self.buffer_data):
@@ -179,6 +187,7 @@ class ImageCarousel(QWidget):
             for point in stored_points.get("points"):
                 id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
                 self.buffer_data.append((id, image))
+                self.data_model[id] = checkpointEndState.PENDING.value
 
             self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
 
@@ -206,6 +215,7 @@ class ImageCarousel(QWidget):
         self.use_filepath = use_filepath
 
         for i, label in enumerate(self.images_thumbnail):
+            label.status_label.setText(checkpointEndState.NONE.value)
             if i < len(data_array):
                 if use_filepath:
                     id, data = data_array[i]
@@ -239,6 +249,8 @@ class ImageCarousel(QWidget):
                 label.label.setPixmap(scaled_pixmap)
                 label.label.setScaledContents(True)
                 label.id = id
+                if id:
+                    label.status_label.setText(self.data_model[id])
             else:
                 empty_pixmap = QPixmap(600, 400)
                 empty_pixmap.fill(Qt.white)
@@ -250,6 +262,10 @@ class ImageCarousel(QWidget):
 
     def display_current_image(self):
         if len(self.data_container) == 0:
+            return
+
+
+        if self.current_index >= len(self.data_container):
             return
 
         if self.use_filepath:
