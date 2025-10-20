@@ -86,6 +86,7 @@ class MyTableWidget(QWidget):
         config_panel = ConfigPanel(nodes_manager=self.nodes_manager, parent=parent, patrols_scheduler=patrols_scheduler)
 
         config_panel.basic_config_wrapper.calibration_started.connect(home_panel.patrol_panel.enable_components)
+        config_panel.basic_config_wrapper.calibration_started.connect(home_panel.visualization_panel.enable_components)
 
         #
         # home_panel.visualization_panel.map_loaded.connect(

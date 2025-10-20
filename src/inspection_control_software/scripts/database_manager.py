@@ -624,7 +624,7 @@ class InternalStorageManager:
         finally:
             session.close()
 
-    def get_calibration(self) -> dict:
+    def get_calibration(self, pointid: str) -> dict:
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         # Base.metadata.create_all(engine) # Create tables if they don't exist
@@ -637,10 +637,11 @@ class InternalStorageManager:
             calculation_query = session.query(
                 func.avg(Calibration.calibration_value).label("mean_value"),
                 func.stddev(Calibration.calibration_value).label("std_dev_value"),
-            )
+            ).filter_by(checkpoint_id=pointid)
 
             # Execute the query and get the single result row
             results = calculation_query.one()
+            print(__name__, results)
 
             # 6. Display the Results
             mean_val = results.mean_value
@@ -651,12 +652,12 @@ class InternalStorageManager:
             print(f" -> Standard Deviation: {std_dev_val:.4f}")
             session.close()
             return {"std_dev_value": std_dev_val, "mean_value": mean_val}
-        except:
+
+        except Exception as e:
             session.rollback()
-            print(f"Error setting up data: {e}")
-            return {}
-        finally:
             session.close()
+            print(f"Error setting up data: {e}")
+            return {"std_dev_value": -1, "mean_value": -1}
 
 
 class DataBase(QThread):
@@ -725,7 +726,7 @@ class DataBase(QThread):
             data = self.internal_storage_manager.save_calibration(self.data)
             self.action_completed.emit("SuccessSaveCalibration", {})
         if self.action == "get_calibration":
-            data = self.internal_storage_manager.get_calibration()
+            data = self.internal_storage_manager.get_calibration(self.data.get("pointid"))
             self.action_completed.emit("SuccessGetCalibration", data)
 
 

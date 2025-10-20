@@ -67,7 +67,6 @@ from rview import MyViz
 from better_image_display import ImageViewer
 from heatmap_generator import HeatmapGenerator
 from database_manager import DataBase, InternalStorageManager, AlertStatus
-from points_generator import CheckPointDisplay
 
 from styles.labels import (
     error_label_style,
@@ -494,14 +493,12 @@ class AlertDetails(QGroupBox):
         self.datetime_label = QLabel("1234-23-24")
         self.back2stats_button = QPushButton("Volver a Estadisticas")
         self.playdata_button = QPushButton("Play recorded data")
-        self.point = CheckPointDisplay()
 
         self.title_label.setStyleSheet(title_label_style)
         self.datetime_label.setStyleSheet(section_header_label_style)
 
         self.layout.addWidget(self.title_label, 0, 2)
         self.layout.addWidget(self.datetime_label, 1, 2)
-        self.layout.addWidget(self.point, 0, 0, 4, 2)
         self.layout.addWidget(self.back2stats_button, 4, 0, 1, 3)
         self.layout.addWidget(self.playdata_button, 3, 2)
         self.setLayout(self.layout)

@@ -97,7 +97,7 @@ class StaticParamsConfigLoader:
 
 class ConfigModel:
     def __init__(
-        self, param_file: str = "./mapping_params.yml", workspace: str = "elpepe"
+        self, param_file: str = "./config/mapping_params.yml", workspace: str = "elpepe"
     ) -> None:
         self.workspace = workspace
         self.param_file = param_file
@@ -126,7 +126,7 @@ class ConfigModel:
         [filename, extension] = filename_with_extension.split(".")
         # filename = 'mapping_params'
         print(filename)
-        param_file = f"./{filename}_range.yml"
+        param_file = f"./config/{filename}_range.yml"
         with open(param_file, "r") as file:
             data = yaml.load(file, Loader=yaml.SafeLoader)
             # print('RANGE', data)

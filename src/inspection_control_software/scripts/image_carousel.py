@@ -131,6 +131,7 @@ class ImageCarousel(QWidget):
         layout.addWidget(self.next_button)
 
         main_layout = QVBoxLayout()
+        main_layout.addWidget(QLabel('fotos de referencia para la inspeccion tomadas de la zonas de interes'))
         main_layout.addWidget(self.image_label)
         main_layout.addLayout(layout)
         main_layout.addLayout(button_layout)

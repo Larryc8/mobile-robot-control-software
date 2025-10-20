@@ -1,5 +1,6 @@
 import sys
 import re
+import rospy
 from typing import List
 from enum import Enum
 
@@ -23,6 +24,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QProgressBar,
     QMenu,
+    QActionGroup,
     QAction,
     QFileDialog,
     QMessageBox,
@@ -68,9 +70,13 @@ from styles.labels import (
     minimal_label_style,
     muted_label_style,
     muted_mini_label_style,
+    warning_label_style,
+    info_label_style,
 )
 
 from styles.patrols import patrol_base_style, patrol_selected_style
+
+from sensor_msgs.msg import BatteryState 
 
 # from points_manager import PointsGenerator
 from better_image_display import ImageViewer
@@ -82,6 +88,7 @@ from input_textdialog import InputDialog, CustomDialog
 from robot_camera_view import RobotCamera
 from image_carousel import ImageCarousel
 from robot_actions_logger import RobotActionsLoggerView 
+from place_form import PlaceForm
 import  robot_actions_logger
 
 from utils.patrol import PatrolEndState, userOperation, operationMode
@@ -212,8 +219,12 @@ class VisualizationPanel(QWidget):
         self.global_state_holder = global_state_holder
         self.mapAsPrincipalView = True
         self.buffer_data_robot_camera = []
+        self.view_options = {}
 
-        self.rviz = MyViz(configfile="./config_navigation.rviz")
+        self.message = QLabel('MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas ')
+        self.message.hide()
+
+        self.rviz = MyViz(configfile="./config/config_navigation.rviz")
 
         self.robotcamera = RobotCamera(
             buffer=self.buffer_data_robot_camera, parent=self.parent
@@ -223,7 +234,6 @@ class VisualizationPanel(QWidget):
 
         self.robot_actions_logger = RobotActionsLoggerView()
         self.logger = robot_actions_logger.logger
-        self.logger.log_changed.connect(self.robot_actions_logger.update_log)
 
         self.drainage_checkpoints_win = ImageCarousel(
             buffer=self.buffer_data_robot_camera
@@ -249,13 +259,11 @@ class VisualizationPanel(QWidget):
             self.load_map_button,
             self.points_window_btn,
             self.create_map_btn,
-            self.followrobot_check,
         ) = (
             QPushButton("Guardar mi mapita"),
             QPushButton("Cargar mapa"),
             QPushButton("puntos de interes"),
             QPushButton("Crear mapa"),
-            QCheckBox(),
         )
 
         [
@@ -269,30 +277,59 @@ class VisualizationPanel(QWidget):
         ]
 
         self.view_menu_btn = QPushButton("Opciones")
+        self.view_menu_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c0392b;
+                color: white;
+                border: none;
+                padding: 2px;
+            }
+            QPushButton:pressed {
+                background-color: #2980b9;
+                color: #f1c40f;
+                border: none;
+                padding: 2px;
+            }
+        """)
+        
         # self.layout.addWidget(button)
 
         # Create the QMenu
         view_menu = QMenu(self)
+        view_options_action_group = QActionGroup(self) 
 
         # Add actions to the menu
         action1 = view_menu.addAction("Action 1")
         action2 = view_menu.addAction("Action 2")
+
+        action1.setCheckable(True)
+        action2.setCheckable(True)
+
+        view_options_action_group.addAction(action1)
+        view_options_action_group.addAction(action2)
+
         view_menu.addSeparator() # Add a separator line
-        action3 = view_menu.addAction("Action 3")
+        self.action3 = view_menu.addAction("ajustTrueuta al robot")
+        self.action3.setWhatsThis('No se que poner')
+        self.action3.setCheckable(True)
+
         view_menu.addSeparator() # Add a separator line
-        action4 = view_menu.addAction(QApplication.style().standardIcon(QStyle.SP_DirLinkIcon), "Guardar referencia")
+        self.action4 = view_menu.addAction(QApplication.style().standardIcon(QStyle.SP_DirLinkIcon), "Guardar referencia")
+        self.action4.setEnabled(False)
 
         # Connect actions to methods
         action1.triggered.connect(lambda: self.setView(0))
         action2.triggered.connect(lambda: self.setView(1))
-        action3.triggered.connect(lambda: print(1))
-        action4.triggered.connect(lambda: self.robotcamera.buffer_reference_image())
+        self.action3.triggered.connect(lambda: self.handleActionSelected(self.action3))
+        self.action4.triggered.connect(lambda: self.robotcamera.buffer_reference_image())
 
         # Set the menu to the button
         self.view_menu_btn.setMenu(view_menu)
 
 
         # self.view_menu_btn.setStyleSheet(border_button_style + button_with_menu_style)
+        self.message.setStyleSheet(info_label_style)
+        view_menu.setStyleSheet(menu_style)
         self.load_map_button.setStyleSheet(primary_button_style)
         self.points_window_btn.setStyleSheet(secondary_button_style + button_with_menu_style)
         self.create_map_btn.setStyleSheet(border_button_style)
@@ -309,7 +346,6 @@ class VisualizationPanel(QWidget):
             self.rviz_options_layout.addWidget(widget, alignment=Qt.AlignLeft)
             for widget in (self.view_menu_btn, )
         ]
-        self.followrobot_check.setText("Ajustar la vista a los movimientos del robot?")
         self.stack_config_btn = QPushButton("cmabiar")
         # self.followrobot_label.setStyleSheet("background-color: #f0f0f0;")
 
@@ -317,20 +353,24 @@ class VisualizationPanel(QWidget):
         self.load_map_button.clicked.connect(self.handleLoadMap)
         self.map_loaded.connect(self.parent.pointsWindow.load_map)
         self.create_map_btn.clicked.connect(self.toggleCreaeteSaveMap)
-        # self.followrobot_check.stateChanged.connect(self.setFollowRobot)
         self.save_map_button.hide()
 
-        view_menu = QMenu("checkpoints", self)
-        view_menu.setStyleSheet(menu_style)
+        menu = QMenu("checkpoints", self)
+        menu.setStyleSheet(menu_style)
         show_checkpoints_action = QAction("puntos de interes", self)
         show_checkpoints_action.triggered.connect(self.show_points_window)
-        view_menu.addAction(show_checkpoints_action)
+        menu.addAction(show_checkpoints_action)
 
         show_dreinage_action = QAction("desagues", self)
         show_dreinage_action.triggered.connect(self.show_dreinage_window)
-        view_menu.addAction(show_dreinage_action)
-        self.points_window_btn.setMenu(view_menu)
+        menu.addAction(show_dreinage_action)
+        self.points_window_btn.setMenu(menu)
         # self.save_button.setEnabled(False)
+        #
+
+        self.logger.log_changed.connect(self.robot_actions_logger.update_log)
+        self.robot_actions_logger.log_file_updated.connect(self.logger.update_log_file)
+
         self.stack_config_btn.clicked.connect(self.toggleCameraMapView)
         # self.points_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
@@ -348,16 +388,32 @@ class VisualizationPanel(QWidget):
         self.setView(0)
         # self.rviz.hide()
         # self.toggleCameraMapView()
+        self.battery_state = BatteryIndicator()
 
         
 
         self.layout.addLayout(self.rviz_options_layout, 0, 0)
-        self.layout.addWidget(QLabel('MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas '), 0, 1)
-        self.layout.addWidget(BatteryIndicator(), 0, 2, alignment=Qt.AlignLeft)
-        self.layout.addWidget(self.stacked_widgets_container, 1, 0, 1, 3)
-        self.layout.addWidget(self.robot_actions_logger, 2,0, 1, 3)
-        self.layout.addLayout(self.buttons_layout, 3, 0, 1, 3)
+        self.layout.addWidget(self.message, 0, 1)
+        self.layout.addWidget(self.battery_state, 0, 3)
+        self.layout.addWidget(self.stacked_widgets_container, 1, 0, 1, 4)
+        self.layout.addWidget(self.robot_actions_logger, 2,0, 1, 4)
+        self.layout.addLayout(self.buttons_layout, 3, 0, 1, 4)
         self.setLayout(self.layout)
+
+        self.layout.setAlignment(self.battery_state, Qt.AlignLeft)
+
+    def enable_components(self, enable):
+        if not enable:
+            self.message.show()
+            return
+
+        self.message.hide()
+
+    def handleActionSelected(self, action3):
+        self.setFollowRobot(action3.isChecked())
+        action3.setText('desajustar vista del robot' if action3.isChecked() else 'ajsutar vista al robot')
+        print(action3.isChecked())
+
 
     def show_log(self):
         self.stacklayout.setCurrentIndex(2)
@@ -424,9 +480,9 @@ class VisualizationPanel(QWidget):
 
     def setFollowRobot(self, x):
         self.rviz.setUp("followrobot", x)
-        if not x:
-            self.rviz.setUp("scale", 60)
-            self.rviz.setUp("globalframe", "map")
+        # if not x:
+        #     self.rviz.setUp("scale", 60)
+        #     self.rviz.setUp("globalframe", "map")
 
     def handleSaveInDatabase(self, data):
         self.save_in_database.emit(data)
@@ -450,6 +506,7 @@ class VisualizationPanel(QWidget):
             dg = CustomDialog(
                 self.parent,
                 "Creacion de mapa sigue activo",
+                message='perderá todo el progreso que tiene hasta ahora!',
                 positive_response="Seguir creando",
                 negative_response="Descartar",
                 retries=1,
@@ -471,7 +528,7 @@ class VisualizationPanel(QWidget):
             dg = CustomDialog(
                 self.parent,
                 "Ya hay un mapa cargado",
-                message="Si cambia el mapa perdera los puntos de interés \nque haya agregado",
+                message="Si cambia el mapa perderá los puntos de interés que haya agregado \n¡para recuperarlos cargue el mapa de nuevo!",
                 positive_response="Conservar Mapa",
                 negative_response="Descartar",
                 retries=0,
@@ -547,7 +604,8 @@ class VisualizationPanel(QWidget):
 
         # if self.nodes_manager.topicHasPublisher("/scan"):
         # self.save_map_button.setEnabled(False)
-        dialog = InputDialog(self.parent)
+        place_form = PlaceForm()
+        dialog = InputDialog(self.parent, title='Guardar archivo de mapeo como:', child=place_form)
         dialog.exec_()
         print("VizPanel,dialog", dialog.filename)
         mapname = dialog.filename
@@ -582,6 +640,8 @@ class VisualizationPanel(QWidget):
         self.global_state_holder.currentUserOperation = userOperation.IDLE
         self.selected_user_operation.emit(userOperation.IDLE)
 
+        self.action4.setEnabled(False)
+
     def handleSavePoints(self, points):
         self.update_points.emit(points)
         pass
@@ -611,6 +671,7 @@ class VisualizationPanel(QWidget):
             # button = dlg.exec()
             return
 
+        self.action4.setEnabled(True)
         self.enable.emit("localization", False)
         self.global_state_holder.currentUserOperation = userOperation.CREATEMAP
         file_path = ""
@@ -739,7 +800,8 @@ class SelectModePanel(QGroupBox):
         if self.global_state_holder.currentUserOperation == userOperation.CREATEMAP:
             dg = CustomDialog(
                 self.parent,
-                "Creacion de mapa sigue activo",
+                "Creacion de mapa sigue activo!",
+                message='perderá todo el progreso que tiene hasta ahora',
                 positive_response="Seguir creando",
                 negative_response="Descartar",
                 retries=1,
@@ -818,6 +880,7 @@ class SelectModePanel(QGroupBox):
             if dg.response == "Positive":
                 return
             self.patrol_panel.patrols_container.patrols_scheduler.cancel_task()
+            self.global_state_holder.visualization_panel.rviz.setUp('reset')
 
         self.nodes_manager.stopNodes(["amcl", "move_base"])
         self.nodes_manager.bringUpStop()
@@ -1005,8 +1068,10 @@ class PatrolsPanel(QGroupBox):
 
     def enable_components(self, enable) -> None:
         self.start_patrols_btn.setEnabled(enable)
+        self.create_btn.setEnabled(enable)
         self.right_btn.setEnabled(enable)
         self.left_btn.setEnabled(enable)
+        self.patrols_container.setEnabled(enable)
 
 
     def handleLoadStoredPoints(self, data):
@@ -1014,8 +1079,12 @@ class PatrolsPanel(QGroupBox):
 
     def get_current_patrols(self, patrols):
         n = len(patrols.keys())
+        if (int(n%self.max_pag_count_elements)):
+            additinal_page = 1
+        else:
+            additinal_page = 0
         self.total_pages_label.setText(
-            f"{int(n/self.max_pag_count_elements) + int(n%self.max_pag_count_elements)}"
+            f"{int(n//self.max_pag_count_elements) + additinal_page}"
         )
 
     def add_patrol(self, check):
@@ -1230,7 +1299,7 @@ class PatrolsPanel(QGroupBox):
             self.current_index_label.setText(f"{1}/{1}")
             return
         self.current_index_label.setText(
-            f"{pag_index}/{len(patrols)/max_pag_count + len(patrols)%max_pag_count}"
+            f"{pag_index}/{len(patrols)//max_pag_count + len(patrols)%max_pag_count}"
         )
 
         # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
@@ -1257,8 +1326,8 @@ class PatrolsContainer(QWidget):
         self.patrols_widgets = []
         self.patrols_scheduler = patrols_scheduler
         self.pageindex = 0
-        self.max_element_view = 2
-        self.element_count = 0
+        self.max_element_view = 4
+        self.patrol_elements_count = 0
         self.isSinglePatrolExec = False
         self.callback = callback
         self.running_patrol = "1"
@@ -1280,7 +1349,7 @@ class PatrolsContainer(QWidget):
         [w.setParent(None) for w in self.patrols_widgets]
         [self.layout.removeWidget(w) for w in self.patrols_widgets]
         self.patrols_widgets = []
-        self.element_count = len(patrols_data)
+        self.patrol_elements_count = len(patrols_data)
         patrols_items = list(patrols_data.items())
         patrols_items.reverse()
         i = 0
@@ -1375,18 +1444,16 @@ class PatrolsContainer(QWidget):
 
     def move_page_index(self, move):
         self.pageindex = self.pageindex + move
-        if (
-            self.pageindex * self.max_element_view
-            + self.max_element_view
-            - self.element_count % 2
-        ) > self.element_count:
+        patrols_items = list(self.patrols_data.items())
+
+        if len(patrols_items[ self.pageindex * self.max_element_view : self.max_element_view + self.pageindex * self.max_element_view ]):#( self.pageindex * self.max_element_view + self.max_element_view - self.patrol_elements_count % self.max_element_view) > self.patrol_elements_count:
             self.pageindex = 0
         if self.pageindex < 0:
             self.pageindex = 0
 
         max_pages_count = (
-            self.element_count // self.max_element_view
-            + self.element_count % self.max_element_view
+            self.patrol_elements_count // self.max_element_view
+            + self.patrol_elements_count % self.max_element_view
         )
 
         return (max_pages_count, self.pageindex)
@@ -1627,7 +1694,7 @@ class Patrol(QGroupBox):
             dg = CustomDialog(
                 self.parent,
                 "Ejecion forzada de patrulla!",
-                message="Ejecutar patrullas de manera forzada, detendra la ejecion de todas las patrullas.\nPara reprogramar de click en Comenzar",
+                message="Ejecutar patrullas de manera forzada, detendra la ejecion de todas las patrullas.\nPara reprogramar de click en <span style='font-weight: bold'>Comenzar</span>",
                 positive_response="Descartar",
                 negative_response="Ejecutar de todos modos",
                 retries=0,
@@ -1711,15 +1778,16 @@ class Patrol(QGroupBox):
         group.start()
 
 
-class BatteryIndicator(QWidget):
+class BatteryIndicator(QGroupBox):
     def __init__(self):
-        super().__init__()
+        super().__init__("Bateria del robot: ", None)
+        self.battery_state_sub = rospy.Subscriber('/battery_state', BatteryState, self.update_battery) 
         # Create UI elements
         self.layout = QHBoxLayout()
 
+        self.layout.setContentsMargins(1, 1, 1, 1)
+
         # Battery percentage with dynamic colorSP_DialogCloseButton
-        text = QLabel("Bateria del robot: ")
-        text.setStyleSheet(muted_label_style)
         self.percentage_label = QLabel("100%")
         self.percentage_label.setAlignment(Qt.AlignLeft)
         self.percentage_label.setStyleSheet("""
@@ -1740,18 +1808,18 @@ class BatteryIndicator(QWidget):
             font-weight: bold;
         """)
 
-        self.layout.addWidget(text, alignment=Qt.AlignLeft)
         self.layout.addWidget(self.percentage_label, alignment=Qt.AlignLeft)
         self.layout.addWidget(self.status_label, alignment=Qt.AlignRight)
         # self.layout.addWidget(self.charging_icon, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
 
         self.current_level = 100
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_battery)
-        self.timer.start(1000)  # Update every second
+        # self.timer = QTimer(self)
+        # self.timer.timeout.connect(self.update_battery)
+        # self.timer.start(1000)  # Update every second
 
-    def update_battery(self):
+    def update_battery(self, msg):
+
         if self.current_level > 0:
             self.current_level -= 2  # Drain faster for demo
         else:

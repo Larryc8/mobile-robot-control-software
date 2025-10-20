@@ -1,8 +1,9 @@
 .catkin_workspace
 
-src/test/scripts/test*.*
 test*.*
 borr*
 *.qml
+**/log/*.csv
+**/reference_images/*.jpg
 
 __pycache__

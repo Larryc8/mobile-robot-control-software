@@ -11,6 +11,8 @@ from pyqttoast import Toast, ToastPreset
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TransformStamped
+from tf2_msgs.msg import TFMessage
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -74,16 +76,24 @@ class TaskWorker(QThread):
     def run(self):
         pass
         try:
-            listener = tf.TransformListener()
+            listener = tf.TransformListener(interpolate=True, cache_time=rospy.Duration(11))
             # rospy.loginfo('waiting for map frame')
+            # m = TransformStamped()
+            # m.header.frame_id = 'map'
+            # m.child_frame_id = 'base_link'
+            # m.transform.translation.x = 2.71828183
+            # m.transform.translation.y = 2.71828183
+            # m.transform.rotation.w = 1.0
+            # listener.setTransform(m)
+            #
             listener.waitForTransform(
                 target_frame="map",
                 source_frame="base_link",
-                time=rospy.Time(0),
-                timeout=rospy.Duration(4),
+                time=rospy.Time(),
+                timeout=rospy.Duration(10),
             )
             trans, rotation_qua = listener.lookupTransform(
-                "map", "base_link", rospy.Time(0)
+                 "map", "base_link", rospy.Time()
             )
 
             yaw = tf.transformations.euler_from_quaternion(rotation_qua)
@@ -121,6 +131,7 @@ class RobotCamera(QGroupBox):
         self.pose_getter = None
         # self.data_buffer2 = buffer
         self.nodes_manager = NodesManager()
+        self.tf_sub = rospy.Subscriber('/tf', TFMessage, self.get_transforms)
 
         # Create CV bridge
         self.bridge = CvBridge()
@@ -135,6 +146,9 @@ class RobotCamera(QGroupBox):
         # Store the latest image
         self.current_image = None
         self.setLayout(self.layout)
+
+    def get_transforms(self, msg):
+        pass
 
     def enterEvent(self, event):
         # self.menu_btn.show()

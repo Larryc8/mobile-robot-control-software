@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 from ast import Dict, List
+import math
 import queue
-from typing import Callable
+from turtle import distance
+from typing import Callable, NamedTuple
 from typing import Any
 
 import logging
@@ -53,6 +55,10 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
+class Pose(NamedTuple):
+    x: float = 0
+    y: float = 0
+
 
 class PointsScheduler(QObject):
     points_state = pyqtSignal(str, str, int)
@@ -88,6 +94,9 @@ class PointsScheduler(QObject):
         self.client = None
         self.points_left = 999
         self.map = None
+        self.current_map_filename = None
+        self.current_pointid = None
+        self.init_pose = Pose(0, 0)
 
         self.current_position_x = 0
         self.current_position_y = 0
@@ -101,7 +110,7 @@ class PointsScheduler(QObject):
         self.pose_sub = rospy.Subscriber(
             "/amcl_pose", PoseWithCovarianceStamped, self.amcl_pose_callback
         )
-        self.odom_sun = rospy.Subscriber("/odom", Odometry, self.odom_callback)
+        self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
         self.cmd_vel_pub = rospy.Publisher("cmd_vel", Twist, queue_size=3)
         self.simple_goal_pub = rospy.Publisher(
             "/move_base_simple/goal",
@@ -209,7 +218,7 @@ class PointsScheduler(QObject):
 
         if len(self.goals) > 0:
             # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
-            self.pointid, pose = self.goals.popitem()
+            self.current_pointid, pose = self.goals.popitem()
             print(
                 "points points_scheduler points",
                 len(self.goals),
@@ -227,12 +236,14 @@ class PointsScheduler(QObject):
             )
             self.currrent_pose = (x_meters, y_meters, yaw)
             self.current_reference_image_path = image
+            self.current_map_filename = pose.get("mapfile")
+
             goal = self.configGoal(x_meters, y_meters, yaw)
             # self.navigation_checker = RobotNavigationChecker()
             self.navigation_checker.set_current_goal(goal, self.points_left)
             self.navigation_checker.start_checker(
                 patrol_id=self.current_patrolid,
-                checkpoint_id=self.pointid,
+                checkpoint_id=self.current_pointid,
                 map=self.map,
             )
 
@@ -251,11 +262,11 @@ class PointsScheduler(QObject):
     def done_cb(self, state, result):
         ids_list = list(self.goals.keys())
         if len(ids_list) == 0:
-            self.points_state.emit(self.pointid, None, state)
+            self.points_state.emit(self.current_pointid, None, state)
         else:
             # if state in [0,1,3]:
             self.points_state.emit(
-                self.pointid,
+                self.current_pointid,
                 ids_list[-1],
                 state,
             )
@@ -300,7 +311,7 @@ class PointsScheduler(QObject):
             self.goals_count,
             PatrolEndState.ACTIVE,
         )
-        self.points_state.emit(self.pointid, self.pointid, 0)
+        self.points_state.emit(self.current_pointid, self.current_pointid, 0)
 
     def feedback_cb(self, feedback):
         if self.feedback_task:
@@ -358,12 +369,12 @@ class PointsScheduler(QObject):
         print(self.scan_angles)
         robot_actions_logger.logger.log(f"Comenzando scaneo....")
         r = self.scan_subroutine(x, y, self.scan_angles.copy())
-        robot_actions_logger.logger.log(
-            f"Scaneo finalizado resultado de la similaridad en{max(r)}"
-        )
+        # robot_actions_logger.logger.log(
+        #     f"Scaneo finalizado resultado de la similaridad en{max(r):.4f}"
+        # )
 
         if self.on_calibration:
-            self.save_calibration(max(r))
+            self.save_calibration(max(r), self.current_map_filename)
         else:
             self.current_point_calibration = max(r)
             self.get_calibration()
@@ -393,6 +404,17 @@ class PointsScheduler(QObject):
         # --- Velocities ---
         linear_velocity_x = msg.twist.twist.linear.x
         angular_velocity_z = msg.twist.twist.angular.z  # Yaw rate
+
+        distance: float = math.sqrt((position_x - self.init_pose.x)**2 + (position_y - self.init_pose.y)**2)
+        if distance > 0.20: 
+            print('RECALCULADO CONSUMO DE ENERGIA')
+            robot_actions_logger.logger.log(f'RECALCULADO CONSUMO DE ENERGIA {distance}')
+            self.init_pose = Pose(position_x, position_y)
+            # self.init_pose.x = position_x
+            # self.init_pose.y = position_y
+
+    def recovery_subroutine(self):
+        pass
 
     def scan_subroutine(self, x: float, y: float, target_yaws_array: list) -> list:
         """
@@ -478,16 +500,16 @@ class PointsScheduler(QObject):
             print("subroutine_wrapper: ", e)
             return 0
 
-    def save_calibration(self, calibration_value: float) -> None:
+    def save_calibration(self, calibration_value: float, map_filename: str) -> None:
         self.database = DataBase(
             action="save_calibration",
-            data={"checkpoint_id": self.pointid, "value": calibration_value},
+            data={"checkpoint_id": self.current_pointid, "value": calibration_value},
         )
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
     def get_calibration(self):
-        self.database = DataBase(action="get_calibration", data={})
+        self.database = DataBase(action="get_calibration", data={"pointid": self.current_pointid})
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
@@ -498,8 +520,9 @@ class PointsScheduler(QObject):
             mean = data["mean_value"]
             std = data["std_dev_value"]
             ref = self.current_point_calibration > (mean - std * 3)
+
             robot_actions_logger.logger.log(
-                f"Scaneo finalizados. std: {std} mean: {mean} - is good {ref}"
+                f"Scaneo finalizados. sim: {self.current_point_calibration:.4f} std: {std:.4f} mean: {mean:.4f} - is good {ref}"
             )
 
         self.database.quit()

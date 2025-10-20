@@ -23,21 +23,18 @@ class GroupWrapper(QGroupBox):
         self.layout = QVBoxLayout()
         for child in children:
             self.layout.addWidget(child, alignment=Qt.AlignTop)
-        self.setMaximumHeight(100)
+        # self.setMaximumHeight(100)
 
         self.setLayout(self.layout)
 
 
-class UserForm(QGroupBox):
+class PlaceForm(QGroupBox):
     def __init__(self):
-        super().__init__("Formulario")
+        super().__init__("Informacion del lugar de inspeccion")
         layout = QVBoxLayout()
         self.setMaximumWidth(700)
 
         # Create UI elements
-        self.title_label = QLabel("Informacion del lugar de inspeccion")
-        self.title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        self.title_label.setMaximumHeight(80)
 
         self.name_label = QLabel("Nombre")
         self.name_input = QLineEdit()
@@ -53,18 +50,17 @@ class UserForm(QGroupBox):
         self.phone_input = QLineEdit()
 
         # Add dropdown menu for user type
-        self.type_label = QLabel("Seleccione un lugar deos lugares ddionibles o  cree un no nuvo desdell el menu de crear un lugar, los mapas que se creen van a estar asociados  a esta lugar")
+        self.type_label = QLabel("Seleccione un lugar o creo uno")
         self.type_label.setWordWrap(True)
         self.type_combo = QComboBox()
         self.type_combo.addItems(
-            ["Select type", "University", "Job", "Student", "Teacher", "Employee"]
+            ["Seleccione un lugar", "University", "Job", "Student", "Teacher", "Employee"]
         )
 
-        self.create_button = QPushButton("Crear Lugar")
+        self.create_button = QPushButton("Añadir Lugar")
         self.create_button.clicked.connect(self.create_place)
 
         # Add widgets to layout
-        layout.addWidget(self.title_label)
 
         select_place_widgets = (self.type_label, self.type_combo, )
 
@@ -79,14 +75,9 @@ class UserForm(QGroupBox):
             self.phone_input,
         )
 
-        select_place_container = GroupWrapper(
-            text="Seleccione un lugar para la inspeccion", 
-            children=select_place_widgets
-        )
-        crete_place_container = GroupWrapper(text="Crear nuevo lugar", children=widgets)
 
 
-        layout.addWidget(select_place_container)
+        layout.addWidget(self.type_combo)
         # layout.addWidget(crete_place_container)
         layout.addWidget(self.create_button)
         layout.setSpacing(30)
@@ -123,6 +114,6 @@ class UserForm(QGroupBox):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = UserForm()
+    window = PlaceForm()
     window.show()
     sys.exit(app.exec_())

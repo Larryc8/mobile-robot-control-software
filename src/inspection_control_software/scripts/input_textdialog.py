@@ -33,12 +33,14 @@ from styles.labels import (
 
 
 class InputDialog(QDialog):
-    def __init__(self, parent):
+    def __init__(self, parent, title, child = None):
         super().__init__(parent)
-        self.setWindowTitle("Text Input Dialog")
+        self.setWindowTitle("Guardar archivo de mapeo")
         self.setGeometry(100, 100, 300, 150)
         self.filename = "defaultname"
+        self.title = title
         self.atempts = 0
+        self.child = child
         # self.setStyleSheet("""
         #     QMessageBox {
         #         background-color: #f8f9fa;
@@ -53,9 +55,9 @@ class InputDialog(QDialog):
         buttons_layout = QHBoxLayout()
 
         # Label
-        self.label = QLabel("Ponle un nombre a tu feo mama!")
+        self.label = QLabel(self.title)
         self.label.setStyleSheet(subtitle_label_style)
-        self.alert_label = QLabel("ERROR: Ingresa un nombre a tu feo mapa!")
+        self.alert_label = QLabel("Ingresa un nombre valido")
         self.alert_label.setStyleSheet(error_label_style)
         self.alert_label.hide()
         layout.addWidget(self.label)
@@ -77,8 +79,11 @@ class InputDialog(QDialog):
         buttons_layout.addWidget(self.discard_btn)
         buttons_layout.addWidget(self.submit_btn)
 
+        if self.child:
+            layout.addWidget(self.child)
 
         layout.addLayout(buttons_layout)
+
         self.setLayout(layout)
 
     def on_submit(self):
@@ -105,11 +110,12 @@ class CustomDialog(QDialog):
         self,
         parent,
         title: str,
-        message: str = '',
+        message: str = 'Hola mucho gusto! Soy un Error', 
         positive_response: str = "Yes",
         negative_response: str = "No",
         retries: int = 0,
-        interative: bool = True
+        interative: bool = True,
+        child = None
     ):
         super().__init__(parent)
         self.setWindowTitle("Alerta!")
@@ -121,6 +127,7 @@ class CustomDialog(QDialog):
         self.negative_response = negative_response
         self.retries = retries
         self.interative = interative
+        self.child = child
         self.atempts = 0 
 
         self.initUI()
@@ -131,13 +138,12 @@ class CustomDialog(QDialog):
 
         # Label
         self.title_label = QLabel(self.title)
-        self.alert_label = QLabel("ERROR: muy mallll!")
+        self.alert_label = QLabel("Esta seguro de esta acción?")
         self.message_label = QLabel(self.message)
         self.alert_label.hide()
 
         layout.addWidget(self.title_label)
-        if self.message:
-            layout.addWidget(self.message_label)
+        layout.addWidget(self.message_label)
         layout.addWidget(self.alert_label)
 
         # Submit button
@@ -162,7 +168,10 @@ class CustomDialog(QDialog):
         else:
             buttons_layout.addWidget(self.default_close_btn)
 
+        if self.child:
+            layout.addWidget(self.child)
         layout.addLayout(buttons_layout)
+
         self.setLayout(layout)
 
     def setPositiveResponse(self):

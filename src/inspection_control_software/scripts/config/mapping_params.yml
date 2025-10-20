@@ -6,7 +6,7 @@ iterations: 5.0
 kernelSize: 1.0
 lasamplerange: 0.005
 lasamplestep: 0.0048
-linearUpdate: 1.04
+linearUpdate: 0.4
 llsamplerange: 0.01
 llsamplestep: 0.01
 lsigma: 0.075

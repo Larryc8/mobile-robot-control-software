@@ -54,7 +54,7 @@ from styles.buttons import (
 
 from styles.labels import inactive_label_style, minimal_label_style
 
-from place_form import UserForm
+from place_form import PlaceForm
 
 
 
@@ -88,11 +88,11 @@ class ConfigPanel(QWidget):
         self.parent = parent
         self.config_mapping = ConfigModel(workspace="/turtlebot3_slam_gmapping/")
         self.config_dwa_planner = ConfigModel(
-            param_file="./navigation_dwaplanner_params.yml",
+            param_file="./config/navigation_dwaplanner_params.yml",
             workspace="/move_base/DWAPlannerROS/",
         )
         self.config_acml = ConfigModel(
-            param_file="./navigation_acml_params.yml", workspace="/acml/"
+            param_file="./config/navigation_acml_params.yml", workspace="/acml/"
         )
         self.configs = {
             "Mapeo": self.config_mapping,
@@ -100,8 +100,8 @@ class ConfigPanel(QWidget):
             "Planeacion": self.config_dwa_planner,
         }
 
-        StaticParamsConfigLoader(
-            "./navigation_move_base_static_params.yml", "/move_base/"
+        _ = StaticParamsConfigLoader(
+            "./config/navigation_move_base_static_params.yml", "/move_base/"
         )
 
         self.nodes_manager = nodes_manager
@@ -483,7 +483,6 @@ class FriendlyConfig(QWidget):
         self.start_calibrations_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
 
 
-        self.layout.addWidget(UserForm(), 1, 0)
         self.layout.addWidget(self.start_calibrations_btn, 2, 1)
         self.layout.addWidget(self.h_slider, 3, 1)
         self.layout.addWidget(self.text, 4, 1)

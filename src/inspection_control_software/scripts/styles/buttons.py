@@ -28,16 +28,21 @@ menu_style = """
     QMenu::item {
         padding: 5px 18px;
         border-radius: 3px;
+        color: black;
         background-color: transparent;
     }
     QMenu::item:selected {
-        background-color: #C0C0C0;
+        background-color: black;
         color: white;
     }
+    QMenu::item:disabled {
+        background-color: transparent;
+        color: gray;
+    }
     QMenu::separator {
-        height: 2px;
-        background-color: black;
-        margin: 5px 0px;
+        height: 1px;
+        background-color: gray;
+        margin: 2px 0px;
     }
 """
 
@@ -109,6 +114,10 @@ colored_button_style = """
     QPushButton:pressed {
         background-color: #3e8e41;
     }
+    QPushButton:disabled {
+        background-color: gray;
+        border: 1px solid gray;
+    }
 """
 
 
@@ -126,6 +135,11 @@ primary_button_style = """
     }
     QPushButton:pressed {
         background-color: #4682B4;
+    }
+
+    QPushButton:disabled {
+        background-color: gray;
+        border: 1px solid gray;
     }
 """
 
