@@ -119,7 +119,7 @@ class CustomDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Alerta!")
-        self.setGeometry(100, 100, 400, 100)
+        self.setFixedSize(500, 200)
         self.response = "Negative"
         self.title = title
         self.message = message
@@ -140,6 +140,7 @@ class CustomDialog(QDialog):
         self.title_label = QLabel(self.title)
         self.alert_label = QLabel("Esta seguro de esta acción?")
         self.message_label = QLabel(self.message)
+        self.message_label.setWordWrap(True)
         self.alert_label.hide()
 
         layout.addWidget(self.title_label)
@@ -157,7 +158,7 @@ class CustomDialog(QDialog):
 
         self.positive_btn.setStyleSheet(primary_button_style)
         self.default_close_btn.setStyleSheet(primary_button_style)
-        self.negative_btn.setStyleSheet(tertiary_button_style)
+        self.negative_btn.setStyleSheet(secondary_button_style)
         self.title_label.setStyleSheet(subtitle_label_style)
         self.message_label.setStyleSheet(normal_label_style )
         self.alert_label.setStyleSheet(error_label_style)

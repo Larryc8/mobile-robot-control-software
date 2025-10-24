@@ -1,6 +1,7 @@
 import random
 from datetime import datetime, time, date
 
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import (
     create_engine,
     Column,
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Date,
     Time,
     Float,
+    CheckConstraint,
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -130,8 +132,16 @@ class Calibration(Base):
 
     checkpoint_id = Column(String, ForeignKey("checkpoints.id"))
     calibration_value = Column(Float)
+    # Defines a column that is an array of Floats
+    # The 'dimensions=1' means it's a 1D array (a list)
+    calibration_vector  = Column(ARRAY(Float))
 
     checkpoint_cal = relationship("Checkpoint", back_populates="calibrations")
+
+    # To enforce the length of 4, you add a database CHECK constraint
+    __table_args__ = (
+        CheckConstraint('array_length(calibration_vector, 1) = 8', name='check_vector_length'),
+    )
 
 if __name__ == "__main__":
     DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"

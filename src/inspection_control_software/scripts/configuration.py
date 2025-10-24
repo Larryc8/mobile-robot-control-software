@@ -29,6 +29,8 @@ from PyQt5.QtWidgets import (
     QProgressBar
 )
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTimer
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QTransform, QFontMetrics
+
 from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
 from patrols_scheduler import PatrolsEscheduler
 
@@ -454,6 +456,7 @@ class FriendlyConfig(QWidget):
         self.layout = QGridLayout()
         #self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
         self.advance_config_btn = QPushButton("Configuracion avanzada")
+        self.advance_config_btn.setIcon( QApplication.style().standardIcon(QStyle.SP_VistaShield))
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
         self.isStart = True
         self.calibration_periods = 1
@@ -466,7 +469,8 @@ class FriendlyConfig(QWidget):
 
         self.h_slider = QSlider(Qt.Horizontal)
         self.h_slider.setTickPosition(QSlider.TicksBelow)
-        self.h_slider.setTickInterval(10)
+        self.h_slider.setTickInterval(1)
+        self.h_slider.setMaximum(20)
         self.h_slider.valueChanged.connect(self.update_all)
 
         self.calibrations_progress: QProgressBar = QProgressBar()

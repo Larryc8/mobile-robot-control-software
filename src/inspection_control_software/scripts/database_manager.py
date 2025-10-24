@@ -1,4 +1,9 @@
 from datetime import datetime
+import numpy as np
+
+from sklearn.feature_selection import mutual_info_regression
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics.pairwise import cosine_similarity
 
 import psycopg2
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
@@ -608,8 +613,19 @@ class InternalStorageManager:
         try:
             calibration_value = calibration_data.get("value")
             checkpoint_id = calibration_data.get("checkpoint_id")
+            calibration_vector = calibration_data.get('vector')
+
+            # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
+            last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(func.random()).first()
+
+            print(f'Ccalibratonn VEctor {calibration_vector} last_element {last_element}')
+            calibration_value = None
+
+            if last_element:
+                calibration_value = self.loss_func(calibration_vector, last_element.calibration_vector)
+
             calibration = Calibration(
-                checkpoint_id=checkpoint_id, calibration_value=calibration_value
+                checkpoint_id=checkpoint_id, calibration_value=calibration_value, calibration_vector=calibration_vector
             )
 
             session.add(calibration)
@@ -624,7 +640,7 @@ class InternalStorageManager:
         finally:
             session.close()
 
-    def get_calibration(self, pointid: str) -> dict:
+    def get_calibration(self, pointid: str, current_calibration_vector: list) -> dict:
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         # Base.metadata.create_all(engine) # Create tables if they don't exist
@@ -641,6 +657,11 @@ class InternalStorageManager:
 
             # Execute the query and get the single result row
             results = calculation_query.one()
+
+            random_vector = -1
+            random_row = session.query(Calibration).order_by(func.random()).filter_by(checkpoint_id=pointid).first()
+            if random_row:
+                random_vector = random_row.calibration_vector
             print(__name__, results)
 
             # 6. Display the Results
@@ -651,14 +672,21 @@ class InternalStorageManager:
             print(f" -> Mean: {mean_val:.4f}")
             print(f" -> Standard Deviation: {std_dev_val:.4f}")
             session.close()
-            return {"std_dev_value": std_dev_val, "mean_value": mean_val}
+            return {"std_dev_value": std_dev_val, "mean_value": mean_val, "loss_func": self.loss_func(current_calibration_vector, random_vector)}
+
 
         except Exception as e:
             session.rollback()
             session.close()
             print(f"Error setting up data: {e}")
-            return {"std_dev_value": -1, "mean_value": -1}
+            return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
 
+    def loss_func(self, x, y):
+        # x = np.array(x).reshape(-1, 1)
+        # y = np.array(y).reshape(-1, 1)
+        # [loss] = mutual_info_regression(x, y)
+        loss = mean_squared_error(x, y)
+        return loss
 
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
@@ -726,7 +754,7 @@ class DataBase(QThread):
             data = self.internal_storage_manager.save_calibration(self.data)
             self.action_completed.emit("SuccessSaveCalibration", {})
         if self.action == "get_calibration":
-            data = self.internal_storage_manager.get_calibration(self.data.get("pointid"))
+            data = self.internal_storage_manager.get_calibration(self.data.get("pointid"), self.data.get("current_calibration_vector"))
             self.action_completed.emit("SuccessGetCalibration", data)
 
 

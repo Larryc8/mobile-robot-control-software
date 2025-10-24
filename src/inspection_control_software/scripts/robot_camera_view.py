@@ -38,24 +38,25 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
 
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
-from PyQt5.QtCore import QTimer, QRect
+from PyQt5.QtCore import QTimer, QRect, QSize
 from PyQt5.QtGui import QImage, QPixmap, QBitmap, QPainter, QPen, QColor
 
 from robot_vision import ImageMatcheChecker
 from database_manager import DataBase
 from config_model import NodesManager
+from notification import  Notification
+from pyqttoast import Toast, ToastPreset, ToastPosition
+
 
 
 from styles.buttons import border_button_style, button_with_menu_style, tertiary_button_style, menu_style
+from styles.labels import inactive_label_style, title_label_style
 
 
 groupbox_style = """
-            QGroupBox {
-                background-color: #f8f9fa;
-                border: 1px solid lightgray;
-                margin-top: 2ex;
-                padding: 1px;
-                color: black;
+            QWidget {
+            background-color: gray;
+            padding: 0px 40px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -105,16 +106,18 @@ class TaskWorker(QThread):
             self.task_completed.emit(tuple([0, 0]))
 
 
-class RobotCamera(QGroupBox):
+class RobotCamera(QWidget):
     send_buffered_data = pyqtSignal(list)
     custom_option_clicked = pyqtSignal()
 
     def __init__(self, buffer, parent) -> None:
-        super().__init__("Camara del robot", parent)
+        super().__init__(parent)
         self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
         # self.container.setLayout(self.layout)
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setWordWrap(True)
         self.layout.addWidget(self.image_label)
         self.setStyleSheet(groupbox_style)
         # self.load_image('./mora1.png')
@@ -130,6 +133,10 @@ class RobotCamera(QGroupBox):
         self.parent = parent
         self.pose_getter = None
         # self.data_buffer2 = buffer
+        #
+        self.image_label.setText("No hay datos de la camara")
+        self.image_label.setStyleSheet(inactive_label_style + title_label_style + 'font-famly: Helvetica')
+
         self.nodes_manager = NodesManager()
         self.tf_sub = rospy.Subscriber('/tf', TFMessage, self.get_transforms)
 
@@ -166,16 +173,20 @@ class RobotCamera(QGroupBox):
             return -1
 
         masked_pixmap = pixmap.copy()
+        size = masked_pixmap.size()
         result = pixmap
+        rect_size = QSize(100, 90)
+        x0  = size.width()//2 - rect_size.width()//2
+        y0 =size.height()//2 - rect_size.height()//2
 
         painter = QPainter(result)
         painter.drawPixmap(0, 0, masked_pixmap)
 
         pen = QPen(QColor(0, 0, 255))  # Red color
-        pen.setWidth(3)  # Border thickness
+        pen.setWidth(1)  # Border thickness
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)  # No fill
-        painter.drawRect(QRect(60, 60, 170, 150))
+        painter.drawRect(QRect(x0, y0, rect_size.width(), rect_size.height()))
         painter.end()
 
         return result
@@ -238,6 +249,15 @@ class RobotCamera(QGroupBox):
 
     def buffer_reference_image(self):
         print("SAVE IMAGE REFERENCE")
+        ntf = Notification(
+            title='Accion en proceso... Guardando referencia',
+            msg='Por favor no mueva el robot hasta guardar la referencia',
+            preset=ToastPreset.INFORMATION,
+            parent=self.parent,
+            duration=8000
+
+        )
+        ntf.show()
         if self.pose_getter and self.pose_getter.isRunning():
             return
 
@@ -257,13 +277,14 @@ class RobotCamera(QGroupBox):
 
         print(f"{__name__} pose", pose)
 
-        toast = Toast(self.parent)
-        toast.setDuration(2000)  # Hide after 5 seconds
-        toast.setTitle("Exito!")
-        toast.setText("Se agrego punto de referencia!")
-        toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
-        Toast.setPositionRelativeToWidget(self.parent)
-        toast.show()
+        ntf = Notification(
+            title='Accion completada con exito',
+            msg='Se guardo foto de referencia exitosamente', 
+            preset=ToastPreset.SUCCESS,
+            parent=self.parent
+            )
+
+        ntf.show()
 
         if self.pose_getter:
             self.pose_getter.quit()
@@ -304,6 +325,9 @@ class RobotCamera(QGroupBox):
             self.pixmap = QPixmap.fromImage(q_img)
             self.pixmap = self.add_visual_aid(self.pixmap)
             self.resize_image()
+            return
+
+        self.image_label.setText("No hay datos de la camara")
 
     def toggleSize(self):
         self.custom_option_clicked.emit()

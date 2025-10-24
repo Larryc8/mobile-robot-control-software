@@ -9,9 +9,9 @@ patrol_base_style = ("""
 
 patrol_selected_style = ("""
     QGroupBox {
-        border: 1px solid #aaa;
+        border: 2px solid #2C3E50;
         border-radius: 5px;
         margin: 0.2em;
-        background: lightgray 
+        background: white;
         }
 """)

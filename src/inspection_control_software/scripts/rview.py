@@ -57,7 +57,9 @@ class MyViz(QWidget):
         self.minWidth = self.width()
         self.resize = 170
         self.var = False
+        self.setStyleSheet('background-color: lightgray')
         # rospy.init_node('harolsito')
+
 
         ## rviz.VisualizationFrame is the main container widget of the
         ## regular RViz application, with menus, a toolbar, a status

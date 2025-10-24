@@ -5,6 +5,8 @@ import queue
 from turtle import distance
 from typing import Callable, NamedTuple
 from typing import Any
+import os
+
 
 import logging
 
@@ -18,6 +20,7 @@ import cv2 as cv
 import tf
 from math import radians, degrees
 from random import randint
+import numpy as np
 
 
 from sensor_msgs.msg import Image
@@ -33,7 +36,10 @@ from move_base_msgs.msg import (
     MoveBaseFeedback,
 )
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from sensor_msgs.msg import BatteryState 
 
+
+from PyQt5.QtCore import QTimer, QRect, QSize
 from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from utils.patrol import PatrolEndState
 from database_manager import AlertStatus
@@ -97,6 +103,7 @@ class PointsScheduler(QObject):
         self.current_map_filename = None
         self.current_pointid = None
         self.init_pose = Pose(0, 0)
+        self.battery_state = 100
 
         self.current_position_x = 0
         self.current_position_y = 0
@@ -106,6 +113,8 @@ class PointsScheduler(QObject):
 
         self.track = [0]
         self.navigation_checker = RobotNavigationChecker(self.track)
+
+        self.battery_state_sub = rospy.Subscriber('/battery_state', BatteryState, self.update_battery) 
         self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
         self.pose_sub = rospy.Subscriber(
             "/amcl_pose", PoseWithCovarianceStamped, self.amcl_pose_callback
@@ -121,6 +130,9 @@ class PointsScheduler(QObject):
 
         # actionlib.GoalStatus.SUCCEEDED
         #
+        #
+    def update_battery(self, msg):
+        self.battery_state = msg.percentage*100
 
     def setup(self, on_calibration: bool = False) -> int:
         """
@@ -346,10 +358,13 @@ class PointsScheduler(QObject):
         name = file_name.split(".")[0]
         ext = ".".join(file_name.split(".")[0:])
 
-        x, y = 60, 60  # Starting coordinates (top-left corner)
-        width, height = 170, 150  # Width and height of crop
+        rect_size = QSize(100, 90)
+        height, width, _ = image.shape  # Width and height of crop
+        x, y = width//2 -rect_size.width()//2, height//2 - rect_size.height()//2  # Starting coordinates (top-left corner)
+        print(f'{__name__} Tamano de la IMAGEN {image.shape}')
 
-        cropped_image = image[y : y + height, x : x + width]
+        cropped_image = image[y : y + rect_size.height(), x : x + rect_size.width()]
+        print(f'{__name__} Tamano de la IMAGEN {cropped_image.shape}')
         new_path = f"{file_path}/{name}_cropped.{ext}"
         print(f"{__name__}: {new_path}")
         cv.imwrite(new_path, cropped_image)
@@ -364,6 +379,7 @@ class PointsScheduler(QObject):
             angle % 360
             for angle in range(yaw_degrees - delta_yaw, yaw_degrees + delta_yaw, 10)
         ]
+        # self.scan_angles = [yaw_degrees]
         # self.get_image_similarity()
         print("cuurent yaw: ", yaw_degrees)
         print(self.scan_angles)
@@ -374,10 +390,11 @@ class PointsScheduler(QObject):
         # )
 
         if self.on_calibration:
-            self.save_calibration(max(r), self.current_map_filename)
+            self.save_calibration(-999, r, self.current_map_filename)
+            robot_actions_logger.logger.log(f"Escaneo finalizado....")
         else:
             self.current_point_calibration = max(r)
-            self.get_calibration()
+            self.get_calibration(r)
 
     def odom_callback(self, msg):
         """
@@ -407,8 +424,8 @@ class PointsScheduler(QObject):
 
         distance: float = math.sqrt((position_x - self.init_pose.x)**2 + (position_y - self.init_pose.y)**2)
         if distance > 0.20: 
-            print('RECALCULADO CONSUMO DE ENERGIA')
-            robot_actions_logger.logger.log(f'RECALCULADO CONSUMO DE ENERGIA {distance}')
+            # print('RECALCULADO CONSUMO DE ENERGIA')
+            # robot_actions_logger.logger.log(f'RECALCULADO CONSUMO DE ENERGIA {distance}')
             self.init_pose = Pose(position_x, position_y)
             # self.init_pose.x = position_x
             # self.init_pose.y = position_y
@@ -476,6 +493,12 @@ class PointsScheduler(QObject):
 
         return [*self.scan_subroutine(x, y, target_yaws_array.copy()), *[rate]]
 
+    def remove_image(self, path):
+        if os.path.exists(path=path):
+            os.remove(path=path)
+        else:
+            print(f'{__name__} el archivo EXISTE {path}')
+
     def get_image_similarity(self) -> float:
         similarity_rate: float = 0
         try:
@@ -485,10 +508,16 @@ class PointsScheduler(QObject):
                 # time.sleep(1000)
                 ImgSim = imgsim.Img2Vec("resnet50", weights="DEFAULT")
 
-                ImgSim.embed_dataset(self.edit_image(self.current_reference_image_path))
+                source = self.edit_image(self.current_reference_image_path)
+                ImgSim.embed_dataset(source=source)
                 ImgSim.dataset
 
-                r = ImgSim.similar_images(self.edit_image(self.camara_image_filepath))
+                target = self.edit_image(self.camara_image_filepath)
+                r = ImgSim.similar_images(target_file=target)
+
+                for p in (source, target):
+                    self.remove_image(p)
+
                 print(f"{__name__} {r}")
                 [similarity_rate] = list(r.values())
                 if self.on_calibration:
@@ -500,16 +529,16 @@ class PointsScheduler(QObject):
             print("subroutine_wrapper: ", e)
             return 0
 
-    def save_calibration(self, calibration_value: float, map_filename: str) -> None:
+    def save_calibration(self, calibration_value: float, calibration_vector: list, map_filename: str) -> None:
         self.database = DataBase(
             action="save_calibration",
-            data={"checkpoint_id": self.current_pointid, "value": calibration_value},
+            data={"checkpoint_id": self.current_pointid, "value": calibration_value, "vector": calibration_vector},
         )
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
-    def get_calibration(self):
-        self.database = DataBase(action="get_calibration", data={"pointid": self.current_pointid})
+    def get_calibration(self, current_calibration_vector):
+        self.database = DataBase(action="get_calibration", data={"pointid": self.current_pointid, "current_calibration_vector": current_calibration_vector})
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
@@ -519,10 +548,11 @@ class PointsScheduler(QObject):
         if msg == "SuccessGetCalibration":
             mean = data["mean_value"]
             std = data["std_dev_value"]
-            ref = self.current_point_calibration > (mean - std * 3)
+            loss_func = data["loss_func"]
+            ref = loss_func < (mean + std * 3)
 
             robot_actions_logger.logger.log(
-                f"Scaneo finalizados. sim: {self.current_point_calibration:.4f} std: {std:.4f} mean: {mean:.4f} - is good {ref}"
+                f"Scaneo finalizados. sim: {loss_func:.4f} std: {std:.4f} mean: {mean:.4f} - is good {ref}"
             )
 
         self.database.quit()

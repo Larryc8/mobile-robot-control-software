@@ -37,7 +37,6 @@ class TopBar(QWidget):
         button1.setIconSize(QSize(150, 52))
         button1.setStyleSheet("""
             QPushButton {
-            background-color: blue;
             border: none;
             }""")
 
@@ -48,7 +47,6 @@ class TopBar(QWidget):
         button2.setIconSize(QSize(250, 52))
         button2.setStyleSheet("""
             QPushButton {
-            background-color: blue;
             border: none;
             }""")
 
@@ -60,7 +58,6 @@ class TopBar(QWidget):
         button3.setIconSize(QSize(152, 52))
         button3.setStyleSheet("""
             QPushButton {
-            background-color: blue;
             border: none;
             }""")
 

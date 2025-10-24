@@ -5,6 +5,7 @@ import datetime
 from datetime import datetime
 import csv
 import os
+import rospy
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -30,6 +31,9 @@ from PyQt5.QtGui import QFont, QTextCursor, QColor, QPalette, QDesktopServices
 from config_model import UserConfigFileManager
 
 from styles.buttons import border_button_style, secondary_button_style
+
+from sensor_msgs.msg import BatteryState 
+
 
 
 class CsvHandler:
@@ -181,9 +185,10 @@ class RobotActionsLoggerView(QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._queue_size = 7
+        self._queue_size = 9
         self.log_queue = []
         self.log_history = []
+        self.battery_state = 100
         msgs: list[str] = ["" for i in range(self._queue_size)]
         self.labels: QLabel = [QLabel(msg) for msg in msgs]
 
@@ -194,6 +199,8 @@ class RobotActionsLoggerView(QGroupBox):
         buttons_layout = QVBoxLayout()
         main_layout = QGridLayout()
         layout.setSpacing(2)
+
+
 
         self.setStyleSheet("""
             QGroupBox {
@@ -224,6 +231,7 @@ class RobotActionsLoggerView(QGroupBox):
 
         self.setLayout(main_layout)
 
+
     def update_log(self, log_msg: str) -> None:
         if len(self.log_queue) == self._queue_size:
             self.log_queue.pop(0)
@@ -250,12 +258,18 @@ class Logger(QObject):
         self._logger = CsvHandler(
             header=["time", "level","battery","msg"], filepath=config["log_history_filepath"]
         )
+        self.battery_state = 100
+
+        self.battery_state_sub = rospy.Subscriber('/battery_state', BatteryState, self.update_battery) 
+
+    def update_battery(self, msg):
+        self.battery_state = msg.percentage*100
 
     def log(self, msg: str = "Chala es suepr linda! Bienvenido!", level=None) -> None:
         now = datetime.now()
         timestamp = now.strftime("%A, %B %d, %Y - %I:%M %p")
-        self.log_changed.emit(f"<span style='color: gray;'>{timestamp}</span> [INFO] [battery:10%] {msg}")
-        self._logger.append_row([timestamp, "INFO", "battery: 10%", msg])
+        self.log_changed.emit(f"<span style='color: gray;'>{timestamp}</span> [INFO] [battery: {self.battery_state:.1f}%] {msg}")
+        self._logger.append_row([timestamp, "INFO", f"battery: {self.battery_state}%", msg])
 
     def update_log_file(self, filepath):
         config = self.user_config.read_data()

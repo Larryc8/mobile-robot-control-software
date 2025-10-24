@@ -40,7 +40,7 @@ class MyTableWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.nodes_manager = NodesManager()
-        self.tabs_names = ["Home", "Configuracion", "Log system"]
+        self.tabs_names = ["Home", "Configuracion", "Sistema de alertas"]
         
         # self.tabs_names = ["Home", "Configuracion"]
         self.parent = parent
@@ -103,7 +103,7 @@ class MyTableWidget(QWidget):
 
         self.tabs_widget['Home'].layout.addWidget(home_panel)
         self.tabs_widget['Configuracion'].layout.addWidget(config_panel)
-        self.tabs_widget['Log system'].layout.addWidget(LogPanel(node_manager=self.nodes_manager, parent=parent))
+        self.tabs_widget["Sistema de alertas"].layout.addWidget(LogPanel(node_manager=self.nodes_manager, parent=parent))
 
         [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]
         self.button = QPushButton("Push for Window")

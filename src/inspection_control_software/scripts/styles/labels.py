@@ -26,14 +26,11 @@ border_label_style = ("""
 
 inactive_label_style = ("""
     QLabel {
-        background-color: gray; 
-        color: #2c3e50;
-        border: 1px solid rgba(44, 62, 80, 100);
-        border-radius: 3px;
-        color: white;
+        background-color: lightgray; 
+        color: black;
         padding: 2px 5px;
     }
-""" + hover_label_style  )
+""" )
 
 minimal_label_style = ("""
     QLabel {
@@ -102,10 +99,6 @@ error_label_style = ("""
 title_label_style = ("""
     QLabel {
         font-size: 24px;
-        font-weight: bold;
-        color: #333333;
-        padding: 2px 0;
-        margin-bottom: 5px;
     }
 """)
 

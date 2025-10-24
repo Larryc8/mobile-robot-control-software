@@ -15,6 +15,8 @@
 # F5F5F5 - White Smoke
 
 # FFFFFF - White
+#
+color = '#2C3E50'
 
 
 menu_style = """
@@ -41,7 +43,7 @@ menu_style = """
     }
     QMenu::separator {
         height: 1px;
-        background-color: gray;
+        background-color: lightgray;
         margin: 2px 0px;
     }
 """
@@ -60,38 +62,36 @@ button_with_menu_style = """
 border_button_style = """
     QPushButton {
         background: transparent;
-        color: #3498db;
-        border: 1px solid #3498db;
+        color: #2C3E50;
+        border: 1px solid #2C3E50;
         border-radius: 2px;
         padding: 6px 6px;
         font-weight: bold;
     }
     QPushButton:hover {
-        background: #3498db;
-        color: white;
+        background: #DCDCDC ;
     }
     QPushButton:pressed {
         background-color: #3e8e41;
     }
 
     QPushButton:disabled {
-        border-color: gray;
-        color: gray
+        border-color: lightgray;
+        color: lightgray
     }
 """
 
 border_button_style_danger = """
     QPushButton {
         background: transparent;
-        color: #3498db;
-        border: 1px solid #3498db;
+        color: #2C3E50;
+        border: 1px solid #2C3E50;
         border-radius: 2px;
         padding: 6px 6px;
         font-weight: bold;
     }
     QPushButton:hover {
-        background: #3498db;
-        color: white;
+        background: #DCDCDC ;
     }
     QPushButton:pressed {
         background-color: red;
@@ -103,10 +103,10 @@ colored_button_style = """
     QPushButton {
         background-color: #2C3E50;
         border-radius: 2px;
+        font-weight: bold;
         color: white;
         border: none;
         padding: 6px 6px;
-        font-size: 16px;
     }
     QPushButton:hover {
         background-color: #45a049;
@@ -115,8 +115,9 @@ colored_button_style = """
         background-color: #3e8e41;
     }
     QPushButton:disabled {
-        background-color: gray;
-        border: 1px solid gray;
+        background-color: transparent;
+        border: 1px solid lightgray;
+        color: lightgray
     }
 """
 
@@ -153,10 +154,12 @@ secondary_button_style = """
         font-size: 16px;
     }
     QPushButton:hover {
-        background-color: #45a049;
+        background: #F5F5F5;
+        border: 1px solid lightgray;
     }
     QPushButton:pressed {
-        background-color: #3e8e41;
+        background-color: black;
+        color: white
     }
 """
 
@@ -178,7 +181,7 @@ toggle_button_style = """
     QPushButton {
         border: none;
         background-color: transparent;
-        color: #4682B4;
+        color: #2C3E50;
         font-weight: bold;
         padding: 6px 6px;
     }
@@ -187,7 +190,7 @@ toggle_button_style = """
     }
     QPushButton:disabled {
         border-radius: 2px;
-        background-color: #4682B4;
+        background-color: #2C3E50;
         color: white;
     }
 
@@ -259,7 +262,7 @@ patrol_checkbox_style = """
         border-radius: 2px;
     }
     QCheckBox::indicator:checked {
-        background-color: #3498db;
+        background-color: #2C3E50;
         border: 1px solid gray;
     }
     QCheckBox::indicator:hover {

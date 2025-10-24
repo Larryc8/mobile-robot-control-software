@@ -1,3 +1,4 @@
+from sre_parse import SUCCESS
 import typing
 import numpy as np
 from numpy.linalg import norm
@@ -37,6 +38,7 @@ from PyQt5.QtGui import (
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, QRectF, QSize, QPropertyAnimation, QPointF
 from pyqttoast import Toast, ToastPreset
+from notification import Notification, NotificationType
 import random
 import yaml
 from datetime import datetime
@@ -303,13 +305,13 @@ class ImageViewer(QMainWindow):
         print("ImageViewer", data)
         self.graphics_view.load_stored_points(data)
         if len(data.get("points")):
-            toast = Toast(self.parent)
-            toast.setDuration(5000)  # Hide after 5 seconds
-            toast.setTitle("Puntos cargados correctamente")
-            toast.setText(f"Se han cargado {len(data.get('points'))} puntos de interés")
-            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            ntf = Notification(
+                parent=self.parent,
+                title="Puntos de interés cargados correctamente",
+                msg=f"Se han cargado {len(data.get('points'))} puntos de interés",
+                preset=ToastPreset.SUCCESS
+            )
+            ntf.show()
 
     def update_points_state(self, current_poin_id, next_point_id, point_state):
         self.graphics_view.update_points_state(
