@@ -13,6 +13,7 @@ import matplotlib
 from matplotlib.colors import LinearSegmentedColormap
 
 
+
 RssiWaypoint = namedtuple("RssiWaypoint", "x y rssi")
 Waypoint = namedtuple("Waypoint", "x y")
 

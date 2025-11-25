@@ -1,83 +1,82 @@
-from sre_parse import SUCCESS
-import typing
-import numpy as np
-from numpy.linalg import norm
-import math
-import sys
 import logging
+import math
+import random
+import sys
+import typing
+from datetime import datetime
+from sre_parse import SUCCESS
 
-from PyQt5.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QGraphicsView,
-    QGraphicsScene,
-    QFileDialog,
-    QVBoxLayout,
-    QWidget,
-    QPushButton,
-    QGraphicsItem,
-    QHBoxLayout,
-    QStyle,
-    QLabel,
-    QGraphicsOpacityEffect,
-    QGraphicsRectItem,
-)
+import numpy as np
+import yaml
+from config_model import NodesManager
+from notification import Notification, NotificationType
+from numpy.linalg import norm
+from PyQt5 import QtGui
+from PyQt5.QtCore import (
+    QObject,
+    QPoint,
+    QPointF,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    QSize,
+    QSizeF,
+    Qt,
+    QThread,
+    QTimer,
+    pyqtSignal,
+)  # , pyqtSlot
 from PyQt5.QtGui import (
-    QPixmap,
+    QBrush,
+    QColor,
+    QFont,
     QImage,
+    QKeySequence,
     QPainter,
     QPainterPath,
     QPen,
-    QBrush,
-    QColor,
+    QPixmap,
     QPolygon,
     QPolygonF,
-    QFont,
     QTransform,
 )
-from PyQt5 import QtGui
-from PyQt5.QtCore import Qt, QRectF, QSize, QPropertyAnimation, QPointF
+from PyQt5.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QGraphicsItem,
+    QGraphicsOpacityEffect,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QShortcut,
+    QStackedLayout,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
+)
 from pyqttoast import Toast, ToastPreset
-from notification import Notification, NotificationType
-import random
-import yaml
-from datetime import datetime
-
-
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
+    colored_button_style,
+    minimal_button_style,
     primary_button_style,
     secondary_button_style,
-    colored_button_style,
     tertiary_button_style,
     toggle_button_style,
-    minimal_button_style,
 )
-
 from styles.labels import (
+    code_label_style,
     inactive_label_style,
+    info_label_style,
     minimal_label_style,
     succes_label_style,
-    info_label_style,
     warning_label_style,
-    code_label_style,
 )
-
-from config_model import NodesManager
-
-from PyQt5.QtCore import (
-    Qt,
-    QRectF,
-    QSizeF,
-    QPoint,
-    QRect,
-    QSize,
-    QThread,
-    pyqtSignal,
-    QObject,
-    QTimer,
-)  # , pyqtSlot
 
 
 class ImageViewer(QMainWindow):
@@ -90,11 +89,14 @@ class ImageViewer(QMainWindow):
         parent=None,
         nodes_manager=None,
         patrols_scheduler=None,
+        widget=None,
     ):
         super().__init__()
         # self.setWindowTitle("Image Viewer with QGraphicsView")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        self.toggle = False
         self.setGeometry(100, 100, 700, 600)
+        self.point_details_widget = widget
 
         self.init_ui()
 
@@ -112,12 +114,18 @@ class ImageViewer(QMainWindow):
         # self.timer = QTimer(self)
         # self.timer.timeout.connect(self.update_counter)
         # self.timer.start(1000)  # Update every 1000ms (1 second)
+        #
+
+    def test(self):
+        self.stackedlayout.setCurrentIndex(1)
+        pass
 
     def init_ui(self):
         # Central widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout()
+        self.stackedlayout = QStackedLayout()
         buttons_layout = QHBoxLayout()
         top_buttons_layout = QHBoxLayout()
         checkpoints_info_layout = QHBoxLayout()
@@ -144,19 +152,23 @@ class ImageViewer(QMainWindow):
         self.info_label.setStyleSheet(info_label_style)
         self.warning_label.setStyleSheet(warning_label_style)
         self.toggle_size_button = QPushButton("◰ Expandir")
-        self.import_points_button = QPushButton(
-            "Importar puntos de interes de otro mapa"
-        )
+        self.import_points_button = QPushButton("Restaurar puntos")
+
         self.toggle_size_button.setMaximumSize(110, 30)
         self.toggle_size_button.setStyleSheet(border_button_style)
         # self.toggle_size_button.setStyleSheet('font-size: 20px')
+
+        self.stackedlayout.addWidget(self.graphics_view)
+        if self.point_details_widget:
+            self.stackedlayout.addWidget(self.point_details_widget)
 
         top_buttons_layout.addWidget(self.import_points_button, alignment=Qt.AlignRight)
         top_buttons_layout.addWidget(self.toggle_size_button, alignment=Qt.AlignRight)
         layout.addLayout(top_buttons_layout)
         layout.addWidget(self.info_label, alignment=Qt.AlignTop)
         layout.addWidget(self.warning_label)
-        layout.addWidget(self.graphics_view)
+        layout.addLayout(self.stackedlayout)
+        # layout.addWidget(self.graphics_view)
         layout.addWidget(self.success_label)
 
         # Buttons
@@ -166,6 +178,8 @@ class ImageViewer(QMainWindow):
         # self.close_button.clicked.connect(self.load_image)
         self.save_button.clicked.connect(self.saveInDatabase)
         self.graphics_view.send_points.connect(self.save_points)
+        self.graphics_view.key_presssed.connect(self.test)
+
         self.close_button.clicked.connect(self.close_win)
         self.graphics_view.pointsChanged.connect(self.handlePointsChanged)
         self.toggle_size_button.clicked.connect(self.toggleSize)
@@ -309,7 +323,7 @@ class ImageViewer(QMainWindow):
                 parent=self.parent,
                 title="Puntos de interés cargados correctamente",
                 msg=f"Se han cargado {len(data.get('points'))} puntos de interés",
-                preset=ToastPreset.SUCCESS
+                preset=ToastPreset.SUCCESS,
             )
             ntf.show()
 
@@ -342,6 +356,7 @@ class ImageViewer(QMainWindow):
 class Example(QGraphicsView):
     send_points = pyqtSignal(dict)
     pointsChanged = pyqtSignal(str)
+    key_presssed = pyqtSignal(bool)
 
     def __init__(self):
         super().__init__()
@@ -372,7 +387,15 @@ class Example(QGraphicsView):
         self.setRenderHint(QPainter.SmoothPixmapTransform)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
 
+        shortcut_open = QShortcut(QKeySequence("Ctrl+A"), self)
+        shortcut_open.activated.connect(self.test)
         # self.load_stored_points()
+        #
+
+    def test(self):
+        self.key_presssed.emit(True)
+        print("Chala te amo")
+        pass
 
     def getPointsPath(self) -> dict:
         print("Points to Check:", self.pointsToCheck)
@@ -415,6 +438,7 @@ class Example(QGraphicsView):
                     "type": 0,
                     "gui_yaw": point.get("gui_yaw"),
                     "image": point.get("image"),
+                    "aruco_pose_vector": point.get("aruco_pose_vector"),
                 }
                 for id, point in self.getPointsPath().items()
             }
@@ -469,7 +493,7 @@ class Example(QGraphicsView):
             f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()} Y:{point_mapped2scene.y()}"
         )
         print(
-            f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x()*0.05} X:{point_mapped2scene.y()*0.05} en metros"
+            f"PUNTOS CON RESPECTO A LA VISTA X:{point_mapped2scene.x() * 0.05} X:{point_mapped2scene.y() * 0.05} en metros"
         )
 
         colors = [Qt.red, Qt.yellow, Qt.green, Qt.blue]
@@ -611,7 +635,16 @@ class Example(QGraphicsView):
         # print('Example', stored_points)
         if stored_points:
             for point in stored_points.get("points"):
-                id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
+                (
+                    id,
+                    x_meters,
+                    y_meters,
+                    map_file,
+                    yaw,
+                    gui_yaw,
+                    image,
+                    aruco_pose_vector,
+                ) = point
                 if map_file == self.mapfile:
                     x_pix = int(
                         (x_meters - self.botton_left_map[0]) / self.map_resolution
@@ -660,6 +693,7 @@ class Example(QGraphicsView):
                                 "yaw": yaw,
                                 "gui_yaw": gui_yaw,
                                 "image": image,
+                                "aruco_pose_vector": aruco_pose_vector,
                             }
                         }
                     )

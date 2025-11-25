@@ -47,6 +47,7 @@ import robot_actions_logger
 from robot_actions_logger import add_color
 
 from robot_navigation_checker import RobotNavigationChecker
+from pose_controller import DifferentialDriveController
 
 if __name__ != "__main__":
     import ImageSimilarity.image_similarity as imgsim
@@ -83,6 +84,7 @@ class PointsScheduler(QObject):
         #     {"x_meters": -1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
         # ]
         self.currrent_pose = (None, None, None)
+        self.currrent_aruco_pose = (None, None, None)
         self.scan_angles = [180, 100, 90, 60, 30, 0]
         self.current_yaw = None
         self.target_yaw = None
@@ -124,6 +126,7 @@ class PointsScheduler(QObject):
         self.simple_goal_pub = rospy.Publisher(
             "/move_base_simple/goal",
             PoseStamped,
+            queue_size=2
         )
 
         self.navigation_checker.alert_generated.connect(self.handleAlertGeneration)
@@ -203,6 +206,14 @@ class PointsScheduler(QObject):
         self.current_position_x = msg.pose.pose.position.x
         self.current_position_y = msg.pose.pose.position.y
 
+
+    def aruco_odom_callback(self, odom_msg):
+        orientation_q = odom_msg.pose.pose.orientation
+        orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        roll, pitch, yaw = euler_from_quaternion(orientation_list)
+        # self.current_pose.theta = yaw
+        self.currrent_aruco_pose = (odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y, yaw)
+
     def setHomePoint(self):
         pass
 
@@ -249,6 +260,7 @@ class PointsScheduler(QObject):
             self.currrent_pose = (x_meters, y_meters, yaw)
             self.current_reference_image_path = image
             self.current_map_filename = pose.get("mapfile")
+            self.aruco_pose = pose.get("aruco_pose_vector")
 
             goal = self.configGoal(x_meters, y_meters, yaw)
             # self.navigation_checker = RobotNavigationChecker()
@@ -384,17 +396,57 @@ class PointsScheduler(QObject):
         print("cuurent yaw: ", yaw_degrees)
         print(self.scan_angles)
         robot_actions_logger.logger.log(f"Comenzando scaneo....")
-        r = self.scan_subroutine(x, y, self.scan_angles.copy())
+
+        rate: float = self.get_image_similarity()
+        robot_actions_logger.logger.log(f"Fin del escaneo.... before fine-tuning sim: {rate:.3f}")
+        # r = self.scan_subroutine(x, y, self.scan_angles.copy())
         # robot_actions_logger.logger.log(
         #     f"Scaneo finalizado resultado de la similaridad en{max(r):.4f}"
         # )
 
-        if self.on_calibration:
-            self.save_calibration(-999, r, self.current_map_filename)
-            robot_actions_logger.logger.log(f"Escaneo finalizado....")
-        else:
-            self.current_point_calibration = max(r)
-            self.get_calibration(r)
+        # if self.on_calibration:
+        #     self.save_calibration(-999, r, self.current_map_filename)
+        #     robot_actions_logger.logger.log(f"Escaneo finalizado....")
+        # else:
+        #     self.current_point_calibration = max(r)
+        #     self.get_calibration(r)
+        #
+        #--- NEW SUBROUTINEN
+        if True:
+            controller = DifferentialDriveController()
+            
+            # Example: Set some desired values (you would typically get these from other nodes)
+            controller.set_linear_distance_setpoint(self.aruco_pose[:2])  # 0.5 m/s
+            yaw = self.aruco_pose[2]
+            controller.set_yaw_setpoint(yaw)  # 90 degrees
+            
+
+            control_rate = rospy.Rate(20)  # 50 Hz
+
+            goal_reached = 777
+            pos = 888
+
+            while not (pos == 0):
+                if self.cancelled:
+                    break
+                goal_reached, pos = controller.control_loop()
+                # print(f"inside the while in  pid controller yaw error: {goal_reached} pose error: {pos}")
+                control_rate.sleep()
+
+
+            pos = 888
+            goal_reached = 777
+            while not (goal_reached == 0):
+                if self.cancelled:
+                    break
+                goal_reached, pos = controller.control_loop(yaw=True)
+                # print(f"inside the while in  pid controller yaw error: {goal_reached} pose error: {pos}")
+                control_rate.sleep()
+
+            print("ARUCO GOAL REACHED", goal_reached, pos)
+
+        rate: float = self.get_image_similarity()
+        robot_actions_logger.logger.log(f"Fin del escaneo.... after fine-tuning sim: {rate:.3f}")
 
     def odom_callback(self, msg):
         """

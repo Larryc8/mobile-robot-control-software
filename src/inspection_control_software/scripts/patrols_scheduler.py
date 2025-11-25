@@ -1,21 +1,18 @@
 #!/usr/bin/env python
-import rospy
-import actionlib
-from actionlib_msgs.msg import GoalStatus
 import queue
-from enum import Enum
-# Import your action message, for example: from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
-
-from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
-from datetime import datetime
 import time
+from datetime import datetime
+from enum import Enum
 
+import actionlib
+import rospy
+from actionlib_msgs.msg import GoalStatus
+from database_manager import DataBase
 from points_scheduler import PointsScheduler
-from database_manager import DataBase 
 
+# Import your action message, for example: from test.msg import PatrolAction, PatrolGoal, PatrolResult, PatrolFeedback
+from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
 from pyqttoast import Toast, ToastPreset
-
-
 from utils.patrol import PatrolEndState
 
 
@@ -89,7 +86,7 @@ class ScheduleChecker(QThread):
 
                     self.sleep(self.sleep_time)
 
-                self.task_completed.emit("TaskSuccessfully")
+                self.task_completed.emit("ForcedTaskSuccessfully")
                 return
         except Exception as e:
             # raise e
@@ -134,14 +131,16 @@ class ScheduleChecker(QThread):
                     # print('PATRULLAJE', scheduled_patrol)
 
                     if not self.isDispatching:
-                        print(f'patrol state {scheduled_patrol["finished"]}')
+                        print(f"patrol state {scheduled_patrol['finished']}")
                         print("worker thread points schedule: ", scheduled_patrol)
                         if not scheduled_patrol["finished"]:
                             self.patrol_state.emit(scheduled_patrol.get("patrolid"))
                             self.points_scheduler.setDoneTask(
                                 done_task=self.free_points_dispatcher
                             )
-                            if not self.points_scheduler.setup(on_calibration=calibration):
+                            if not self.points_scheduler.setup(
+                                on_calibration=calibration
+                            ):
                                 return
 
                             self.points_scheduler.dispatch(scheduled_patrol["patrolid"])
@@ -273,7 +272,7 @@ class PatrolsEscheduler(QObject):
                         "time": "0208",
                         "finished": False,
                         "calibration": True,
-                        'patrolid': str(id)
+                        "patrolid": str(id),
                     }
                 },
                 "time": "0208",
@@ -349,6 +348,7 @@ class PatrolsEscheduler(QObject):
         self.single_patrolid = patrolid
         if not self.cancel_task():
             self.exec_single_patrol()
+            pass
         pass
 
     def exec_single_patrol(self):
@@ -410,6 +410,13 @@ class PatrolsEscheduler(QObject):
             print("single patrol func executing")
             self.exec_single_patrol()
 
+        if message == "ForcedTaskSuccessfully":
+            self.single_patrolid = None
+            pass
+
+        if message == "TaskCancelled":
+            self.single_patrolid = None
+
     def update_patrol(self, x):
         [id] = list(x.keys())
         print("update PATROL ID verifcation", self.patrols_data.get(id))
@@ -441,9 +448,9 @@ class PatrolsEscheduler(QObject):
         today = now.weekday()
         days_until = (day - today) % 7
         print(
-            f'{days_until}{patrol["time"]}  day: {day} today: {today} day: {patrol["day"]}'
+            f"{days_until}{patrol['time']}  day: {day} today: {today} day: {patrol['day']}"
         )
-        return int(f'{days_until}{patrol["time"]}')
+        return int(f"{days_until}{patrol['time']}")
 
     def start_patrols(self, on_calibration=False):
         self.patrols = []
@@ -452,8 +459,7 @@ class PatrolsEscheduler(QObject):
         if self.on_calibration:
             self.patrols_data = self.patrols_data_test
         else:
-            self.patrols_data  = self.patrols_data_copy
-
+            self.patrols_data = self.patrols_data_copy
 
         for id, patrol in self.patrols_data.items():
             for patrol_day in patrol["days"].values():
@@ -474,7 +480,6 @@ class PatrolsEscheduler(QObject):
         ontime = [
             patrol for patrol in self.patrols if not self.filter_delayed_patrols(patrol)
         ]
-
 
         self.patrols = []
         self.patrols.extend(ontime)
@@ -514,9 +519,9 @@ class PatrolsEscheduler(QObject):
         self.patrol_delayed.emit(patrolid)
 
     def setPointsToVisit(self, points: dict):
-        '''
-        points are a dict the keys are the checkpoints ids 
-        '''
+        """
+        points are a dict the keys are the checkpoints ids
+        """
 
         self._points_to_visit = points
         self.points_scheduler.update_points(points)

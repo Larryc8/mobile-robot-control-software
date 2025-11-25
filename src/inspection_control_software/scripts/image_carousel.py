@@ -1,22 +1,31 @@
-import sys
 import os
+import sys
+
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
-    QWidget,
-    QLabel,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QGroupBox,
     QFileDialog,
-    QStyle
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QShortcut,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-
-from utils.patrol import PatrolEndState, userOperation, operationMode, checkpointEndState
-
-from styles.buttons import border_button_style, secondary_button_style, border_button_style_danger
+from styles.buttons import (
+    border_button_style,
+    border_button_style_danger,
+    secondary_button_style,
+)
+from utils.patrol import (
+    PatrolEndState,
+    checkpointEndState,
+    operationMode,
+    userOperation,
+)
 
 # Button styling
 button_base_style = """
@@ -30,6 +39,7 @@ button_base_style = """
 
 thumnail_base_style = """
 """
+
 
 class CustomLabel(QWidget):
     clicked = pyqtSignal(int)
@@ -75,7 +85,7 @@ class ImageCarousel(QWidget):
         self.buffer_data = buffer
         self.use_filepath = False
         self.current_index = 0
-        self.MAX_THUMBNAILS = 4
+        self.MAX_THUMBNAILS = 3
         self.loaded_images = []
         self.data_container = []
         self.imaages_to_show = []
@@ -86,18 +96,21 @@ class ImageCarousel(QWidget):
         self.image_label = QLabel()
         self.page_label = QLabel("0/0")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("border: 2px solid gray;  background-color: gray")
+        self.image_label.setStyleSheet(
+            "border: 2px solid gray;  background-color: gray"
+        )
 
         # Buttons
         self.prev_button = QPushButton("<")
         self.next_button = QPushButton(">")
         self.delete_button = QPushButton("Descartar desague")
 
- 
-        self.prev_button.setStyleSheet(button_base_style + border_button_style )
+        self.prev_button.setStyleSheet(button_base_style + border_button_style)
         self.next_button.setStyleSheet(button_base_style + border_button_style)
         self.delete_button.setStyleSheet(secondary_button_style)
-        self.delete_button.setIcon(QApplication.style().standardIcon(QStyle.SP_DialogCancelButton))
+        self.delete_button.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_DialogCancelButton)
+        )
 
         # Button connections
         self.prev_button.clicked.connect(self.show_previous_image)
@@ -110,11 +123,12 @@ class ImageCarousel(QWidget):
         button_layout.addWidget(self.delete_button)
         self.delete_button.hide()
 
-
         layout = QHBoxLayout()
         thumbnails_layout = QHBoxLayout()
 
-        self.images_thumbnail = [CustomLabel(text="Image", index=i) for i in range(self.MAX_THUMBNAILS)]
+        self.images_thumbnail = [
+            CustomLabel(text="Image", index=i) for i in range(self.MAX_THUMBNAILS)
+        ]
         [
             label.clicked.connect(self.update_thumbnail)
             for label in self.images_thumbnail
@@ -125,13 +139,16 @@ class ImageCarousel(QWidget):
             thumbnails_layout.addWidget(label)
             label.setFixedSize(200, 170)
 
-
         layout.addWidget(self.prev_button)
         layout.addLayout(thumbnails_layout)
         layout.addWidget(self.next_button)
 
         main_layout = QVBoxLayout()
-        main_layout.addWidget(QLabel('fotos de referencia para la inspeccion tomadas de la zonas de interes'))
+        # main_layout.addWidget(
+        #     QLabel(
+        #         "fotos de referencia para la inspeccion tomadas de la zonas de interes"
+        #     )
+        # )
         main_layout.addWidget(self.image_label)
         main_layout.addLayout(layout)
         main_layout.addLayout(button_layout)
@@ -139,7 +156,7 @@ class ImageCarousel(QWidget):
         self.setLayout(main_layout)
         self.show_empty_image()
 
-    def create_data_model(self) ->None:
+    def create_data_model(self) -> None:
         pass
 
     def update_thumbnail(self, index):
@@ -167,7 +184,9 @@ class ImageCarousel(QWidget):
             x = [
                 label for label in self.images_thumbnail if label.id == current_point_id
             ]
-            self.data_model[current_point_id] = checkpointEndState.CHECKED.value#"<span style='color: green; font-weight: bold'>Bueno</span>"
+            self.data_model[current_point_id] = (
+                checkpointEndState.CHECKED.value
+            )  # "<span style='color: green; font-weight: bold'>Bueno</span>"
             if len(x):
                 x[0].status_label.setText(checkpointEndState.CHECKED.value)
 
@@ -186,11 +205,16 @@ class ImageCarousel(QWidget):
 
         if stored_points:
             for point in stored_points.get("points"):
-                id, x_meters, y_meters, map_file, yaw, gui_yaw, image = point
+                id, x_meters, y_meters, map_file, yaw, gui_yaw, image, *_ = point
                 self.buffer_data.append((id, image))
                 self.data_model[id] = checkpointEndState.PENDING.value
 
-            self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+            self.display_all_images(
+                data_array=self.buffer_data[
+                    self.current_index : self.current_index + self.MAX_THUMBNAILS
+                ],
+                use_filepath=self.use_filepath,
+            )
 
     def show_empty_image(self):
         # Create a blank pixmap
@@ -203,12 +227,22 @@ class ImageCarousel(QWidget):
     def discard_buffered_data(self):
         if self.current_index < len(self.buffer_data):
             self.buffer_data.pop(self.current_index)
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        self.display_all_images(
+            data_array=self.buffer_data[
+                self.current_index : self.current_index + self.MAX_THUMBNAILS
+            ],
+            use_filepath=self.use_filepath,
+        )
 
     def load_images(self, images: list = []):
         self.use_filepath = False
         self.display_current_image()
-        self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        self.display_all_images(
+            data_array=self.buffer_data[
+                self.current_index : self.current_index + self.MAX_THUMBNAILS
+            ],
+            use_filepath=self.use_filepath,
+        )
         pass
 
     def display_all_images(self, data_array, use_filepath):
@@ -224,7 +258,7 @@ class ImageCarousel(QWidget):
                 else:
                     id = None
                     data = data_array[i]
-                    img, file_path, pose = data
+                    img, file_path, pose, *_ = data
                     if img is not None:
                         height, width, channel = img.shape
                         bytes_per_line = 3 * width
@@ -265,7 +299,6 @@ class ImageCarousel(QWidget):
         if len(self.data_container) == 0:
             return
 
-
         if self.current_index >= len(self.data_container):
             return
 
@@ -274,7 +307,7 @@ class ImageCarousel(QWidget):
             _, path = self.data_container[self.current_index]
             pixmap = QPixmap(path)
         else:
-            img, file_path, pose = self.data_container[self.current_index]
+            img, file_path, pose, *_ = self.data_container[self.current_index]
             if img is not None:
                 height, width, channel = img.shape
                 bytes_per_line = 3 * width
@@ -298,25 +331,32 @@ class ImageCarousel(QWidget):
         self.image_label.setPixmap(scaled_pixmap)
 
     def show_next_image(self):
-        print(f'buffer dat len {len(self.buffer_data)}')
+        print(f"buffer dat len {len(self.buffer_data)}")
         if self.buffer_data is None:
             return
 
         if not len(self.buffer_data):
             return
 
-        if  (len(self.buffer_data) % self.MAX_THUMBNAILS):
-            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS) + 1
+        if len(self.buffer_data) % self.MAX_THUMBNAILS:
+            pages = (len(self.buffer_data) // self.MAX_THUMBNAILS) + 1
         else:
-            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS)
+            pages = len(self.buffer_data) // self.MAX_THUMBNAILS
 
         if len(self.buffer_data) < self.MAX_THUMBNAILS:
-            self.current_index = 0#(self.current_index - 1) % 1 
+            self.current_index = 0  # (self.current_index - 1) % 1
         else:
-            self.current_index = (self.current_index + 1) % pages 
+            self.current_index = (self.current_index + 1) % pages
 
         # self.display_all_images(data_array=self.buffer_data[self.current_index: self.current_index + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
-        self.display_all_images(data_array=self.buffer_data[self.current_index * self.MAX_THUMBNAILS : self.current_index * self.MAX_THUMBNAILS + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        self.display_all_images(
+            data_array=self.buffer_data[
+                self.current_index * self.MAX_THUMBNAILS : self.current_index
+                * self.MAX_THUMBNAILS
+                + self.MAX_THUMBNAILS
+            ],
+            use_filepath=self.use_filepath,
+        )
 
     def show_previous_image(self):
         if self.buffer_data is None:
@@ -325,17 +365,24 @@ class ImageCarousel(QWidget):
         if not len(self.buffer_data):
             return
 
-        if  (len(self.buffer_data) % self.MAX_THUMBNAILS):
-            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS) + 1
+        if len(self.buffer_data) % self.MAX_THUMBNAILS:
+            pages = (len(self.buffer_data) // self.MAX_THUMBNAILS) + 1
         else:
-            pages = (len(self.buffer_data)//self.MAX_THUMBNAILS)
+            pages = len(self.buffer_data) // self.MAX_THUMBNAILS
 
-        if not (len(self.buffer_data)//self.MAX_THUMBNAILS):
-            self.current_index = 0#(self.current_index - 1) % 1 
+        if not (len(self.buffer_data) // self.MAX_THUMBNAILS):
+            self.current_index = 0  # (self.current_index - 1) % 1
         else:
             self.current_index = (self.current_index - 1) % pages
 
-        self.display_all_images(data_array=self.buffer_data[self.current_index * self.MAX_THUMBNAILS : self.current_index * self.MAX_THUMBNAILS + self.MAX_THUMBNAILS], use_filepath=self.use_filepath)
+        self.display_all_images(
+            data_array=self.buffer_data[
+                self.current_index * self.MAX_THUMBNAILS : self.current_index
+                * self.MAX_THUMBNAILS
+                + self.MAX_THUMBNAILS
+            ],
+            use_filepath=self.use_filepath,
+        )
 
     def select_image(self, index):
         if self.buffer_data is None:

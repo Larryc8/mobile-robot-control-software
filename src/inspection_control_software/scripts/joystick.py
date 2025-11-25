@@ -1,12 +1,19 @@
-import sys
 import asyncio
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QGroupBox, QPushButton, QShortcut
-from PyQt5.QtCore import Qt, QPoint, QPointF
-from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QPainterPath
+import sys
 
-from PyQt5.QtGui import QKeySequence
-
+from config_model import UserConfigFileManager
 from manual_control_node import ControlDynamicPose
+from PyQt5.QtCore import QPoint, QPointF, Qt
+from PyQt5.QtGui import QBrush, QColor, QKeySequence, QPainter, QPainterPath, QPen
+from PyQt5.QtWidgets import (
+    QApplication,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QShortcut,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class Joypad(QGroupBox):
@@ -17,12 +24,12 @@ class Joypad(QGroupBox):
         self.setMinimumHeight(size)
         self.setMaximumWidth(size)
         self.setMinimumWidth(size)
-        self.joypad_radius = size*0.4
-        self.thumb_radius = size*0.15
-        self.center = QPointF(self.width()/2, self.height()/2 + 15)
+        self.joypad_radius = size * 0.4
+        self.thumb_radius = size * 0.15
+        self.center = QPointF(self.width() / 2, self.height() / 2 + 15)
         self.thumb_pos = self.center
         self.max_distance = self.joypad_radius - self.thumb_radius
-        self.currentOperationMode = 'manual'
+        self.currentOperationMode = "manual"
         self.x_value = 0.0
         self.y_value = 0.0
         self.pressed = False
@@ -31,6 +38,9 @@ class Joypad(QGroupBox):
         key_sequence = QKeySequence("Ctrl+Up")
         self.shortcut = QShortcut(key_sequence, self)
         self.shortcut.activated.connect(self.on_shortcut_triggered)
+
+    def update_parameters(self):
+        pass
 
     def on_shortcut_triggered(self):
         """This function (slot) is called when the shortcut is pressed."""
@@ -77,7 +87,7 @@ class Joypad(QGroupBox):
     def keyReleaseEvent(self, event):
         self.moveThumb(self.center)
         self.update()
-        print('key realeased joystick')
+        print("key realeased joystick")
         # super().keyReleaseEvent(event)
 
     def paintEvent(self, event):
@@ -120,7 +130,7 @@ class Joypad(QGroupBox):
             self.y_value = 0.0
             self.update()
             self.valueChanged(0.0, 0.0)
-            self.robot_vel_controller.setRobotDynamicPose(0,0)
+            self.robot_vel_controller.setRobotDynamicPose(0, 0)
             super().mouseReleaseEvent(event)
 
     def moveThumb(self, pos):
@@ -134,7 +144,7 @@ class Joypad(QGroupBox):
             vector = QPointF(vector.x() * scale, vector.y() * scale)
 
         self.thumb_pos = self.center + vector
-        print(f'move thumb {self.thumb_pos.x()} {self.thumb_pos.y()}')
+        print(f"move thumb {self.thumb_pos.x()} {self.thumb_pos.y()}")
 
         # Calculate normalized values (-1.0 to 1.0)
         self.x_value = vector.x() / self.max_distance
@@ -150,7 +160,7 @@ class Joypad(QGroupBox):
 
     def update_operation_mode(self, mode):
         # if mode == 'auto':
-            # print('auto joystick')
+        # print('auto joystick')
         pass
 
 

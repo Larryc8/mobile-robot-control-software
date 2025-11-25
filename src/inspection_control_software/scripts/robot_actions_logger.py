@@ -1,39 +1,34 @@
-from ctypes import alignment
-import typing
-import sys
-import datetime
-from datetime import datetime
 import csv
+import datetime
 import os
-import rospy
+import sys
+import typing
+from ctypes import alignment
+from datetime import datetime
 
+import rospy
+from config_model import UserConfigFileManager
+from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPalette, QTextCursor
 from PyQt5.QtWidgets import (
     QApplication,
+    QComboBox,
+    QFileDialog,
+    QGridLayout,
     QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
     QMainWindow,
-    QWidget,
-    QVBoxLayout,
     QPlainTextEdit,
     QPushButton,
-    QHBoxLayout,
-    QGridLayout,
-    QLabel,
-    QFileDialog,
-    QLineEdit,
-    QComboBox,
-    QTextEdit,
     QScrollArea,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import QObject, Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QTextCursor, QColor, QPalette, QDesktopServices
-
-
-from config_model import UserConfigFileManager
-
+from sensor_msgs.msg import BatteryState
 from styles.buttons import border_button_style, secondary_button_style
-
-from sensor_msgs.msg import BatteryState 
-
 
 
 class CsvHandler:
@@ -149,6 +144,7 @@ class FixedMessage(QGroupBox):
         layout.setContentsMargins(6, 6, 6, 6)
         self.show_btn = QPushButton("Mostrar")
         self.export_btn = QPushButton("Exportar")
+        self.export_btn.setIcon(QIcon("./public/export2.svg"))
 
         self.export_btn.clicked.connect(self.export_log)
 
@@ -181,6 +177,7 @@ class RobotActionsLoggerView(QGroupBox):
     A reusable widget for displaying application log messages.
     It automatically adds timestamps and provides options to clear or save the log.
     """
+
     log_file_updated = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -199,8 +196,6 @@ class RobotActionsLoggerView(QGroupBox):
         buttons_layout = QVBoxLayout()
         main_layout = QGridLayout()
         layout.setSpacing(2)
-
-
 
         self.setStyleSheet("""
             QGroupBox {
@@ -231,7 +226,6 @@ class RobotActionsLoggerView(QGroupBox):
 
         self.setLayout(main_layout)
 
-
     def update_log(self, log_msg: str) -> None:
         if len(self.log_queue) == self._queue_size:
             self.log_queue.pop(0)
@@ -256,25 +250,33 @@ class Logger(QObject):
         self.user_config = UserConfigFileManager("./config/app_config.json")
         config = self.user_config.read_data()
         self._logger = CsvHandler(
-            header=["time", "level","battery","msg"], filepath=config["log_history_filepath"]
+            header=["time", "level", "battery", "msg"],
+            filepath=config["log_history_filepath"],
         )
         self.battery_state = 100
 
-        self.battery_state_sub = rospy.Subscriber('/battery_state', BatteryState, self.update_battery) 
+        self.battery_state_sub = rospy.Subscriber(
+            "/battery_state", BatteryState, self.update_battery
+        )
 
     def update_battery(self, msg):
-        self.battery_state = msg.percentage*100
+        self.battery_state = msg.percentage * 100
 
     def log(self, msg: str = "Chala es suepr linda! Bienvenido!", level=None) -> None:
         now = datetime.now()
         timestamp = now.strftime("%A, %B %d, %Y - %I:%M %p")
-        self.log_changed.emit(f"<span style='color: gray;'>{timestamp}</span> [INFO] [battery: {self.battery_state:.1f}%] {msg}")
-        self._logger.append_row([timestamp, "INFO", f"battery: {self.battery_state}%", msg])
+        self.log_changed.emit(
+            f"<span style='color: gray;'>{timestamp}</span> [INFO] [battery: {self.battery_state:.1f}%] {msg}"
+        )
+        self._logger.append_row(
+            [timestamp, "INFO", f"battery: {self.battery_state}%", msg]
+        )
 
     def update_log_file(self, filepath):
         config = self.user_config.read_data()
         self._logger = CsvHandler(
-            header=["time", "level","battery","msg"], filepath=config["log_history_filepath"]
+            header=["time", "level", "battery", "msg"],
+            filepath=config["log_history_filepath"],
         )
 
 

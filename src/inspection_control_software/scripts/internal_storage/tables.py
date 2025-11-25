@@ -87,12 +87,17 @@ class Checkpoint(Base):
     status = Column( Integer) 
     # You should specify enum values, e.g., Enum('active', 'inactive', name='status_enum'))
     image = Column(String)
+    aruco_pose_vector  = Column(ARRAY(Float))
 
     alerts = relationship("Alert", back_populates="checkpoint")
     checkpoint_link = relationship("CheckpointLink", back_populates="checkpoint")
     map = relationship("Map", back_populates="checkpoint")
 
     calibrations = relationship("Calibration", back_populates="checkpoint_cal")
+
+    __table_args__ = (
+        CheckConstraint('array_length(aruco_pose_vector, 1) = 3', name='check_vector_length'),
+    )
 
 class CheckpointLink(Base):
     __tablename__ = "checkpoints_link"

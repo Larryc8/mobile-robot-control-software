@@ -16,7 +16,7 @@
 
 # FFFFFF - White
 #
-color = '#2C3E50'
+color = "#2C3E50"
 
 
 menu_style = """
@@ -48,9 +48,9 @@ menu_style = """
     }
 """
 
+# image: url(public/menu-4-fill-svgrepo-com.svg);
 button_with_menu_style = """
     QPushButton::menu-indicator {
-        image: url(public/menu-4-fill-svgrepo-com.svg);
         subcontrol-position: right center;
         subcontrol-origin: padding;
         padding-right: 15px;
@@ -166,11 +166,11 @@ secondary_button_style = """
 tertiary_button_style = """
     QPushButton {
         background: #DCDCDC ;
-        color: gray;
+        color: black;
         border: none;
         padding: 5px;
         text-align: left;
-        font-size: 16px;
+        font-size: 14px;
     }
     QPushButton:hover {
         background: #F5F5F5;

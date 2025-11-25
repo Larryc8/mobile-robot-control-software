@@ -1,64 +1,55 @@
-from fileinput import isstdin
-from typing import List
-import numpy as np
-import time
 import json
 import os
-
 import sys
+import time
+from fileinput import isstdin
+from typing import List
+
+import numpy as np
 import rospy
+from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
+from input_textdialog import CustomDialog
+from patrols_scheduler import PatrolsEscheduler
+from place_form import PlaceForm
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QPixmap, QTransform
 from PyQt5.QtWidgets import (
-    QMainWindow,
     QApplication,
-    QPushButton,
-    QWidget,
-    QTabWidget,
-    QVBoxLayout,
-    QLayout,
+    QFileDialog,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QSlider,
-    QGroupBox,
-    QTabWidget,
-    QStyle,
+    QLayout,
     QLineEdit,
-    QStackedLayout,
-    QFileDialog,
+    QMainWindow,
+    QProgressBar,
+    QPushButton,
     QSlider,
-    QProgressBar
+    QStackedLayout,
+    QStyle,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QTransform, QFontMetrics
-
-from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
-from patrols_scheduler import PatrolsEscheduler
-
-from input_textdialog import CustomDialog
 from pyqttoast import Toast, ToastPreset
-
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
+    colored_button_style,
+    error_simple_line_edit_style,
+    minimal_button_style,
+    modern_line_edit_style,
+    patrol_checkbox_style,
     primary_button_style,
     secondary_button_style,
-    colored_button_style,
+    simple_line_edit_style,
+    simple_slider_leftright_style,
+    simple_slider_rightleft_style,
     tertiary_button_style,
     toggle_button_style,
-    minimal_button_style,
-    patrol_checkbox_style,
-    simple_slider_rightleft_style,
-    simple_slider_leftright_style,
-    modern_line_edit_style,
-    simple_line_edit_style,
-    error_simple_line_edit_style,
 )
-
 from styles.labels import inactive_label_style, minimal_label_style
-
-from place_form import PlaceForm
-
-
 
 # Usage example
 # if __name__ == "__main__":
@@ -84,7 +75,7 @@ from place_form import PlaceForm
 class ConfigPanel(QWidget):
     query_param = pyqtSignal(str)
 
-    def __init__(self, nodes_manager, parent=None, patrols_scheduler = None) -> None:
+    def __init__(self, nodes_manager, parent=None, patrols_scheduler=None) -> None:
         super().__init__()
         self.stacklayout = QStackedLayout()
         self.parent = parent
@@ -148,13 +139,13 @@ class ConfigPanel(QWidget):
             self.query_param.connect(tab.update_panel)
 
         self.tabs.setStyleSheet("""
-            
+
             QTabBar::tab {
                 background: #F5F5F5;
                 padding: 8px;
                 color: #555;
             }
-            
+
             QTabBar::tab:selected {
                 color: #333;
                 border-bottom: 4px solid #2196F3;
@@ -164,11 +155,11 @@ class ConfigPanel(QWidget):
         # self.tabs.setTabPosition(QTabWidget.West)
 
         self.save_config_button = QPushButton("Guardar Configuracion")
+        self.save_config_button.setMaximumWidth(300)
         self.apply_config_button = QPushButton("Aplicar Cambios")
         self.reset_config_btn = QPushButton("Restaurar valores")
         self.back_btn = QPushButton("↤ Atras")
         self.back_btn.setFixedWidth(100)
-
 
         self.buttons_layout.addWidget(self.save_config_button, 2)
         # self.buttons_layout.addWidget(self.reset_config_btn, 1 )
@@ -223,7 +214,6 @@ class ConfigPanel(QWidget):
     def set_friendly_config(self, x):
         self.stacklayout.setCurrentIndex(0)
 
-
     @pyqtSlot()
     def saveClickHandler(self) -> None:
         self.apply_config_button.hide()
@@ -240,11 +230,11 @@ class ConfigPanel(QWidget):
         )
         dialog.exec_()
 
-        if dialog.response == 'Positive':
+        if dialog.response == "Positive":
             toast = Toast(self)
             toast.setDuration(5000)  # Hide after 5 seconds
             toast.setTitle("Reiniciando Nodos...")
-            toast.setText('Los cambios han sido aplicados con exito')
+            toast.setText("Los cambios han sido aplicados con exito")
             toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
             Toast.setPositionRelativeToWidget(self.parent)
             toast.show()
@@ -450,21 +440,23 @@ class FriendlyConfig(QWidget):
     config_type_change = pyqtSignal(int)
     calibration_started = pyqtSignal(bool)
 
-    def __init__(self, patrols_scheduler: PatrolsEscheduler ) -> None:
+    def __init__(self, patrols_scheduler: PatrolsEscheduler) -> None:
         super().__init__()
         self.patrols_scheduler: PatrolsEscheduler = patrols_scheduler
         self.layout = QGridLayout()
-        #self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
+        # self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
         self.advance_config_btn = QPushButton("Configuracion avanzada")
-        self.advance_config_btn.setIcon( QApplication.style().standardIcon(QStyle.SP_VistaShield))
+        self.advance_config_btn.setIcon(QIcon("./public/setting.svg"))
+        self.advance_config_btn.setMaximumWidth(300)
+
         self.advance_config_btn.clicked.connect(self.advance_config_callack)
         self.isStart = True
         self.calibration_periods = 1
-        self.start_calibrations_btn = QPushButton('Test PatrolsEscheduler')
-        self.debug = QLabel('debug')
+        self.start_calibrations_btn = QPushButton("Comenzar calibraciones")
+        self.start_calibrations_btn.setMaximumWidth(300)
+        self.debug = QLabel("debug")
 
-
-        self.text = QLabel('Se ejecuraran periodos de calibracion')
+        self.text = QLabel("Se ejecuraran periodos de calibracion")
         self.text.setFixedHeight(30)
 
         self.h_slider = QSlider(Qt.Horizontal)
@@ -480,12 +472,12 @@ class FriendlyConfig(QWidget):
         self.patrols_scheduler.points_scheduler.check_done.connect(self.update_progress)
         self.patrols_scheduler.patrol_finished.connect(self.stop_calibrations)
 
-
         self.start_calibrations_btn.setStyleSheet(border_button_style)
-        self.advance_config_btn.setStyleSheet(primary_button_style)
+        self.advance_config_btn.setStyleSheet(secondary_button_style)
 
-        self.start_calibrations_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_MediaPlay))
-
+        self.start_calibrations_btn.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+        )
 
         self.layout.addWidget(self.start_calibrations_btn, 2, 1)
         self.layout.addWidget(self.h_slider, 3, 1)
@@ -499,8 +491,10 @@ class FriendlyConfig(QWidget):
 
     def update_all(self, value):
         self.calibration_periods = int(value)
-        self.calibrations_progress.setMaximum(self.calibration_periods*7)
-        self.text.setText(f'La calibracion se jcecutara drante {self.calibration_periods} periodo')
+        self.calibrations_progress.setMaximum(self.calibration_periods * 7)
+        self.text.setText(
+            f"La calibracion se jcecutara drante {self.calibration_periods} periodo"
+        )
 
     def advance_config_callack(self, x):
         self.config_type_change.emit(1)
@@ -510,33 +504,31 @@ class FriendlyConfig(QWidget):
             self.calibrations_progress.setValue(0)
             self.start_calibrations()
             self.isStart = False
-            return 
+            return
 
         self.stop_calibrations()
         self.isStart = True
 
-    def update_progress(self, x)->None:
+    def update_progress(self, x) -> None:
         if not self.isStart:
             self.calibrations_progress.setValue(self.calibrations_progress.value() + 1)
-            self.debug.setText(f'debug {self.calibrations_progress.value()}')
-
-
+            self.debug.setText(f"debug {self.calibrations_progress.value()}")
 
     def start_calibrations(self):
         self.calibration_started.emit(False)
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
         self.start_calibrations_btn.setIcon(icon_stop)
-        self.start_calibrations_btn.setText("Parar")
+        self.start_calibrations_btn.setText("Parar calibraciones")
         self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
         self.patrols_scheduler.start_patrols(on_calibration=True)
         pass
 
-    def stop_calibrations(self)->None:
+    def stop_calibrations(self) -> None:
         self.calibration_started.emit(True)
         self.patrols_scheduler.cancel_task()
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.start_calibrations_btn.setIcon(icon_start)
-        self.start_calibrations_btn.setText("Comenzar")
+        self.start_calibrations_btn.setText("Comenzar calibraciones")
 
 
 class DescriptionConfigContainer(QGroupBox):

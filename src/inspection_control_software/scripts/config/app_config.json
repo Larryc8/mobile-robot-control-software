@@ -1,3 +1,6 @@
 {
-    "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/mse_octubre_23_9pm.csv"
+  "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/mse_octubre_23_9pm.csv",
+  "recent_map_files": [],
+  "max_linear_vel": 0,
+  "max_angular_vel": 0
 }

@@ -10,7 +10,7 @@ acc_lim_x: 2.6
 acc_lim_y: 0.0
 acc_lim_theta: 3.2
 xy_goal_tolerance: 0.099
-yaw_goal_tolerance: 0.2006
+yaw_goal_tolerance: 0.2856
 latch_xy_goal_tolerance: false
 sim_time: 1.5
 vx_samples: 20.0

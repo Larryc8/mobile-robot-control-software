@@ -10,29 +10,24 @@
 
 ## Then load sys to get sys.argv.
 import sys
-from python_qt_binding.QtGui import *
-from python_qt_binding.QtCore import *
 
-from python_qt_binding.QtWidgets import *
 import rospy
 import tf
-
+from geometry_msgs.msg import Pose2D, PoseWithCovarianceStamped, Twist
+from nav_msgs.msg import OccupancyGrid, Odometry
+from python_qt_binding.QtCore import *
+from python_qt_binding.QtGui import *
+from python_qt_binding.QtWidgets import *
 
 ## Finally import the RViz bindings themselves.
 from rviz import bindings as rviz
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from nav_msgs.msg import OccupancyGrid
-
-
 from tf.transformations import euler_from_quaternion
-
 
 # try:
 # rospy.get_master().getPid()
 # except:
 # failed = True
+
 
 class Test(rviz.Tool):
     def __init__(self) -> None:
@@ -51,15 +46,15 @@ class MyViz(QWidget):
         super().__init__(parent)  # Pasa `parent` al constructor de QWidget
         # QWidget.__init__(self)
         self.past_point = QPoint(0, 0)
+        self.robot_pose = Pose2D()
         self.frame_position = QPoint(0, 0)
         self.followRobot = False
         self.minHeight = self.height()
         self.minWidth = self.width()
         self.resize = 170
         self.var = False
-        self.setStyleSheet('background-color: lightgray')
+        self.setStyleSheet("background-color: lightgray")
         # rospy.init_node('harolsito')
-
 
         ## rviz.VisualizationFrame is the main container widget of the
         ## regular RViz application, with menus, a toolbar, a status
@@ -108,7 +103,6 @@ class MyViz(QWidget):
         rospy.Subscriber("/odom", Odometry, self.callback)
         rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.pose_callback)
         rospy.Subscriber("/map", OccupancyGrid, self.map_callback)
-    
 
         # self.grid_display = self.manager.getRootDisplayGroup().getDisplayAt(0)
 
@@ -117,22 +111,30 @@ class MyViz(QWidget):
         layout.addWidget(self.frame)
         self.setLayout(layout)
 
+    def update_robot_pose(self, x, y):
+        self.view_man.getCurrent().subProp("X").setValue(x)
+        self.view_man.getCurrent().subProp("Y").setValue(y)
+
     def pose_callback(self, msg):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
 
+        self.robot_pose.x = x
+        self.robot_pose.y = y
+
         if self.followRobot:
-            self.view_man.getCurrent().subProp("X").setValue(x) 
-            self.view_man.getCurrent().subProp("Y").setValue(y)
+            self.update_robot_pose(x, y)
         pass
 
     def map_callback(self, msg):
-        if not  self.followRobot:
+        if not self.followRobot:
             return
 
         try:
-            listener = tf.TransformListener(interpolate=True, cache_time=rospy.Duration(11))
- 
+            listener = tf.TransformListener(
+                interpolate=True, cache_time=rospy.Duration(11)
+            )
+
             listener.waitForTransform(
                 target_frame="map",
                 source_frame="base_link",
@@ -140,21 +142,19 @@ class MyViz(QWidget):
                 timeout=rospy.Duration(10),
             )
             trans, rotation_qua = listener.lookupTransform(
-                 "map", "base_link", rospy.Time()
+                "map", "base_link", rospy.Time()
             )
 
             yaw = tf.transformations.euler_from_quaternion(rotation_qua)
             [x, y, z] = trans
 
             if self.followRobot:
-                self.view_man.getCurrent().subProp("X").setValue(x) 
-                self.view_man.getCurrent().subProp("Y").setValue(y)
+                self.update_robot_pose(x, y)
 
-            rospy.loginfo('UPDATE POSE IN MAP CCREATION')
-
+            rospy.loginfo("UPDATE POSE IN MAP CCREATION")
 
         except Exception as e:
-            print(__name__, e) 
+            print(__name__, e)
 
     def callback(self, msg):
         orientation = msg.pose.pose.orientation
@@ -166,25 +166,25 @@ class MyViz(QWidget):
         self.past_point = present_point
 
         # if self.followRobot:
-            # (roll, pitch, yaw) = euler_from_quaternion(
-            #     [orientation.x, orientation.y, orientation.z, orientation.w]
-            # )
-            # self.view_man.getCurrent().subProp("Angle").setValue(yaw - 1.55678)
-            # # self.view_man.getCurrent().subProp( "Global Options" ).subProp( "Fixed Frame" ).setValue('odom')
-            # self.view_man.getCurrent().subProp("X").setValue(
-            #     self.view_man.getCurrent().subProp("X").getValue() + delta_movement.x() 
-            # )
-            # self.view_man.getCurrent().subProp("Y").setValue(
-            #     self.view_man.getCurrent().subProp("Y").getValue() + delta_movement.y()
-            # )
-            # # self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
-            #
-            # # if self.width() > self.height():
-            # #     delta_movement =  delta_movement*self.width()/self.height()
-            # # else:
-            # #     delta_movement = delta_movement*(self.width()/self.minWidth)
-            # self.frame_position = self.frame_position + delta_movement
-            #
+        # (roll, pitch, yaw) = euler_from_quaternion(
+        #     [orientation.x, orientation.y, orientation.z, orientation.w]
+        # )
+        # self.view_man.getCurrent().subProp("Angle").setValue(yaw - 1.55678)
+        # # self.view_man.getCurrent().subProp( "Global Options" ).subProp( "Fixed Frame" ).setValue('odom')
+        # self.view_man.getCurrent().subProp("X").setValue(
+        #     self.view_man.getCurrent().subProp("X").getValue() + delta_movement.x()
+        # )
+        # self.view_man.getCurrent().subProp("Y").setValue(
+        #     self.view_man.getCurrent().subProp("Y").getValue() + delta_movement.y()
+        # )
+        # # self.view_man.getCurrent().subProp( "Y" ).setValue(self.frame_position.y())
+        #
+        # # if self.width() > self.height():
+        # #     delta_movement =  delta_movement*self.width()/self.height()
+        # # else:
+        # #     delta_movement = delta_movement*(self.width()/self.minWidth)
+        # self.frame_position = self.frame_position + delta_movement
+        #
         # print(
         #     "RVIZ",
         #     self.view_man.getCurrent().subProp("Y").getValue(),
@@ -196,12 +196,14 @@ class MyViz(QWidget):
     def setUp(self, prop: str, value=None):  # SCale 562
         if prop == "globalframe":
             self.manager.setFixedFrame(value)
-            if value == 'map':
+            if value == "map":
                 self.view_man.getCurrent().subProp("Angle").setValue(0)
         if prop == "followrobot":
             # self.frame.hideLeftDock(not self.var)
             self.followRobot = value
             self.view_man.getCurrent().subProp("Scale").setValue(self.resize)
+            if self.followRobot:
+                self.update_robot_pose(self.robot_pose.x, self.robot_pose.y)
             # self.manager.setFixedFrame("odom")
         if prop == "scale":
             self.view_man.getCurrent().subProp("Scale").setValue(value)
@@ -228,7 +230,7 @@ class MyViz(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    t = MyViz('./config_navigation.rviz')
+    t = MyViz("./config_navigation.rviz")
     t.show()
 
     sys.exit(app.exec())

@@ -1,35 +1,56 @@
+from input_textdialog import CustomDialog
+from PyQt5.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QRect,
+    Qt,
+    QTime,
+    pyqtSignal,
+    pyqtSlot,
+)
 from PyQt5.QtWidgets import (
-    QMainWindow,
     QApplication,
-    QPushButton,
-    QWidget,
-    QTabWidget,
-    QVBoxLayout,
-    QLayout,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QSlider,
     QCheckBox,
     QComboBox,
-    QGroupBox,
-    QScrollArea,
-    QStackedLayout,
-    QMenu,
-    QTimeEdit,
-    QStyle,
     QGraphicsOpacityEffect,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QMainWindow,
+    QMenu,
+    QPushButton,
+    QScrollArea,
+    QSlider,
+    QStackedLayout,
+    QStyle,
+    QTabWidget,
+    QTimeEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QTime,  QPropertyAnimation, QRect, QEasingCurve
+from styles.buttons import primary_button_style, secondary_button_style
+from styles.labels import (
+    border_label_style,
+    error_label_style,
+    inactive_label_style,
+    muted_mini_label_style,
+)
 
-from styles.buttons import primary_button_style, secondary_button_style 
-from styles.labels import inactive_label_style, border_label_style, error_label_style, muted_mini_label_style
-from input_textdialog import CustomDialog
 
 class PatrolsMenu(QMainWindow):
     update_date = pyqtSignal(dict)
 
-    def __init__(self, parent, selected_days, patrolid, time='0000', state=None, current_weekday=None) -> None:
+    def __init__(
+        self,
+        parent,
+        selected_days,
+        patrolid,
+        time="0000",
+        state=None,
+        current_weekday=None,
+    ) -> None:
         super().__init__()
         # self.update_date = pyqtSignal(dict)
         # print(parent)
@@ -44,7 +65,6 @@ class PatrolsMenu(QMainWindow):
             }
         """)
 
-
         self.setGeometry(0, 0, 380, 275)
         self.patrolid = patrolid
         self.state = state
@@ -52,7 +72,7 @@ class PatrolsMenu(QMainWindow):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.days_labels = DaySelect(selected_days=selected_days)
         self.time = TimeSelect()
-        self.time.setTime(time) 
+        self.time.setTime(time)
         self.current_weekday = current_weekday
 
         buttons_layout = QHBoxLayout()
@@ -66,7 +86,7 @@ class PatrolsMenu(QMainWindow):
         icon_save = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
         save_btn.setIcon(icon_save)
 
-        self.empty_days_alert = QLabel('✘ ERROR: Seleccione almenos un dia')
+        self.empty_days_alert = QLabel("✘ ERROR: Seleccione almenos un dia!")
         self.empty_days_alert.setStyleSheet(error_label_style)
         self.empty_days_alert.hide()
         layout = QVBoxLayout()
@@ -79,12 +99,11 @@ class PatrolsMenu(QMainWindow):
         close_btn.clicked.connect(self.close)
         self.central_widget.setLayout(layout)
 
-
     def show_popup(self):
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
-        popup_x = self.parent.x() + (self.parent.width() - self.width() - 60) 
-        popup_y = self.parent.y() + (self.parent.height() - self.height())//2 
+        popup_x = self.parent.x() + (self.parent.width() - self.width() - 60)
+        popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
         # print("popup", popup_x, popup_y)
         self.move(popup_x, popup_y)
         self.show()
@@ -97,19 +116,28 @@ class PatrolsMenu(QMainWindow):
         days = self.days_labels.get_selected_days()
         # print('patrol menu', days)
         x = {
-                f"{name}": {"day": f"{name}", "time": time, "finished": False, 'patrolid': str(self.patrolid)}
+            f"{name}": {
+                "day": f"{name}",
+                "time": time,
+                "finished": False,
+                "patrolid": str(self.patrolid),
+            }
             for name in days
             if name
         }
         if len(x) == 0:
             self.empty_days_alert.show()
-            return 
+            return
 
-        a = {'days': x, 'time': time, "state": self.state, 'current_weekday': self.current_weekday}
+        a = {
+            "days": x,
+            "time": time,
+            "state": self.state,
+            "current_weekday": self.current_weekday,
+        }
         print("A MA, FUNCIONA patrool menu", x)
         self.update_date.emit({str(self.patrolid): a})
         self.hide()
-
 
 
 class TimeSelect(QGroupBox):
@@ -124,10 +152,9 @@ class TimeSelect(QGroupBox):
         self.minutes.setDisplayFormat("mm")
         self.ap.setDisplayFormat("AP")
 
-
         self.layout = QGridLayout()
-        self.hours_label = QLabel('Horas')
-        self.minutes_label = QLabel('Minutes')
+        self.hours_label = QLabel("Horas")
+        self.minutes_label = QLabel("Minutes")
         self.layout.addWidget(self.hours_label, 0, 0)
         self.layout.addWidget(self.minutes_label, 0, 1)
         self.layout.addWidget(self.hours, 1, 0)
@@ -135,46 +162,45 @@ class TimeSelect(QGroupBox):
         self.layout.addWidget(self.ap, 1, 2)
         self.setLayout(self.layout)
 
-        style =  ("""
+        style = """
             QTimeEdit {
                 border: 2px solid #3498db;
                 padding: 2px 10px;
                 background: white;
                 font-size: 25px;
             }
-            
+
             QTimeEdit:hover {
                 border-color: #2980b9;
             }
-            
+
             QTimeEdit::up-button, QTimeEdit::down-button {
                 background-color: #3498db;
                 border: none;
                 width: 40px;
             }
-            
+
             QTimeEdit::up-button:hover, QTimeEdit::down-button:hover {
                 background-color: blue;
-            } 
-        """)
+            }
+        """
         self.hours.setStyleSheet(style)
         self.minutes.setStyleSheet(style)
         self.ap.setStyleSheet(style)
         self.hours_label.setStyleSheet(muted_mini_label_style)
         self.minutes_label.setStyleSheet(muted_mini_label_style)
 
-
     def setTime(self, time: str):
         x = [digit for digit in time]
-        hours_value = ''.join(x[:2])
-        minutes_value = ''.join(x[2:])
-        self.hours.setTime(QTime.fromString(hours_value, 'HH'))
-        self.minutes.setTime(QTime.fromString(minutes_value, 'mm'))
+        hours_value = "".join(x[:2])
+        minutes_value = "".join(x[2:])
+        self.hours.setTime(QTime.fromString(hours_value, "HH"))
+        self.minutes.setTime(QTime.fromString(minutes_value, "mm"))
 
     def getTime(self):
         hours = self.hours.time()
         minutes = self.minutes.time()
-        time_str = f'{hours.toString("HH")}{minutes.toString("mm")}'
+        time_str = f"{hours.toString('HH')}{minutes.toString('mm')}"
         return time_str
 
 

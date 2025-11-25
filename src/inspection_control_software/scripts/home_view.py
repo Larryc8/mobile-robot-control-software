@@ -1,100 +1,92 @@
-import sys
 import re
-import rospy
-from typing import List
+import sys
+from datetime import datetime
 from enum import Enum
+from typing import List
 
+import robot_actions_logger
+import rospy
+
+# from points_manager import PointsGenerator
+from better_image_display import ImageViewer
+from config_model import UserConfigFileManager
+from database_manager import AlertStatus
+from image_carousel import ImageCarousel
+from input_textdialog import CustomDialog, InputDialog
+from joystick import Joypad
+from notification import Notification, NotificationType
+from patrol_menu import PatrolsMenu
+from patrols_scheduler import PatrolsEscheduler
+from place_form import PlaceForm
+from PyQt5.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    QSize,
+    Qt,
+    QTime,
+    QTimer,
+    pyqtSignal,
+    pyqtSlot,
+)
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QPixmap, QTransform
 from PyQt5.QtWidgets import (
-    QMainWindow,
+    QAction,
+    QActionGroup,
     QApplication,
-    QPushButton,
-    QWidget,
-    QTabWidget,
-    QVBoxLayout,
-    QLayout,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QSlider,
     QCheckBox,
     QComboBox,
-    QGroupBox,
-    QScrollArea,
-    QStackedLayout,
-    QMenu,
-    QProgressBar,
-    QMenu,
-    QActionGroup,
-    QAction,
     QFileDialog,
-    QMessageBox,
-    QStyle,
     QGraphicsOpacityEffect,
-    QToolTip,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSlider,
     QStackedLayout,
+    QStyle,
+    QTabWidget,
+    QToolTip,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import (
-    QPoint,
-    Qt,
-    pyqtSlot,
-    pyqtSignal,
-    QPropertyAnimation,
-    QParallelAnimationGroup,
-    QEasingCurve,
-    QTimer,
-    QTime,
-    QSize,
-    QEvent,
-)
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QTransform, QFontMetrics
-
-from database_manager import AlertStatus
-from pyqttoast import Toast, ToastPreset, ToastPosition
-from notification import Notification, NotificationType
-
-from datetime import datetime
-import rospy
+from pyqttoast import Toast, ToastPosition, ToastPreset
+from robot_actions_logger import RobotActionsLoggerView
+from robot_camera_view import RobotCamera
+from rview import MyViz
+from sensor_msgs.msg import BatteryState
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
-    menu_style,
-    primary_button_style,
-    secondary_button_style,
+    button_with_menu_style,
     colored_button_style,
-    tertiary_button_style,
-    toggle_button_style,
+    menu_style,
     minimal_button_style,
     patrol_checkbox_style,
-    button_with_menu_style
+    primary_button_style,
+    secondary_button_style,
+    tertiary_button_style,
+    toggle_button_style,
 )
-
 from styles.labels import (
     inactive_label_style,
+    info_label_style,
     minimal_label_style,
     muted_label_style,
     muted_mini_label_style,
     warning_label_style,
-    info_label_style,
 )
-
 from styles.patrols import patrol_base_style, patrol_selected_style
-
-from sensor_msgs.msg import BatteryState 
-
-# from points_manager import PointsGenerator
-from better_image_display import ImageViewer
-from joystick import Joypad
-from patrols_scheduler import PatrolsEscheduler
-from patrol_menu import PatrolsMenu
-from rview import MyViz
-from input_textdialog import InputDialog, CustomDialog
-from robot_camera_view import RobotCamera
-from image_carousel import ImageCarousel
-from robot_actions_logger import RobotActionsLoggerView 
-from place_form import PlaceForm
-import  robot_actions_logger
-
-from utils.patrol import PatrolEndState, userOperation, operationMode
+from utils.patrol import PatrolEndState, operationMode, userOperation
 
 
 class HomePanel(QWidget):
@@ -157,8 +149,9 @@ class HomePanel(QWidget):
         self.visualization_panel.map_loaded.connect(
             self.patrol_panel.patrols_scheduler.points_scheduler.setMap
         )
-        self.patrol_panel.patrols_scheduler.points_scheduler.alert_generated.connect(self.visualization_panel.handleAlertGeneration)
-
+        self.patrol_panel.patrols_scheduler.points_scheduler.alert_generated.connect(
+            self.visualization_panel.handleAlertGeneration
+        )
 
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
             self.visualization_panel.drainage_checkpoints_win.update_dreinage_info
@@ -170,17 +163,14 @@ class HomePanel(QWidget):
 
         self.visualization_panel.change_mode.connect(select_mode_panel.handleChangeMode)
 
-
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
             self.visualization_panel.drainage_checkpoints_win.reset_dreinage_status
         )
-
 
         self.layout.addWidget(self.visualization_panel, 0, 0, 8, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
 
         self.layout.addWidget(self.patrol_panel, 1, 2, 6, 1)
-
 
         self.layout.addWidget(joypad, 7, 2)
         # self.layout.addWidget(btn1, 3, 2)
@@ -224,7 +214,9 @@ class VisualizationPanel(QWidget):
         self.buffer_data_robot_camera = []
         self.view_options = {}
 
-        self.message = QLabel('MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas ')
+        self.message = QLabel(
+            "MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas "
+        )
         self.message.hide()
 
         self.rviz = MyViz(configfile="./config/config_navigation.rviz")
@@ -233,8 +225,7 @@ class VisualizationPanel(QWidget):
             buffer=self.buffer_data_robot_camera, parent=self.parent
         )
 
-
-
+        self.user_configs = UserConfigFileManager("./config/app_config.json")
         self.robot_actions_logger = RobotActionsLoggerView()
         self.logger = robot_actions_logger.logger
 
@@ -247,7 +238,9 @@ class VisualizationPanel(QWidget):
         # self.global_state_holder.currentUserOperation = userOperation.IDLE
         # self.mini_display = RobotCamera()
         self.parent.pointsWindow = ImageViewer(
-            nodes_manager=self.nodes_manager, parent=self.parent
+            nodes_manager=self.nodes_manager,
+            parent=self.parent,
+            widget=self.drainage_checkpoints_win,
         )
         self.nodes = [
             {
@@ -270,26 +263,24 @@ class VisualizationPanel(QWidget):
         )
 
         self.view_menu_btn = QPushButton("Opciones")
-        
+
         [
             self.buttons_layout.addWidget(button, r, c)
             for button, r, c, rx, cx in (
-                (self.view_menu_btn, 0, 1, 0, 0),
+                (self.view_menu_btn, 0, 3, 0, 0),
                 (self.load_map_button, 0, 0, 1, 4),
                 (self.points_window_btn, 0, 2, 1, 3),
-                (self.create_map_btn, 0, 3, 1, 3),
+                (self.create_map_btn, 0, 1, 1, 3),
             )
         ]
 
-
-
         # Create the QMenu
         view_menu = QMenu(self)
-        view_options_action_group = QActionGroup(self) 
+        view_options_action_group = QActionGroup(self)
 
-        # Add actions to the menu 
-        action1 = view_menu.addAction( "Modo de pantalla: Camara")
-        action2 = view_menu.addAction( "Modo de pantalla: Mapa")
+        # Add actions to the menu
+        action1 = view_menu.addAction("Modo de pantalla: Camara")
+        action2 = view_menu.addAction("Modo de pantalla: Mapa")
 
         action1.setCheckable(True)
         action2.setCheckable(True)
@@ -297,12 +288,12 @@ class VisualizationPanel(QWidget):
         view_options_action_group.addAction(action1)
         view_options_action_group.addAction(action2)
 
-        view_menu.addSeparator() # Add a separator line
+        view_menu.addSeparator()  # Add a separator line
         self.action3 = view_menu.addAction("Enfocar vista al robot")
-        self.action3.setWhatsThis('No se que poner')
+        self.action3.setWhatsThis("No se que poner")
         self.action3.setCheckable(True)
 
-        view_menu.addSeparator() # Add a separator line
+        view_menu.addSeparator()  # Add a separator line
         self.action4 = view_menu.addAction("Marcar lugar como referencia")
         self.action4.setEnabled(False)
 
@@ -310,18 +301,37 @@ class VisualizationPanel(QWidget):
         action1.triggered.connect(lambda: self.toggleCameraMapView())
         action2.triggered.connect(lambda: self.toggleCameraMapView())
         self.action3.triggered.connect(lambda: self.handleActionSelected(self.action3))
-        self.action4.triggered.connect(lambda: self.robotcamera.buffer_reference_image())
+        self.action4.triggered.connect(
+            lambda: self.robotcamera.buffer_reference_image()
+        )
 
         # Set the menu to the button
         self.view_menu_btn.setMenu(view_menu)
 
+        map_files_menu = QMenu(self)
+        new_action = QAction("cargar mapa", self)
+        new_action.triggered.connect(self.handleLoadMap)
+        map_files_menu.addAction(new_action)
+
+        recent_files_menu = map_files_menu.addMenu("recent files")
+
+        new_action2 = QAction("New File 2", self)
+        new_action2.triggered.connect(lambda: print("adios"))
+        recent_files_menu.addAction(new_action2)
+
+        self.load_map_button.setMenu(map_files_menu)
+
         # self.view_menu_btn.setStyleSheet(border_button_style + button_with_menu_style)
         self.message.setStyleSheet(warning_label_style)
         view_menu.setStyleSheet(menu_style)
-        self.view_menu_btn.setStyleSheet(secondary_button_style)
-        self.load_map_button.setStyleSheet(secondary_button_style + button_with_menu_style)
-        self.points_window_btn.setStyleSheet(secondary_button_style + button_with_menu_style)
-        self.create_map_btn.setStyleSheet(border_button_style)
+        self.view_menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style)
+        self.load_map_button.setStyleSheet(
+            tertiary_button_style + button_with_menu_style
+        )
+        self.points_window_btn.setStyleSheet(
+            tertiary_button_style + button_with_menu_style
+        )
+        self.create_map_btn.setStyleSheet(tertiary_button_style)
 
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.create_map_btn.setIcon(icon_start)
@@ -330,8 +340,7 @@ class VisualizationPanel(QWidget):
         icon_load = QApplication.style().standardIcon(QStyle.SP_FileLinkIcon)
         self.load_map_button.setIcon(icon_load)
 
-
-        self.load_map_button.clicked.connect(self.handleLoadMap)
+        # self.load_map_button.clicked.connect(self.handleLoadMap)
         self.map_loaded.connect(self.parent.pointsWindow.load_map)
         self.create_map_btn.clicked.connect(self.toggleCreaeteSaveMap)
 
@@ -359,8 +368,9 @@ class VisualizationPanel(QWidget):
             self.drainage_checkpoints_win.load_images
         )
         # self.robotcamera.custom_option_clicked.connect(self.toggleCameraMapView)
-        self.selected_user_operation.connect(self.drainage_checkpoints_win.get_user_operation)
-
+        self.selected_user_operation.connect(
+            self.drainage_checkpoints_win.get_user_operation
+        )
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
@@ -368,8 +378,6 @@ class VisualizationPanel(QWidget):
         # self.rviz.hide()
         # self.toggleCameraMapView()
         self.battery_state = BatteryIndicator()
-
-        
 
         # self.layout.addLayout(self.rviz_options_layout, 0, 0)
         self.layout.addLayout(self.buttons_layout, 1, 0)
@@ -390,21 +398,38 @@ class VisualizationPanel(QWidget):
 
     def handleActionSelected(self, action3):
         self.setFollowRobot(action3.isChecked())
-        action3.setText('Desenfocar vista del robot' if action3.isChecked() else 'Enfocar vista al robot')
+        action3.setText(
+            "Desenfocar vista del robot"
+            if action3.isChecked()
+            else "Enfocar vista al robot"
+        )
         print(action3.isChecked())
-
 
     def show_log(self):
         self.stacklayout.setCurrentIndex(2)
 
     def handleAlertGeneration(self, message, status):
-
         if status == AlertStatus.ERROR:
-            ntf = Notification(title='Ha ocurrido una alerta', msg=f"{message}", preset=ToastPreset.ERROR, parent=self.parent)
+            ntf = Notification(
+                title="Ha ocurrido una alerta",
+                msg=f"{message}",
+                preset=ToastPreset.ERROR,
+                parent=self.parent,
+            )
         if status == AlertStatus.WARNING:
-            ntf = Notification(title='Ha ocurrido una alerta', msg=f"{message}", preset=ToastPreset.WARNING, parent=self.parent)
+            ntf = Notification(
+                title="Ha ocurrido una alerta",
+                msg=f"{message}",
+                preset=ToastPreset.WARNING,
+                parent=self.parent,
+            )
         if status == AlertStatus.INFO:
-            ntf = Notification(title='Ha ocurrido una alerta', msg=f"{message}", preset=ToastPreset.INFO, parent=self.parent)
+            ntf = Notification(
+                title="Ha ocurrido una alerta",
+                msg=f"{message}",
+                preset=ToastPreset.INFO,
+                parent=self.parent,
+            )
 
         ntf.show()
 
@@ -443,7 +468,6 @@ class VisualizationPanel(QWidget):
 
         self.stacklayout.widget(index).setMaximumSize(2000, 1000)
         self.stacklayout.widget(index).update()
-        
 
     # def resizeEvent(self, event):
     def paintEvent(self, event):
@@ -472,7 +496,7 @@ class VisualizationPanel(QWidget):
             dg = CustomDialog(
                 self.parent,
                 "No se puede cargar mapa en el modo Auto",
-                message='Para cargar un nuevo mapa cambie al modo manual',
+                message="Para cargar un nuevo mapa cambie al modo manual",
                 positive_response="Seguir en modo Auto",
                 negative_response="Cambiar a Manual",
                 retries=1,
@@ -486,7 +510,7 @@ class VisualizationPanel(QWidget):
             dg = CustomDialog(
                 self.parent,
                 "Creacion de mapa sigue activo",
-                message='perderá todo el progreso que tiene hasta ahora!',
+                message="perderá todo el progreso que tiene hasta ahora!",
                 positive_response="Seguir creando",
                 negative_response="Descartar",
                 retries=1,
@@ -544,10 +568,10 @@ class VisualizationPanel(QWidget):
                     )
                 )
                 ntf = Notification(
-                    title='Operacion realizada con exito!', 
-                    msg='EL mapa ha sido subido', 
+                    title="Operacion realizada con exito!",
+                    msg="EL mapa ha sido subido",
                     preset=ToastPreset.SUCCESS,
-                    parent=self.parent
+                    parent=self.parent,
                 )
                 ntf.show()
 
@@ -558,13 +582,12 @@ class VisualizationPanel(QWidget):
             self.rviz.setUp("reset", True)
 
             self.global_state_holder.currentUserOperation = userOperation.IDLE
-    
 
             ntf = Notification(
-                title='Operacion realizada sin exito!', 
-                msg='Seleccione un mapa valido!', 
+                title="Operacion realizada sin exito!",
+                msg="Seleccione un mapa valido!",
                 preset=ToastPreset.ERROR,
-                parent=self.parent
+                parent=self.parent,
             )
             ntf.show()
 
@@ -575,13 +598,11 @@ class VisualizationPanel(QWidget):
 
     def saveMapHandler(self):
         if not self.nodes_manager.nodeIsRunning("turtlebot3_slam_gmapping"):
-         
-
             ntf = Notification(
-                title='Fallo en la creación del mapa', 
-                msg='El node de mapao no esta disponible!', 
+                title="Fallo en la creación del mapa",
+                msg="El node de mapao no esta disponible!",
                 preset=ToastPreset.ERROR,
-                parent=self.parent
+                parent=self.parent,
             )
             ntf.show()
             return
@@ -589,7 +610,9 @@ class VisualizationPanel(QWidget):
         # if self.nodes_manager.topicHasPublisher("/scan"):
         # self.save_map_button.setEnabled(False)
         place_form = PlaceForm()
-        dialog = InputDialog(self.parent, title='Guardar archivo de mapeo como:', child=place_form)
+        dialog = InputDialog(
+            self.parent, title="Guardar archivo de mapeo como:", child=place_form
+        )
         dialog.exec_()
         print("VizPanel,dialog", dialog.filename)
         mapname = dialog.filename
@@ -597,10 +620,10 @@ class VisualizationPanel(QWidget):
             self.nodes_manager.save_map(f"./maps/{mapname}")
             # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
             ntf = Notification(
-                title='Se guardo el mapa exitosamente', 
-                msg='Ahora el mapa está disponible para la navegación', 
+                title="Se guardo el mapa exitosamente",
+                msg="Ahora el mapa está disponible para la navegación",
                 preset=ToastPreset.SUCCESS,
-                parent=self.parent
+                parent=self.parent,
             )
             ntf.show()
 
@@ -632,20 +655,17 @@ class VisualizationPanel(QWidget):
 
     def handleCreateMap(self):
         if not self.currentOperationMode == operationMode.MANUAL:
-
-
             ntf = Notification(
-                title='Solo se puede crear mapas en modo manual', 
-                msg='Seleccione el modo manual', 
+                title="Solo se puede crear mapas en modo manual",
+                msg="Seleccione el modo manual",
                 preset=ToastPreset.WARNING,
-                parent=self.parent
+                parent=self.parent,
             )
             ntf.show()
 
             return
 
         if not self.nodes_manager.topicHasPublisher("/scan"):
-  
             ntf = Notification(parent=self.parent, type=NotificationType.LIDAR_ERROR)
             ntf.show()
             # dlg = QMessageBox(self)
@@ -690,7 +710,8 @@ class VisualizationPanel(QWidget):
         # self.parent.pointsWindow.save_points()
 
     def show_dreinage_window(self, checked):
-        self.drainage_checkpoints_win.show()
+        # self.drainage_checkpoints_win.show()
+        pass
 
     def update_operation_mode(self, mode):
         self.currentOperationMode = mode
@@ -767,14 +788,14 @@ class SelectModePanel(QGroupBox):
         # self.localize_button.hide()
 
     def handleChangeMode(self, mode):
+        self.global_state_holder.visualization_panel.rviz.setUp("reset")
+
         if mode == operationMode.AUTO:
             self.handleAutoMode()
-            return 
+            return
         if mode == operationMode.MANUAL:
             self.handleManualMode()
             return
-
-
 
     def checkMap(self, map_filepath):
         self.map = map_filepath
@@ -784,7 +805,7 @@ class SelectModePanel(QGroupBox):
             dg = CustomDialog(
                 self.parent,
                 "Creacion de mapa sigue activo!",
-                message='perderá todo el progreso que tiene hasta ahora',
+                message="perderá todo el progreso que tiene hasta ahora",
                 positive_response="Seguir creando",
                 negative_response="Descartar",
                 retries=1,
@@ -797,21 +818,16 @@ class SelectModePanel(QGroupBox):
         self.cancel_user_operation.emit(userOperation.CREATEMAP)
 
         if not self.nodes_manager.topicHasPublisher("/scan"):
-
-            ntf = Notification(
-                type=NotificationType.LIDAR_ERROR,
-                parent=self.parent
-            )
+            ntf = Notification(type=NotificationType.LIDAR_ERROR, parent=self.parent)
             ntf.show()
             return
 
         if not self.nodes_manager.topicHasPublisher("/map_metadata"):
-
             ntf = Notification(
-                title="No hay mapa disponible", 
-                msg="Cargue un mapa para continuar con la operación", 
+                title="No hay mapa disponible",
+                msg="Cargue un mapa para continuar con la operación",
                 preset=ToastPreset.ERROR,
-                parent=self.parent
+                parent=self.parent,
             )
             ntf.show()
             return
@@ -819,13 +835,12 @@ class SelectModePanel(QGroupBox):
         # self.nodes_manager.stopNodes(["amcl", "move_base", "turtlebot3_slam_gmapping"])
         print("AUTO MODE", self.map)
         if not self.map:
-
             ntf = Notification(
-                    title="No hay mapa disponible", 
-                    msg="Cargue un mapa para continuar con la operación", 
-                    preset=ToastPreset.ERROR,
-                    parent=self.parent
-                )
+                title="No hay mapa disponible",
+                msg="Cargue un mapa para continuar con la operación",
+                preset=ToastPreset.ERROR,
+                parent=self.parent,
+            )
             ntf.show()
             return
 
@@ -839,16 +854,13 @@ class SelectModePanel(QGroupBox):
         self.manual_mode_button.setEnabled(True)
         self.localize_button.setEnabled(False)
 
-
         ntf = Notification(
-                title="Modo auto establecido", 
-                msg="Programacion de patrullajes disponible", 
-                preset=ToastPreset.SUCCESS,
-                parent=self.parent
-            )
+            title="Modo auto establecido",
+            msg="Programacion de patrullajes disponible",
+            preset=ToastPreset.SUCCESS,
+            parent=self.parent,
+        )
         ntf.show()
-
-
 
     def handleManualMode(self):
         patroslRunning = (
@@ -858,7 +870,7 @@ class SelectModePanel(QGroupBox):
             dg = CustomDialog(
                 parent=self.parent,
                 title="Patrullajes corriendo",
-                message='Si pasa el modo manual, sera cancelada la programacion de los patrullajes.',
+                message="Si pasa el modo manual, sera cancelada la programacion de los patrullajes.",
                 positive_response="Continuar en modo Auto",
                 negative_response="Cambiar a modo Manual",
                 retries=0,
@@ -867,7 +879,7 @@ class SelectModePanel(QGroupBox):
             if dg.response == "Positive":
                 return
             self.patrol_panel.patrols_container.patrols_scheduler.cancel_task()
-            self.global_state_holder.visualization_panel.rviz.setUp('reset')
+            self.global_state_holder.visualization_panel.rviz.setUp("reset")
 
         self.nodes_manager.stopNodes(["amcl", "move_base"])
         self.nodes_manager.bringUpStop()
@@ -876,13 +888,12 @@ class SelectModePanel(QGroupBox):
         self.manual_mode_button.setEnabled(False)
         self.localize_button.setEnabled(True)
 
-
         ntf = Notification(
-                title="Modo manual establecido", 
-                msg="Cargue un mapa para continuar con la operacion", 
-                preset=ToastPreset.SUCCESS,
-                parent=self.parent
-            )
+            title="Modo manual establecido",
+            msg="Cargue un mapa para continuar con la operacion",
+            preset=ToastPreset.SUCCESS,
+            parent=self.parent,
+        )
         ntf.show()
 
     def handleLocalization(self):
@@ -893,7 +904,6 @@ class SelectModePanel(QGroupBox):
             ntf = Notification(parent=self.parent, type=NotificationType.LIDAR_ERROR)
             ntf.show()
 
-       
             return
 
         if not self.nodes_manager.topicHasPublisher("/map_metadata"):
@@ -1058,18 +1068,17 @@ class PatrolsPanel(QGroupBox):
         self.left_btn.setEnabled(enable)
         self.patrols_container.setEnabled(enable)
 
-
     def handleLoadStoredPoints(self, data):
         self.set_stored_database_points.emit(data)
 
     def get_current_patrols(self, patrols):
         n = len(patrols.keys())
-        if (int(n%self.max_pag_count_elements)):
+        if int(n % self.max_pag_count_elements):
             additinal_page = 1
         else:
             additinal_page = 0
         self.total_pages_label.setText(
-            f"{int(n//self.max_pag_count_elements) + additinal_page}"
+            f"{int(n // self.max_pag_count_elements) + additinal_page}"
         )
 
     def add_patrol(self, check):
@@ -1168,7 +1177,12 @@ class PatrolsPanel(QGroupBox):
         # self.delete_btn.setEnabled(False)
         # self.stop_patrols_btn.setEnabled(True)
 
-        ntf = Notification(parent=self.parent, title='Programación iniciada con exito', msg='Continua con la operacion', preset=ToastPreset.SUCCESS)
+        ntf = Notification(
+            parent=self.parent,
+            title="Programación iniciada con exito",
+            msg="Continua con la operacion",
+            preset=ToastPreset.SUCCESS,
+        )
         ntf.show()
 
     def start_any_patrol(self, patrolid=None):
@@ -1196,24 +1210,23 @@ class PatrolsPanel(QGroupBox):
             return
 
         ntf = Notification(
-            parent=self.parent, 
-            title='Los patrullajes se estan cancelando...', 
-            msg='Espere a que los patrullajes se cancelen', 
-            preset=ToastPreset.INFORMATION
+            parent=self.parent,
+            title="Los patrullajes se estan cancelando...",
+            msg="Espere a que los patrullajes se cancelen",
+            preset=ToastPreset.INFORMATION,
         )
         ntf.show()
-
 
     def delete_patrols(self):
         toDelete = self.patrols_container.get_selected_patrolsid()
         self.patrols_scheduler.delete_patrols(toDelete)
         if self.patrols_scheduler.patrolIsRunning:
             dlg = CustomDialog(
-                self, 
-                title='Se detectaron cambios',
-                message="Se borro un patrullaje mientras el la ejecucion de patrullajes esta corriendo parata que tus cambios surtan efecto <span styele='font-weight: bold'>deten e inicia de nuevo los patrullajes</span>"
+                self,
+                title="Se detectaron cambios",
+                message="Se borro un patrullaje mientras el la ejecucion de patrullajes esta corriendo parata que tus cambios surtan efecto <span styele='font-weight: bold'>deten e inicia de nuevo los patrullajes</span>",
             )
-  
+
             button = dlg.exec_()
 
         # max_pag, pag_index = self.patrols_container.move_page_index(0)
@@ -1230,22 +1243,31 @@ class PatrolsPanel(QGroupBox):
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
         if message == "TaskSuccessfully":
-            toast = Toast(self.parent)
-            toast.setDuration(3000)  # Hide after 5 seconds
-            toast.setTitle("Todos los Patrullajes se Ejecutado con Exito")
-            toast.setText("Cree nuevos patrullajes y de Iniciar")
-            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            ntf = Notification(
+                parent=self.parent,
+                title="Todos los Patrullajes se Ejecutado con Exito",
+                msg="Cree nuevos patrullajes y de Iniciar",
+                preset=ToastPreset.INFORMATION,
+            )
+            ntf.show()
+
+        if message == "ForcedTaskSuccessfully":
+            ntf = Notification(
+                parent=self.parent,
+                title="Patrullaje forzado",
+                msg="NA",
+                preset=ToastPreset.INFORMATION,
+            )
+            ntf.show()
 
         if message == "TaskCancelled":
-            toast = Toast(self.parent)
-            toast.setDuration(3000)  # Hide after 5 seconds
-            toast.setTitle("Programacion cancelada`")
-            toast.setText("La programacion ha sido cancelada")
-            toast.applyPreset(ToastPreset.WARNING)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            ntf = Notification(
+                parent=self.parent,
+                title="La ejecucion ha sido cancelada",
+                msg="Cree nuevos patrullajes y de Iniciar",
+                preset=ToastPreset.INFORMATION,
+            )
+            ntf.show()
 
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.start_patrols_btn.setIcon(icon_start)
@@ -1269,7 +1291,7 @@ class PatrolsPanel(QGroupBox):
             self.current_index_label.setText(f"{1}/{1}")
             return
         self.current_index_label.setText(
-            f"{pag_index}/{len(patrols)//max_pag_count + len(patrols)%max_pag_count}"
+            f"{pag_index}/{len(patrols) // max_pag_count + len(patrols) % max_pag_count}"
         )
 
         # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
@@ -1416,7 +1438,12 @@ class PatrolsContainer(QWidget):
         self.pageindex = self.pageindex + move
         patrols_items = list(self.patrols_data.items())
 
-        if len(patrols_items[ self.pageindex * self.max_element_view : self.max_element_view + self.pageindex * self.max_element_view ]):#( self.pageindex * self.max_element_view + self.max_element_view - self.patrol_elements_count % self.max_element_view) > self.patrol_elements_count:
+        if len(
+            patrols_items[
+                self.pageindex * self.max_element_view : self.max_element_view
+                + self.pageindex * self.max_element_view
+            ]
+        ):  # ( self.pageindex * self.max_element_view + self.max_element_view - self.patrol_elements_count % self.max_element_view) > self.patrol_elements_count:
             self.pageindex = 0
         if self.pageindex < 0:
             self.pageindex = 0
@@ -1748,19 +1775,23 @@ class Patrol(QGroupBox):
         group.start()
 
 
-class BatteryIndicator(QGroupBox):
+class BatteryIndicator(QWidget):
     def __init__(self):
-        super().__init__("Bateria del robot: ", None)
-        self.battery_state_sub = rospy.Subscriber('/battery_state', BatteryState, self.update_battery) 
+        super().__init__(None)
+        self.battery_state_sub = rospy.Subscriber(
+            "/battery_state", BatteryState, self.update_battery
+        )
         # Create UI elements
         self.layout = QHBoxLayout()
 
         self.layout.setContentsMargins(1, 1, 1, 1)
 
         # Battery percentage with dynamic colorSP_DialogCloseButton
-        self.percentage_label = QLabel("100%")
-        self.percentage_label.setAlignment(Qt.AlignLeft)
-        self.percentage_label.setStyleSheet("""
+        self.battery_icon = QPushButton()
+        self.battery_icon.setIcon(QIcon("./public/battery-twotone-100-svgrepo-com.svg"))
+        # self.battery_icon.setIconSize(50, 50)
+        self.battery_icon.setText("100%")
+        self.battery_icon.setStyleSheet("""
             font-size: 12px;
             font-weight: bold;
             color: #4CAF50;  /* Initial green color */
@@ -1778,8 +1809,8 @@ class BatteryIndicator(QGroupBox):
             font-weight: bold;
         """)
 
-        self.layout.addWidget(self.percentage_label, alignment=Qt.AlignLeft)
-        self.layout.addWidget(self.status_label, alignment=Qt.AlignRight)
+        self.layout.addWidget(self.battery_icon)
+        # self.layout.addWidget(self.status_label, alignment=Qt.AlignRight)
         # self.layout.addWidget(self.charging_icon, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
 
@@ -1789,8 +1820,8 @@ class BatteryIndicator(QGroupBox):
         # self.timer.start(1000)  # Update every second
 
     def update_battery(self, msg):
-        percentage = msg.percentage*100
-        self.percentage_label.setText(f"{percentage:.1f}%")
+        percentage = msg.percentage * 100
+        self.battery_icon.setText(f"{percentage:.1f}%")
         # self.status_label.setText(status)
 
 

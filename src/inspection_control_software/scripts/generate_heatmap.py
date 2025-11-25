@@ -10,6 +10,7 @@ import scipy.interpolate
 from scipy.interpolate import RBFInterpolator
 from cmath import inf
 
+
 RssiWaypoint = namedtuple('RssiWaypoint','x y rssi')
 
 #Custom red to green colormap

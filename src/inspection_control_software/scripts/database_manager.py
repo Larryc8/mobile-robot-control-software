@@ -337,6 +337,7 @@ class InternalStorageManager:
                 yaw = point.get("yaw")
                 gui_yaw = point.get("gui_yaw")
                 image = point.get("image")
+                aruco_pose = point.get("aruco_pose")
 
                 checkpoint = Checkpoint(
                     id=id,
@@ -347,6 +348,7 @@ class InternalStorageManager:
                     status=0,
                     gui_yaw=gui_yaw,
                     image=image,
+                    aruco_pose_vector=aruco_pose
                 )
                 session.add(checkpoint)
                 session.commit()
@@ -393,6 +395,7 @@ class InternalStorageManager:
                             point.yaw,
                             point.gui_yaw,
                             point.image,
+                            point.aruco_pose_vector
                         )
                     )
 

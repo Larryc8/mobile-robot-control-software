@@ -1,57 +1,50 @@
 import math
 import sys
-from datetime import datetime
 import typing
-import rospy
+from datetime import datetime
+
 import cv2 as cv
+import rospy
 import tf
-
-from pyqttoast import Toast, ToastPreset
-
+from config_model import NodesManager
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Image
+from database_manager import DataBase
+from geometry_msgs.msg import Pose2D, TransformStamped, Twist
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TransformStamped
-from tf2_msgs.msg import TFMessage
-
+from notification import Notification
+from PyQt5.QtCore import QRect, QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QBitmap, QColor, QImage, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import (
+    QAction,
     QApplication,
-    QMainWindow,
-    QGraphicsView,
-    QGraphicsScene,
     QFileDialog,
-    QVBoxLayout,
-    QWidget,
-    QPushButton,
     QGraphicsItem,
-    QHBoxLayout,
-    QStyle,
-    QLabel,
     QGraphicsOpacityEffect,
     QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
     QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
     QMenu,
-    QAction,
+    QPushButton,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
 )
-
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap
-
-from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
-from PyQt5.QtCore import QTimer, QRect, QSize
-from PyQt5.QtGui import QImage, QPixmap, QBitmap, QPainter, QPen, QColor
-
+from pyqttoast import Toast, ToastPosition, ToastPreset
 from robot_vision import ImageMatcheChecker
-from database_manager import DataBase
-from config_model import NodesManager
-from notification import  Notification
-from pyqttoast import Toast, ToastPreset, ToastPosition
-
-
-
-from styles.buttons import border_button_style, button_with_menu_style, tertiary_button_style, menu_style
+from sensor_msgs.msg import Image
+from styles.buttons import (
+    border_button_style,
+    button_with_menu_style,
+    menu_style,
+    tertiary_button_style,
+)
 from styles.labels import inactive_label_style, title_label_style
-
+from tf.transformations import euler_from_quaternion
+from tf2_msgs.msg import TFMessage
 
 groupbox_style = """
             QWidget {
@@ -68,6 +61,7 @@ groupbox_style = """
             }
         """
 
+
 class TaskWorker(QThread):
     task_completed = pyqtSignal(tuple)
 
@@ -77,7 +71,9 @@ class TaskWorker(QThread):
     def run(self):
         pass
         try:
-            listener = tf.TransformListener(interpolate=True, cache_time=rospy.Duration(11))
+            listener = tf.TransformListener(
+                interpolate=True, cache_time=rospy.Duration(11)
+            )
             # rospy.loginfo('waiting for map frame')
             # m = TransformStamped()
             # m.header.frame_id = 'map'
@@ -94,7 +90,7 @@ class TaskWorker(QThread):
                 timeout=rospy.Duration(10),
             )
             trans, rotation_qua = listener.lookupTransform(
-                 "map", "base_link", rospy.Time()
+                "map", "base_link", rospy.Time()
             )
 
             yaw = tf.transformations.euler_from_quaternion(rotation_qua)
@@ -123,7 +119,7 @@ class RobotCamera(QWidget):
         # self.load_image('./mora1.png')
         self.menu_btn = QPushButton("menu")
         self.menu_btn.setMaximumWidth(100)
-        self.menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style )
+        self.menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style)
         self.menu_btn.hide()
         self.setup_submenu()
         self.layout.addWidget(self.menu_btn)
@@ -135,16 +131,25 @@ class RobotCamera(QWidget):
         # self.data_buffer2 = buffer
         #
         self.image_label.setText("No hay datos de la camara")
-        self.image_label.setStyleSheet(inactive_label_style + title_label_style + 'font-famly: Helvetica')
+        self.image_label.setStyleSheet(
+            inactive_label_style + title_label_style + "font-famly: Helvetica"
+        )
+
+        self.current_aruco_pose = Pose2D()
 
         self.nodes_manager = NodesManager()
-        self.tf_sub = rospy.Subscriber('/tf', TFMessage, self.get_transforms)
+        self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.get_transforms)
+        self.aruco_odom_sub = rospy.Subscriber(
+            "/aruco/odom", Odometry, self.aruco_odom_callback
+        )
 
         # Create CV bridge
         self.bridge = CvBridge()
 
         # Subscribe to image topic
-        self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
+        self.image_sub = rospy.Subscriber(
+            "/camera/image_debug", Image, self.image_callback
+        )
 
         # Timer to check for new images
         self.timer = QTimer(self)
@@ -161,7 +166,7 @@ class RobotCamera(QWidget):
         # self.menu_btn.show()
 
         super().enterEvent(event)
-        
+
     def leaveEvent(self, event):
         self.menu_btn.hide()
 
@@ -176,8 +181,8 @@ class RobotCamera(QWidget):
         size = masked_pixmap.size()
         result = pixmap
         rect_size = QSize(100, 90)
-        x0  = size.width()//2 - rect_size.width()//2
-        y0 =size.height()//2 - rect_size.height()//2
+        x0 = size.width() // 2 - rect_size.width() // 2
+        y0 = size.height() // 2 - rect_size.height() // 2
 
         painter = QPainter(result)
         painter.drawPixmap(0, 0, masked_pixmap)
@@ -218,6 +223,7 @@ class RobotCamera(QWidget):
                 x, y, yaw = data[2]
                 image_filepath = data[1]
                 cv.imwrite(data[1], data[0])
+                aruco_pose = data[3]
                 _x, _y = math.cos(yaw), math.sin(yaw)
                 gui_yaw = math.atan2(_y, -_x)
                 points.update(
@@ -232,6 +238,7 @@ class RobotCamera(QWidget):
                             "type": 1,
                             "gui_yaw": gui_yaw,
                             "image": image_filepath,
+                            "aruco_pose": aruco_pose,
                         }
                     }
                 )
@@ -248,14 +255,13 @@ class RobotCamera(QWidget):
         pass
 
     def buffer_reference_image(self):
-        print("SAVE IMAGE REFERENCE")
+        print("SAVE IMAGE REFERENCE", f"aruco pose {self.current_aruco_pose}")
         ntf = Notification(
-            title='Accion en proceso... Guardando referencia',
-            msg='Por favor no mueva el robot hasta guardar la referencia',
+            title="Accion en proceso... Guardando referencia",
+            msg="Por favor no mueva el robot hasta guardar la referencia",
             preset=ToastPreset.INFORMATION,
             parent=self.parent,
-            duration=8000
-
+            duration=8000,
         )
         ntf.show()
         if self.pose_getter and self.pose_getter.isRunning():
@@ -265,11 +271,34 @@ class RobotCamera(QWidget):
         self.pose_getter.task_completed.connect(self.set_pose_and_image)
         self.pose_getter.start()
 
+    def aruco_odom_callback(self, odom_msg):
+        # Extract position
+        self.current_aruco_pose.x = odom_msg.pose.pose.position.x
+        self.current_aruco_pose.y = odom_msg.pose.pose.position.y
+
+        # Extract orientation (convert quaternion to Euler angles)
+        orientation_q = odom_msg.pose.pose.orientation
+        orientation_list = [
+            orientation_q.x,
+            orientation_q.y,
+            orientation_q.z,
+            orientation_q.w,
+        ]
+        roll, pitch, yaw = euler_from_quaternion(orientation_list)
+        self.current_aruco_pose.theta = yaw
+
     def set_pose_and_image(self, pose):
         if len(self.data_buffer) < 10:
             id = str(datetime.now().timestamp())
             img_file_path = f"./reference_images/reference_image{id}.jpg"
-            self.data_buffer.append((self.current_image, img_file_path, pose))
+            aruco_pose = [
+                self.current_aruco_pose.x,
+                self.current_aruco_pose.y,
+                self.current_aruco_pose.theta,
+            ]
+            self.data_buffer.append(
+                (self.current_image, img_file_path, pose, aruco_pose)
+            )
 
             # self.data_buffer2.append(pixmap)
             # print(f'{__name__} curent image shape', self.current_image.shape)
@@ -278,11 +307,11 @@ class RobotCamera(QWidget):
         print(f"{__name__} pose", pose)
 
         ntf = Notification(
-            title='Accion completada con exito',
-            msg='Se guardo foto de referencia exitosamente', 
+            title="Accion completada con exito",
+            msg="Se guardo foto de referencia exitosamente",
             preset=ToastPreset.SUCCESS,
-            parent=self.parent
-            )
+            parent=self.parent,
+        )
 
         ntf.show()
 
