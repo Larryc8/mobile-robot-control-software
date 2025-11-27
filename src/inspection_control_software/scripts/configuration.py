@@ -33,6 +33,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 from pyqttoast import Toast, ToastPreset
+from robot_control_vel import (
+    RobotVelocityController,
+)
+from robot_form import RobotConfigForm
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
@@ -479,11 +483,15 @@ class FriendlyConfig(QWidget):
             QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         )
 
-        self.layout.addWidget(self.start_calibrations_btn, 2, 1)
-        self.layout.addWidget(self.h_slider, 3, 1)
-        self.layout.addWidget(self.text, 4, 1)
+        a = RobotConfigForm()
+        b = RobotVelocityController()
+        self.layout.addWidget(a, 0, 0)
+        self.layout.addWidget(b, 1, 0)
+        self.layout.addWidget(self.start_calibrations_btn, 0, 1)
+        self.layout.addWidget(self.h_slider, 1, 1)
+        self.layout.addWidget(self.text, 2, 1)
         self.layout.addWidget(self.calibrations_progress, 5, 1)
-        self.layout.addWidget(self.debug, 6, 1)
+        # self.layout.addWidget(self.debug, 6, 1)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
         # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
         self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)

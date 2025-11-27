@@ -144,7 +144,7 @@ class FixedMessage(QGroupBox):
         layout.setContentsMargins(6, 6, 6, 6)
         self.show_btn = QPushButton("Mostrar")
         self.export_btn = QPushButton("Exportar")
-        self.export_btn.setIcon(QIcon("./public/export2.svg"))
+        self.export_btn.setIcon(QIcon("./public/export.svg"))
 
         self.export_btn.clicked.connect(self.export_log)
 

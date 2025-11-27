@@ -10,6 +10,7 @@ from config_model import NodesManager
 from cv_bridge import CvBridge
 from database_manager import DataBase
 from geometry_msgs.msg import Pose2D, TransformStamped, Twist
+from input_textdialog import CustomDialog
 from nav_msgs.msg import Odometry
 from notification import Notification
 from PyQt5.QtCore import QRect, QSize, Qt, QThread, QTimer, pyqtSignal
@@ -256,14 +257,21 @@ class RobotCamera(QWidget):
 
     def buffer_reference_image(self):
         print("SAVE IMAGE REFERENCE", f"aruco pose {self.current_aruco_pose}")
-        ntf = Notification(
-            title="Accion en proceso... Guardando referencia",
-            msg="Por favor no mueva el robot hasta guardar la referencia",
-            preset=ToastPreset.INFORMATION,
+        # ntf = Notification(
+        #     title="Accion en proceso... Guardando referencia",
+        #     msg="Por favor no mueva el robot hasta guardar la referencia",
+        #     preset=ToastPreset.INFORMATION,
+        #     parent=self.parent,
+        #     duration=8000,
+        # )
+        # ntf.show()
+        dlg = CustomDialog(
             parent=self.parent,
-            duration=8000,
+            title="Accion en proceso... Guardando referencia",
+            message="Por favor no mueva el robot hasta guardar la referencia",
+            interative=False,
         )
-        ntf.show()
+        dlg.exec_()
         if self.pose_getter and self.pose_getter.isRunning():
             return
 

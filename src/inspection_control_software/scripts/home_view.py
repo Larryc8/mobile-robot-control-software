@@ -683,7 +683,7 @@ class VisualizationPanel(QWidget):
         # self.save_map_button.show()
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
-        self.create_map_btn.setIcon(icon)
+        self.create_map_btn.setIcon(QIcon("./public/save.svg"))
         self.create_map_btn.setText("Guardar Mapa")
         self.isCreateMap = False
 
@@ -694,11 +694,6 @@ class VisualizationPanel(QWidget):
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
         self.selected_user_operation.emit(userOperation.CREATEMAP)
         return
-
-        dlg = QMessageBox(self)
-        dlg.setWindowTitle("I have a question!")
-        dlg.setText("Solo se pueden crear mapas en el modo manual")
-        dlg.exec()
 
     def show_points_window(self, checked):
         # self.parent.w = None
@@ -1122,13 +1117,13 @@ class PatrolsPanel(QGroupBox):
 
     def start_patrols(self):
         if not self.nodes_manager.nodeIsRunning("amcl"):
-            toast = Toast(self.parent)
-            toast.setDuration(5000)  # Hide after 5 seconds
-            toast.setTitle("Error: Fallo inicio de patrullajes")
-            toast.setText("El node de amcl no esta activo")
-            toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            ntf = Notification(
+                parent=self.parent,
+                title="Fallo en inicio de patrullajes",
+                msg="El nodo acml no esta activo",
+                preset=ToastPreset.ERROR,
+            )
+            ntf.show()
             return
 
         if not self.nodes_manager.nodeIsRunning("move_base"):
@@ -1822,6 +1817,9 @@ class BatteryIndicator(QWidget):
     def update_battery(self, msg):
         percentage = msg.percentage * 100
         self.battery_icon.setText(f"{percentage:.1f}%")
+        self.battery_icon.setIcon(
+            QIcon(f"./public/battery-twotone-{80}-svgrepo-com.svg")
+        )
         # self.status_label.setText(status)
 
 
