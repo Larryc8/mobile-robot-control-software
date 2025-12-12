@@ -213,6 +213,7 @@ class VisualizationPanel(QWidget):
         self.mapAsPrincipalView = True
         self.buffer_data_robot_camera = []
         self.view_options = {}
+        self.map_recent_files = []
 
         self.message = QLabel(
             "MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas "
@@ -225,7 +226,8 @@ class VisualizationPanel(QWidget):
             buffer=self.buffer_data_robot_camera, parent=self.parent
         )
 
-        self.user_configs = UserConfigFileManager("./config/app_config.json")
+        self.user_configs = UserConfigFileManager()
+
         self.robot_actions_logger = RobotActionsLoggerView()
         self.logger = robot_actions_logger.logger
 
@@ -240,7 +242,7 @@ class VisualizationPanel(QWidget):
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager,
             parent=self.parent,
-            widget=self.drainage_checkpoints_win,
+            # widget=self.drainage_checkpoints_win,
         )
         self.nodes = [
             {
@@ -313,11 +315,15 @@ class VisualizationPanel(QWidget):
         new_action.triggered.connect(self.handleLoadMap)
         map_files_menu.addAction(new_action)
 
-        recent_files_menu = map_files_menu.addMenu("recent files")
+        self.recent_files_menu = map_files_menu.addMenu("recent files")
 
         new_action2 = QAction("New File 2", self)
         new_action2.triggered.connect(lambda: print("adios"))
-        recent_files_menu.addAction(new_action2)
+        self.recent_files_menu.addAction(new_action2)
+
+        # config = self.user_configs.read_data()  # Add recent files
+        # print(config)
+        # self.map_recent_files = self.setup_recent_files(config["recent_map_files"])
 
         self.load_map_button.setMenu(map_files_menu)
 
@@ -491,7 +497,31 @@ class VisualizationPanel(QWidget):
     def handleSaveInDatabase(self, data):
         self.save_in_database.emit(data)
 
-    def handleLoadMap(self):
+    def add_recent_file(self, file):
+        if len(self.map_recent_files) > 3:
+            self.map_recent_files.pop(0)
+            self.map_recent_files.append(file)
+        else:
+            self.map_recent_files.append(file)
+
+        self.setup_recent_files(self.map_recent_files)
+        # self.user_configs.update_value("recent_map_files", self.map_recent_files)
+
+    def setup_recent_files(self, files):
+        print(files)
+        for file_path in files:
+            print(file_path)
+            name = file_path.split("/")[-1]
+            new_action2 = QAction(name, self)
+            new_action2.triggered.connect(lambda: self.handleLoadMap(file_path))
+            self.recent_files_menu.addAction(new_action2)
+        return files
+
+    def open_recent_file(self, file):
+        self.handleLoadMap(file)
+        pass
+
+    def handleLoadMap(self, file=None):
         if self.currentOperationMode == operationMode.AUTO:
             dg = CustomDialog(
                 self.parent,
@@ -543,9 +573,17 @@ class VisualizationPanel(QWidget):
 
         try:
             self.nodes_manager.bringUpStop()
-            file_path, _ = QFileDialog.getOpenFileName(
-                self, "Open Image File", "", "Image Files (*.yaml)"
-            )
+            file_path = file  # God, please help me!
+
+            if not file:
+                file_path, _ = QFileDialog.getOpenFileName(
+                    self,
+                    "Abrir archivo de configuración de mapa",
+                    "",
+                    "Archivo de configuración (*.yaml)",
+                )
+                self.add_recent_file(file_path)
+
             print(file_path)
             self.map_loaded.emit(file_path)
 
@@ -668,10 +706,6 @@ class VisualizationPanel(QWidget):
         if not self.nodes_manager.topicHasPublisher("/scan"):
             ntf = Notification(parent=self.parent, type=NotificationType.LIDAR_ERROR)
             ntf.show()
-            # dlg = QMessageBox(self)
-            # dlg.setWindowTitle("I have a question!")
-            # dlg.setText("No LiDar Data, Ayyyy!!! \n Anda pasha BOBO")
-            # button = dlg.exec()
             return
 
         self.action4.setEnabled(True)
@@ -683,8 +717,10 @@ class VisualizationPanel(QWidget):
         # self.save_map_button.show()
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
-        self.create_map_btn.setIcon(QIcon("./public/save.svg"))
-        self.create_map_btn.setText("Guardar Mapa")
+        # QIcon("./public/save.svg")
+        # icon = QApplication.style().standardIcon(QStyle.SP_DirLinkIcon)
+        self.create_map_btn.setIcon(icon)
+        self.create_map_btn.setText("Guardar Mapa...")
         self.isCreateMap = False
 
         self.nodes_manager.bringUpStop()
@@ -1774,8 +1810,13 @@ class BatteryIndicator(QWidget):
     def __init__(self):
         super().__init__(None)
         self.battery_state_sub = rospy.Subscriber(
-            "/battery_state", BatteryState, self.update_battery
+            "/battery_state", BatteryState, self.battery_callback
         )
+        self.percentage = 100
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_battery_state)
+        self.timer.start(30)  # Update at ~30fps
+
         # Create UI elements
         self.layout = QHBoxLayout()
 
@@ -1796,31 +1837,25 @@ class BatteryIndicator(QWidget):
         self.status_label.setAlignment(Qt.AlignLeft)
         self.status_label.setStyleSheet("font-size: 14px; color: #666;")
 
-        self.charging_icon = QLabel("⚡ CHARGING")
-        # self.charging_icon.setAlignment(Qt.AlignCenter)
-        self.charging_icon.setStyleSheet("""
-            font-size: 14px;
-            color: #FFC107;
-            font-weight: bold;
-        """)
-
         self.layout.addWidget(self.battery_icon)
-        # self.layout.addWidget(self.status_label, alignment=Qt.AlignRight)
-        # self.layout.addWidget(self.charging_icon, alignment=Qt.AlignLeft)
         self.setLayout(self.layout)
 
         self.current_level = 100
-        # self.timer = QTimer(self)
-        # self.timer.timeout.connect(self.update_battery)
-        # self.timer.start(1000)  # Update every second
 
-    def update_battery(self, msg):
-        percentage = msg.percentage * 100
-        self.battery_icon.setText(f"{percentage:.1f}%")
+    def map2percent(self, val):
+        max = 1.1
+        min = 0.99
+        h = max - min
+        return ((val - min) / h) * 100
+
+    def battery_callback(self, msg):
+        self.percentage = self.map2percent(msg.percentage)
+
+    def update_battery_state(self):
+        self.battery_icon.setText(f"{self.percentage:.1f}%")
         self.battery_icon.setIcon(
             QIcon(f"./public/battery-twotone-{80}-svgrepo-com.svg")
         )
-        # self.status_label.setText(status)
 
 
 if __name__ == "__main__":

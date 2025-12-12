@@ -18,6 +18,34 @@
 #
 color = "#2C3E50"
 
+dropdown_style = """
+QComboBox {
+    border: 2px solid #27ae60;
+    border-radius: 4px;
+    padding: 6px 12px;
+    background-color: #f9f9f9;
+    color: #2c3e50;
+    font-size: 15px;
+    min-width: 180px;
+}
+
+QComboBox:disabled {
+    border-color: #bdc3c7;
+    background-color: #ecf0f1;
+    color: #95a5a6;
+}
+
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    border: none;
+    border-left: 2px solid #27ae60;
+    border-radius: 0 6px 6px 0;
+    width: 40px;
+    background-color: #2ecc71;
+}
+"""
 
 menu_style = """
     QMenu {
@@ -121,28 +149,28 @@ colored_button_style = """
     }
 """
 
+primary_button_style = colored_button_style
+# primary_button_style = """
+#     QPushButton {
+#         background-color: #4682B4;
+#         border-radius: 2px;
+#         color: white;
+#         border: none;
+#         padding: 6px 6px;
+#         font-size: 16px;
+#     }
+#     QPushButton:hover {
+#         background-color: #B0BEC5;
+#     }
+#     QPushButton:pressed {
+#         background-color: #4682B4;
+#     }
 
-primary_button_style = """
-    QPushButton {
-        background-color: #4682B4;
-        border-radius: 2px;
-        color: white;
-        border: none;
-        padding: 6px 6px;
-        font-size: 16px;
-    }
-    QPushButton:hover {
-        background-color: #B0BEC5;
-    }
-    QPushButton:pressed {
-        background-color: #4682B4;
-    }
-
-    QPushButton:disabled {
-        background-color: gray;
-        border: 1px solid gray;
-    }
-"""
+#     QPushButton:disabled {
+#         background-color: gray;
+#         border: 1px solid gray;
+#     }
+# """
 
 secondary_button_style = """
     QPushButton {
@@ -167,9 +195,9 @@ tertiary_button_style = """
     QPushButton {
         background: #DCDCDC ;
         color: black;
+        border-radius: 2px;
         border: none;
         padding: 5px;
-        text-align: left;
         font-size: 14px;
     }
     QPushButton:hover {

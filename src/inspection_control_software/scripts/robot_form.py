@@ -1,5 +1,7 @@
 import sys
 
+import rospy
+from config_model import UserConfigFileManager
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -11,56 +13,66 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QStyle,
     QVBoxLayout,
     QWidget,
+)
+from styles.buttons import (
+    border_button_style,
+    border_button_style_danger,
+    secondary_button_style,
 )
 
 
 class RobotConfigForm(QWidget):
     def __init__(self):
         super().__init__()
+        self.user_config = UserConfigFileManager()
         self.init_ui()
 
     def init_ui(self):
         # Window settings
         self.setWindowTitle("Robot Configuration Setup")
-        self.setGeometry(100, 100, 500, 300)  # x, y, width, height
+        # self.setGeometry(100, 100, 500, 300)  # x, y, width, height
 
         # Main Layout
         main_layout = QVBoxLayout()
         buttons_layout = QHBoxLayout()
-        buttons_layout.addWidget(QPushButton("Seleccionar"))
-        buttons_layout.addWidget(QPushButton("Agregar Nuevo"))
+        delete_option_btn = QPushButton("Borrar robot")
+        add_option_btn = QPushButton("+ Agregar Nuevo")
+        delete_option_btn.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_DialogDiscardButton)
+        )
+
+        delete_option_btn.setStyleSheet(border_button_style_danger)
+        add_option_btn.setStyleSheet(border_button_style)
+
+        buttons_layout.addWidget(delete_option_btn)
+        buttons_layout.addWidget(add_option_btn)
 
         self.country_dropdown = QComboBox()
         # self.country_dropdown.currentIndexChanged.connect(self.on_country_changed)
 
         # Add countries with custom data (country codes)
-        countries = [
+        robots_options = [
             ("Turtlebot3", "US"),
             ("Canada", "CA"),
-            ("United Kingdom", "UK"),
-            ("Germany", "DE"),
-            ("France", "FR"),
-            ("Japan", "JP"),
         ]
 
-        for country, code in countries:
+        for country, code in robots_options:
             self.country_dropdown.addItem(country, code)
 
         # Title
         title_label = QLabel("Enter Robot Details")
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet(
-            "font-size: 18px; font-weight: bold; margin-bottom: 10px;"
-        )
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
 
-        main_layout.addWidget(title_label)
+        # main_layout.addWidget(title_label)
 
         main_layout.addWidget(self.country_dropdown)
         main_layout.addLayout(buttons_layout)
         # Form Layout for inputs
-        main_layout.addStretch(0)
+        # main_layout.addStretch(0)
 
         form_layout = QFormLayout()
 
@@ -102,9 +114,7 @@ class RobotConfigForm(QWidget):
 
         # Submit Button
         self.submit_btn = QPushButton("Save Configuration")
-        self.submit_btn.setStyleSheet(
-            "background-color: #4CAF50; color: white; font-weight: bold; padding: 10px;"
-        )
+        self.submit_btn.setStyleSheet(secondary_button_style)
         self.submit_btn.clicked.connect(self.submit_form)
         main_layout.addWidget(self.submit_btn)
 
@@ -143,12 +153,6 @@ class RobotConfigForm(QWidget):
         print("\n--- Form Submitted ---")
         for key, value in data.items():
             print(f"{key}: {value}")
-
-        # Show success message box with the data
-        msg_text = "\n".join([f"{k}: {v}" for k, v in data.items()])
-        QMessageBox.information(
-            self, "Configuration Saved", f"Successfully captured:\n\n{msg_text}"
-        )
 
 
 if __name__ == "__main__":

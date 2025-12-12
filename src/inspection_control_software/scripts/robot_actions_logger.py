@@ -130,7 +130,7 @@ class FixedMessage(QGroupBox):
         """)
 
         # self.setContentsMargins(0, 0, 0, 0)
-        self.user_config = UserConfigFileManager("./config/app_config.json")
+        self.user_config = UserConfigFileManager()
         self.setFlat(True)
         config = self.user_config.read_data()
 

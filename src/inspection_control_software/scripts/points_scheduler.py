@@ -13,13 +13,16 @@ from typing import Any, Callable, NamedTuple
 
 import actionlib
 import cv2 as cv
+
+# if __name__ != "__main__":
+import ImageSimilarity.image_similarity2 as imgsim
 import numpy as np
 import robot_actions_logger
 import rospy
 import tf
 from actionlib_msgs.msg import GoalStatus
 from cv_bridge import CvBridge
-from database_manager import AlertStatus
+from database_manager import AlertStatus, DataBase
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from move_base_msgs.msg import (
     MoveBaseAction,
@@ -42,10 +45,6 @@ from robot_navigation_checker import RobotNavigationChecker
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import BatteryState, Image
 from utils.patrol import PatrolEndState
-
-if __name__ != "__main__":
-    import ImageSimilarity.image_similarity as imgsim
-from database_manager import DataBase
 from utils.sorting import sort_nearest_neighbor
 
 logger = logging.getLogger(__name__)
@@ -96,7 +95,7 @@ class PointsScheduler(QObject):
         self.client = None
         self.points_left = 999
         self.map = None
-        self.current_map_filename = None
+        self.current_map_filename: str = ""
         self.current_pointid = None
         self.init_pose = Pose(0, 0)
         self.battery_state = 100
@@ -105,7 +104,7 @@ class PointsScheduler(QObject):
         self.current_position_y = 0
 
         self.bridge = CvBridge()
-        self.camara_image_filepath = "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/reference_images/camera.jpg"
+        self.camera_image_filepath = "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/reference_images/camera.jpg"
 
         self.track = [0]
         self.navigation_checker = RobotNavigationChecker(self.track)
@@ -403,21 +402,21 @@ class PointsScheduler(QObject):
         robot_actions_logger.logger.log(f"Comenzando scaneo....")
 
         rate: float = self.get_image_similarity()
-        robot_actions_logger.logger.log(
-            f"Fin del escaneo.... before fine-tuning sim: {rate:.3f}"
-        )
+        self.current_rate = rate
+        robot_actions_logger.logger.log(f"Fin del escaneo.... similaridad: {rate:.3f}")
         # r = self.scan_subroutine(x, y, self.scan_angles.copy())
         # robot_actions_logger.logger.log(
         #     f"Scaneo finalizado resultado de la similaridad en{max(r):.4f}"
         # )
 
-        # if self.on_calibration:
-        #     self.save_calibration(-999, r, self.current_map_filename)
-        #     robot_actions_logger.logger.log(f"Escaneo finalizado....")
-        # else:
-        #     self.current_point_calibration = max(r)
-        #     self.get_calibration(r)
-        #
+        if self.on_calibration:
+            self.save_calibration(
+                rate, None, self.current_map_filename, id=self.current_pointid
+            )
+        else:
+            self.current_point_calibration = rate
+            self.get_calibration([], id=self.current_pointid)
+
         # --- NEW SUBROUTINEN
         if False:
             controller = DifferentialDriveController()
@@ -450,10 +449,10 @@ class PointsScheduler(QObject):
 
             print("ARUCO GOAL REACHED", goal_reached, pos)
 
-        rate: float = self.get_image_similarity()
-        robot_actions_logger.logger.log(
-            f"Fin del escaneo.... after fine-tuning sim: {rate:.3f}"
-        )
+        # rate: float = self.get_image_similarity()
+        # robot_actions_logger.logger.log(
+        #     f"Fin del escaneo.... after fine-tuning sim: {rate:.3f}"
+        # )
 
     def odom_callback(self, msg):
         """
@@ -561,42 +560,36 @@ class PointsScheduler(QObject):
             print(f"{__name__} el archivo EXISTE {path}")
 
     def get_image_similarity(self) -> float:
-        similarity_rate: float = 0
         try:
             if self.current_reference_image_path:
-                cv.imwrite(self.camara_image_filepath, self.current_image)
-                print(f"{__name__} path:{self.camara_image_filepath}")
-                # time.sleep(1000)
-                ImgSim = imgsim.Img2Vec("efficientnet_b0", weights="DEFAULT")
+                cv.imwrite(self.camera_image_filepath, self.current_image)
+                print(f"{__name__} path:{self.camera_image_filepath}")
+                ImgSim = imgsim.ImgSimilarity("efficientnet_b0")
 
-                source = self.edit_image(self.current_reference_image_path)
-                ImgSim.embed_dataset(source=source)
-                ImgSim.dataset
+                reference = self.current_reference_image_path
+                # reference = self.edit_image(self.current_reference_image_path)
+                camera = self.camera_image_filepath
+                # self.edit_image(self.camara_image_filepath)
+                r = ImgSim.similarity((reference, (130, 70, 230, 170)), (camera, None))
 
-                target = self.edit_image(self.camara_image_filepath)
-                r = ImgSim.similar_images(target_file=target)
+                # for p in (source, target):
+                #     self.remove_image(p)
 
-                for p in (source, target):
-                    self.remove_image(p)
-
-                print(f"{__name__} {r}")
-                [similarity_rate] = list(r.values())
                 if self.on_calibration:
                     pass
-
-                logger.error(f"{list(r.keys())[0]},{list(r.values())[0]}")
-            return similarity_rate
+                return r
+            return -1
         except Exception as e:
             print("subroutine_wrapper: ", e)
-            return 0
+            return -1000
 
     def save_calibration(
-        self, calibration_value: float, calibration_vector: list, map_filename: str
+        self, calibration_value: float, calibration_vector: list, map_filename: str, id
     ) -> None:
         self.database = DataBase(
             action="save_calibration",
             data={
-                "checkpoint_id": self.current_pointid,
+                "checkpoint_id": id,
                 "value": calibration_value,
                 "vector": calibration_vector,
             },
@@ -604,11 +597,11 @@ class PointsScheduler(QObject):
         self.database.action_completed.connect(self.database_task_finished)
         self.database.start()
 
-    def get_calibration(self, current_calibration_vector):
+    def get_calibration(self, current_calibration_vector, id):
         self.database = DataBase(
             action="get_calibration",
             data={
-                "pointid": self.current_pointid,
+                "pointid": id,
                 "current_calibration_vector": current_calibration_vector,
             },
         )
@@ -621,11 +614,11 @@ class PointsScheduler(QObject):
         if msg == "SuccessGetCalibration":
             mean = data["mean_value"]
             std = data["std_dev_value"]
-            loss_func = data["loss_func"]
-            ref = loss_func < (mean + std * 3)
+            loss_func = self.current_rate  # self.get_image_similarity()
+            ref = loss_func > (mean - std * 1.5)
 
             robot_actions_logger.logger.log(
-                f"Scaneo finalizados. sim: {loss_func:.4f} std: {std:.4f} mean: {mean:.4f} - is good {ref}"
+                f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {ref}"
             )
 
         self.database.quit()

@@ -1,33 +1,39 @@
 from datetime import datetime
-import numpy as np
 
+import numpy as np
+import psycopg2
 from sklearn.feature_selection import mutual_info_regression
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics.pairwise import cosine_similarity
-
-import psycopg2
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
-from sqlalchemy import and_
-from sqlalchemy import asc, desc, func
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    and_,
+    asc,
+    create_engine,
+    desc,
+    func,
+)
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
 
-from typing import Optional, List, Tuple
-from PyQt5.QtCore import QThread, pyqtSignal, QObject  # , pyqtSlot
 from enum import Enum
+from typing import List, Optional, Tuple
 
 from internal_storage.tables import (
-    Place,
-    Patrol,
-    Checkpoint,
     Alert,
-    PatrolLink,
+    Calibration,
+    Checkpoint,
     CheckpointLink,
     Map,
-    Calibration,
+    Patrol,
+    PatrolLink,
+    Place,
 )
+from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
 
 # cursor.execute("SELECT version();")
 # db_version = cursor.fetchone()
@@ -348,7 +354,7 @@ class InternalStorageManager:
                     status=0,
                     gui_yaw=gui_yaw,
                     image=image,
-                    aruco_pose_vector=aruco_pose
+                    aruco_pose_vector=aruco_pose,
                 )
                 session.add(checkpoint)
                 session.commit()
@@ -395,7 +401,7 @@ class InternalStorageManager:
                             point.yaw,
                             point.gui_yaw,
                             point.image,
-                            point.aruco_pose_vector
+                            point.aruco_pose_vector,
                         )
                     )
 
@@ -616,19 +622,30 @@ class InternalStorageManager:
         try:
             calibration_value = calibration_data.get("value")
             checkpoint_id = calibration_data.get("checkpoint_id")
-            calibration_vector = calibration_data.get('vector')
+            calibration_vector = None  # calibration_data.get("vector")
 
             # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
-            last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(func.random()).first()
+            # last_element = (
+            #     session.query(Calibration)
+            #     .filter_by(checkpoint_id=checkpoint_id)
+            #     .order_by(func.random())
+            #     .first()
+            # )
 
-            print(f'Ccalibratonn VEctor {calibration_vector} last_element {last_element}')
-            calibration_value = None
+            # print(
+            #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
+            # )
+            # calibration_value = None
 
-            if last_element:
-                calibration_value = self.loss_func(calibration_vector, last_element.calibration_vector)
+            # if last_element:
+            #     calibration_value = self.loss_func(
+            #         calibration_vector, last_element.calibration_vector
+            #     )
 
             calibration = Calibration(
-                checkpoint_id=checkpoint_id, calibration_value=calibration_value, calibration_vector=calibration_vector
+                checkpoint_id=checkpoint_id,
+                calibration_value=calibration_value,
+                calibration_vector=calibration_vector,
             )
 
             session.add(calibration)
@@ -661,11 +678,15 @@ class InternalStorageManager:
             # Execute the query and get the single result row
             results = calculation_query.one()
 
-            random_vector = -1
-            random_row = session.query(Calibration).order_by(func.random()).filter_by(checkpoint_id=pointid).first()
-            if random_row:
-                random_vector = random_row.calibration_vector
-            print(__name__, results)
+            # random_vector = -1
+            # random_row = (
+            #     session.query(Calibration)
+            #     .order_by(func.random())
+            #     .filter_by(checkpoint_id=pointid)
+            #     .first()
+            # )
+            # if random_row:
+            #     random_vector = random_row.calibration_vector
 
             # 6. Display the Results
             mean_val = results.mean_value
@@ -675,14 +696,15 @@ class InternalStorageManager:
             print(f" -> Mean: {mean_val:.4f}")
             print(f" -> Standard Deviation: {std_dev_val:.4f}")
             session.close()
-            return {"std_dev_value": std_dev_val, "mean_value": mean_val, "loss_func": self.loss_func(current_calibration_vector, random_vector)}
-
+            # return {"std_dev_value": std_dev_val, "mean_value": mean_val, "loss_func": self.loss_func(current_calibration_vector, random_vector)}
+            return {"std_dev_value": std_dev_val, "mean_value": mean_val}
 
         except Exception as e:
             session.rollback()
             session.close()
             print(f"Error setting up data: {e}")
-            return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
+            # return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
+            return {"std_dev_value": -1, "mean_value": -1}
 
     def loss_func(self, x, y):
         # x = np.array(x).reshape(-1, 1)
@@ -690,6 +712,7 @@ class InternalStorageManager:
         # [loss] = mutual_info_regression(x, y)
         loss = mean_squared_error(x, y)
         return loss
+
 
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
@@ -757,7 +780,9 @@ class DataBase(QThread):
             data = self.internal_storage_manager.save_calibration(self.data)
             self.action_completed.emit("SuccessSaveCalibration", {})
         if self.action == "get_calibration":
-            data = self.internal_storage_manager.get_calibration(self.data.get("pointid"), self.data.get("current_calibration_vector"))
+            data = self.internal_storage_manager.get_calibration(
+                self.data.get("pointid"), self.data.get("current_calibration_vector")
+            )
             self.action_completed.emit("SuccessGetCalibration", data)
 
 

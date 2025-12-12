@@ -1,89 +1,83 @@
+import json
+import os
 import subprocess
+import time
 from sys import executable
 from typing import List
+
 import rospy
 import yaml
-import subprocess
-import os
-import json
-import time
-
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from roslaunch import configure_logging, parent, rlutil
 from roslaunch.core import Node
-from roslaunch import rlutil
-from roslaunch import parent
-from roslaunch import configure_logging
 from roslaunch.scriptapi import ROSLaunch
-
-from PyQt5.QtCore import QThread, pyqtSignal, QObject
-
 
 
 class UserConfigFileManager:
-    def __init__(self, filename):
+    def __init__(self, filename: str = "./config/app_config.json"):
         self.filename = filename
         self.ensure_file_exists()
-    
+
     def ensure_file_exists(self):
         """Create file with empty structure if it doesn't exist"""
         if not os.path.exists(self.filename):
             initial_data = {}
             self.write_data(initial_data)
-    
+
     def read_data(self):
         """Read data from JSON file"""
         try:
-            with open(self.filename, 'r') as file:
+            with open(self.filename, "r") as file:
                 return json.load(file)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"Error reading file: {e}")
             return {}
-    
+
     def write_data(self, data):
         """Write data to JSON file"""
         try:
-            with open(self.filename, 'w') as file:
+            with open(self.filename, "w") as file:
                 json.dump(data, file, indent=4)
             return True
         except Exception as e:
             print(f"Error writing file: {e}")
             return False
-    
+
     def update_value(self, key_path, new_value):
         """Update a specific value using key path"""
         data = self.read_data()
-        
+
         # Navigate to the nested key
         current_level = data
-        keys = key_path.split('.')
-        
+        keys = key_path.split(".")
+
         for key in keys[:-1]:
             if key not in current_level:
                 current_level[key] = {}
             current_level = current_level[key]
-        
+
         # Update the final key
         current_level[keys[-1]] = new_value
-        
+
         return self.write_data(data)
-    
+
     def add_to_array(self, array_path, new_item):
         """Add item to an array in the JSON structure"""
         data = self.read_data()
-        
+
         # Navigate to the array
         current_level = data
-        keys = array_path.split('.')
-        
+        keys = array_path.split(".")
+
         for key in keys:
             if key not in current_level:
                 current_level[key] = []
             current_level = current_level[key]
-        
+
         # Add new item
         current_level.append(new_item)
-        
-        return self.write_data(data)
 
+        return self.write_data(data)
 
 
 class StaticParamsConfigLoader:
@@ -101,7 +95,7 @@ class ConfigModel:
     ) -> None:
         self.workspace = workspace
         self.param_file = param_file
-        self.all_config_params = {} 
+        self.all_config_params = {}
 
         with open(self.param_file, "r") as file:
             self.data = yaml.load(file, Loader=yaml.SafeLoader)
@@ -147,14 +141,14 @@ class ConfigModel:
 # class NodeWorker(QThread):
 #     # finished = pyqtSignal()
 #     # progress = pyqtSignal(int)
-#     
+#
 #     def __init__(self, node):
 #         super().__init__()
 #         self.node = node
 #         self.subprocess = None
-#         
+#
 #     def run(self):
-#         package, exec, name, arg, respawn = self.node['package'], self.node['exec'], self.node['name'], self.node.get('arg'), self.node.get('respawn') 
+#         package, exec, name, arg, respawn = self.node['package'], self.node['exec'], self.node['name'], self.node.get('arg'), self.node.get('respawn')
 #         if arg:
 #             self.subprocess = subprocess.Popen(['rosrun', package, exec, arg, f'__name:={name}'])
 #         else:
@@ -190,32 +184,46 @@ class NodesManager(QObject):
         node_instances = {}
         for node in nodes:
             node_values = node.values()
-            package, exec, name, args, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
+            package, exec, name, args, respawn = (
+                node["package"],
+                node["exec"],
+                node["name"],
+                node.get("arg"),
+                node.get("respawn"),
+            )
             if not respawn:
                 respawn = False
-            
+
             node_instances.update(
                 # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
-                {name: Node(package=package, node_type=exec, name=name, args=args,  respawn=False)}
+                {
+                    name: Node(
+                        package=package,
+                        node_type=exec,
+                        name=name,
+                        args=args,
+                        respawn=False,
+                    )
+                }
             )
             self.started_nodes.update(node_instances)
         return node_instances
+
     # def initNodes(self, nodes: List[dict] = []) -> List[dict]:
-        # node_instances = {}
-        # for node in nodes:
-        #     node_values = node.values()
-        #     package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
-        #     if not respawn:
-        #         respawn = False
-        #     
-        #     node_instances.update(
-        #         # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
-        #         {name: Node(package=package, node_type=exec, name=name, args=arg,  respawn=respawn)}
-            # )
-        # return nodes
+    # node_instances = {}
+    # for node in nodes:
+    #     node_values = node.values()
+    #     package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
+    #     if not respawn:
+    #         respawn = False
+    #
+    #     node_instances.update(
+    #         # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
+    #         {name: Node(package=package, node_type=exec, name=name, args=arg,  respawn=respawn)}
+    # )
+    # return nodes
 
     def startNodes(self, node_instances: dict = {}) -> dict:
-
         self._launcher.start()
         # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}
         for name, node in node_instances.items():
@@ -231,7 +239,7 @@ class NodesManager(QObject):
 
     #     # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}
     #     for node in node_instances :
-    #         package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn') 
+    #         package, exec, name, arg, respawn = node['package'], node['exec'], node['name'], node.get('arg'), node.get('respawn')
     #         _subprocess = {name: NodeWorker(node)}
     #         _subprocess.get(name).start()
     #         # if arg:
@@ -262,23 +270,23 @@ class NodesManager(QObject):
             for name, _subprocess in self.nodes_subprocess.items():
                 if name == node_name:
                     _subprocess.stop()
-                    nodeToDeleteArray.append(name) 
+                    nodeToDeleteArray.append(name)
                     nodeToDelete = name
 
-    # def stopNodes(self, node_names: List[str]) -> None:
-    #     # self.bringup.shutdown()
-    #     # [subprocess.stop() for name, subprocess in self.nodes_subprocess.items()]
-    #     # subprocess = self.get(node_name)
-    #     # subprocess.stop()
-    #     nodeToDeleteArray = []
+        # def stopNodes(self, node_names: List[str]) -> None:
+        #     # self.bringup.shutdown()
+        #     # [subprocess.stop() for name, subprocess in self.nodes_subprocess.items()]
+        #     # subprocess = self.get(node_name)
+        #     # subprocess.stop()
+        #     nodeToDeleteArray = []
 
-    #     for node_name in node_names:
-    #         for name, _subprocess in self.nodes_subprocess.items():
-    #             if name == node_name:
-    #                 _subprocess.stop()
-    #                 # _subprocess.terminate()  # Send SIGTERM
-    #                 # _subprocess.wait()
-    #                 nodeToDeleteArray.append(name) 
+        #     for node_name in node_names:
+        #         for name, _subprocess in self.nodes_subprocess.items():
+        #             if name == node_name:
+        #                 _subprocess.stop()
+        #                 # _subprocess.terminate()  # Send SIGTERM
+        #                 # _subprocess.wait()
+        #                 nodeToDeleteArray.append(name)
 
         # print('node manager node to stop', nodeToDelete)
         # if nodeToDelete:
@@ -287,14 +295,12 @@ class NodesManager(QObject):
             self.nodes_subprocess.pop(node_name)
             self.started_nodes.pop(node_name)
 
-
     def restartNodes(self):
         for name, _subprocess in self.nodes_subprocess.items():
             _subprocess.stop()
 
-        self.nodes_subprocess ={}
+        self.nodes_subprocess = {}
         self.startNodes(self.started_nodes)
-
 
     def bringUpStart(self):
         # rospy.init_node("harold_start_launch", anonymous=True)
@@ -310,12 +316,12 @@ class NodesManager(QObject):
         self.bringup.start()
         # rospy.loginfo("started")
 
-    def bringUpStop(self): 
-        if  self.bringup is not None:
+    def bringUpStop(self):
+        if self.bringup is not None:
             self.bringup.shutdown()
 
     def save_map(self, mapname):
-        x = subprocess.Popen(['rosrun', 'map_server', 'map_saver', '-f', f'{mapname}'])
+        x = subprocess.Popen(["rosrun", "map_server", "map_saver", "-f", f"{mapname}"])
         # x.wait()
         return x
 
@@ -323,7 +329,7 @@ class NodesManager(QObject):
         for available_topic, _type in rospy.get_published_topics():
             if available_topic == topic:
                 return True
-            print('from topci :', available_topic, _type)
+            print("from topci :", available_topic, _type)
         return False
 
     def nodeIsRunning(self, nodename):
@@ -332,16 +338,15 @@ class NodesManager(QObject):
         return False
 
     def recordSensordata(self, topicslist: list):
-        topics = ' '.join(topicslist)
-        filename = 'haroldjeje'
-        self.rosbag = subprocess.Popen(['rosbag', 'record', '-O', filename,  topics])
-        print('ROSBAG: ', topics)
+        topics = " ".join(topicslist)
+        filename = "haroldjeje"
+        self.rosbag = subprocess.Popen(["rosbag", "record", "-O", filename, topics])
+        print("ROSBAG: ", topics)
 
     def stopRecordSensorData(self):
         if self.rosbag:
             self.rosbag.terminate()
-        pass 
-
+        pass
 
 
 if __name__ == "__main__":

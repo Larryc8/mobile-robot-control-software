@@ -2,7 +2,7 @@ import asyncio
 import sys
 
 from config_model import UserConfigFileManager
-from manual_control_node import ControlDynamicPose
+from manual_control_node import DynamicPoseController
 from PyQt5.QtCore import QPoint, QPointF, Qt
 from PyQt5.QtGui import QBrush, QColor, QKeySequence, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import (
@@ -33,7 +33,7 @@ class Joypad(QGroupBox):
         self.x_value = 0.0
         self.y_value = 0.0
         self.pressed = False
-        self.robot_vel_controller = ControlDynamicPose()
+        self.robot_vel_controller = DynamicPoseController()
 
         key_sequence = QKeySequence("Ctrl+Up")
         self.shortcut = QShortcut(key_sequence, self)

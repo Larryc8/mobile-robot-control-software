@@ -485,21 +485,31 @@ class FriendlyConfig(QWidget):
 
         a = RobotConfigForm()
         b = RobotVelocityController()
-        self.layout.addWidget(a, 0, 0)
-        self.layout.addWidget(b, 1, 0)
-        self.layout.addWidget(self.start_calibrations_btn, 0, 1)
-        self.layout.addWidget(self.h_slider, 1, 1)
-        self.layout.addWidget(self.text, 2, 1)
-        self.layout.addWidget(self.calibrations_progress, 5, 1)
-        # self.layout.addWidget(self.debug, 6, 1)
-        # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 3, 1)
-        # self.layout.addWidget(DescriptionConfigContainer(title="Calibracion inspeccion"), 4, 1)
+        self.layout.addWidget(QLabel("Detalles de robot"), 0, 0, 1, -1)
+        self.layout.addWidget(a, 1, 0)
+        self.layout.addWidget(b, 2, 0)
+        self.layout.addWidget(
+            Wrapper(
+                children=[
+                    QLabel("Test Patrols"),
+                    self.start_calibrations_btn,
+                    self.h_slider,
+                    self.text,
+                    self.calibrations_progress,
+                ]
+            ),
+            1,
+            1,
+        )
         self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
         self.setLayout(self.layout)
 
     def update_all(self, value):
         self.calibration_periods = int(value)
-        self.calibrations_progress.setMaximum(self.calibration_periods * 7)
+        points_count = len(self.patrols_scheduler.points_scheduler._goals)
+        self.calibrations_progress.setMaximum(
+            self.calibration_periods * points_count
+        )  # POrfa Revisalo , hay dos iguales!
         self.text.setText(
             f"La calibracion se jcecutara drante {self.calibration_periods} periodo"
         )
@@ -529,6 +539,8 @@ class FriendlyConfig(QWidget):
         self.start_calibrations_btn.setText("Parar calibraciones")
         self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
         self.patrols_scheduler.start_patrols(on_calibration=True)
+        points_count = len(self.patrols_scheduler.points_scheduler._goals)
+        self.calibrations_progress.setMaximum(self.calibration_periods * points_count)
         pass
 
     def stop_calibrations(self) -> None:
@@ -539,20 +551,13 @@ class FriendlyConfig(QWidget):
         self.start_calibrations_btn.setText("Comenzar calibraciones")
 
 
-class DescriptionConfigContainer(QGroupBox):
-    def __init__(self, title="Estatdiaticas") -> None:
-        super().__init__(title)
+class Wrapper(QWidget):
+    def __init__(self, title="Estatdiaticas", children: list = []) -> None:
+        super().__init__()
         self.layout = QVBoxLayout()
-        self.option_layout = QHBoxLayout()
-        self.layout.addWidget(QLabel("Mucho texto aburriod"))
-        self.firtoption_button = QPushButton("pequeno")
-        self.secondoption_button = QPushButton("Mediano")
-        self.thirdoption_button = QPushButton("Grande")
-
-        self.option_layout.addWidget(self.firtoption_button)
-        self.option_layout.addWidget(self.secondoption_button)
-        self.option_layout.addWidget(self.thirdoption_button)
-        self.layout.addLayout(self.option_layout)
+        for w in children:
+            self.layout.addWidget(w)
+        self.layout.addStretch(4)
         self.setLayout(self.layout)
 
 

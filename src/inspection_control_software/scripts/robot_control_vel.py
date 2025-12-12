@@ -1,5 +1,7 @@
 import sys
 
+import rospy
+from config_model import UserConfigFileManager
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -12,6 +14,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from styles.buttons import dropdown_style, secondary_button_style, tertiary_button_style
+
+# Dios mio dame m*a
 
 
 class RobotVelocityController(QWidget):
@@ -21,9 +26,15 @@ class RobotVelocityController(QWidget):
         # Initialize variables
         self.linear_vel = 0.0
         self.angular_vel = 0.0
-        self.path_tolerance = 0.10
+        self.PATH_TOLERANCE = 0.10
+        self.user_config_hanler = UserConfigFileManager()
+        config = self.user_config_hanler.read_data()
 
         self.init_ui()
+
+        self.update_mode(config["conduction_mode"])
+        self.init_tolerance(config["path_tolerance"] * 100)
+        self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
 
     def init_ui(self):
         self.setWindowTitle("Robot Teleop Controller")
@@ -31,9 +42,10 @@ class RobotVelocityController(QWidget):
 
         # Main Layout
         main_layout = QVBoxLayout()
+        info_label_style = "color: gray; font-style: italic; margin-top: 5px;"
 
         # Title
-        title_label = QLabel("Velocity Control Panel")
+        title_label = QLabel("Control Panel")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet(
             "font-size: 16px; font-weight: bold; margin-bottom: 10px;"
@@ -87,7 +99,7 @@ class RobotVelocityController(QWidget):
         mode_title = QLabel("Conduction Mode")
         mode_title.setStyleSheet("font-weight: bold;")
         mode_title.setAlignment(Qt.AlignCenter)
-        mode_layout.addWidget(mode_title)
+        # mode_layout.addWidget(mode_title)
 
         # Buttons layout
         buttons_layout = QHBoxLayout()
@@ -111,9 +123,7 @@ class RobotVelocityController(QWidget):
         self.mode_description = QLabel("Select a mode to see impact.")
         self.mode_description.setAlignment(Qt.AlignCenter)
         self.mode_description.setWordWrap(True)
-        self.mode_description.setStyleSheet(
-            "color: gray; font-style: italic; margin-top: 5px;"
-        )
+        self.mode_description.setStyleSheet(info_label_style)
         mode_layout.addWidget(self.mode_description)
 
         main_layout.addLayout(mode_layout)
@@ -128,13 +138,23 @@ class RobotVelocityController(QWidget):
         nav_title.setAlignment(Qt.AlignCenter)
         nav_layout.addWidget(nav_title)
 
+        self.timeout_items = [
+            ("5 seconds", 5),
+            ("10 seconds", 10),
+            ("20 seconds", 20),
+            ("30 seconds", 30),
+            ("60 seconds", 60),
+        ]
+
         # Stuck Timeout Dropdown
         timeout_layout = QHBoxLayout()
         timeout_label = QLabel("Stuck Timeout:")
         self.timeout_combo = QComboBox()
-        self.timeout_combo.addItems(
-            ["5 seconds", "10 seconds", "20 seconds", "30 seconds", "60 seconds"]
-        )
+        # self.timeout_combo.setStyleSheet(dropdown_style)
+
+        for text, code in self.timeout_items:
+            self.timeout_combo.addItem(text)
+
         self.timeout_combo.setCurrentIndex(1)  # Default to 10s
         self.timeout_combo.currentTextChanged.connect(self.update_timeout)
 
@@ -149,7 +169,7 @@ class RobotVelocityController(QWidget):
 
         self.lcd_tolerance = QLCDNumber()
         self.lcd_tolerance.setSegmentStyle(QLCDNumber.Flat)
-        self.lcd_tolerance.display(self.path_tolerance)
+        self.lcd_tolerance.display(self.PATH_TOLERANCE)
 
         tolerance_header.addWidget(tolerance_label)
         tolerance_header.addWidget(self.lcd_tolerance)
@@ -161,18 +181,13 @@ class RobotVelocityController(QWidget):
         self.slider_tolerance.setValue(10)  # Represents 0.10 m
         self.slider_tolerance.valueChanged.connect(self.update_tolerance)
         tolerance_layout.addWidget(self.slider_tolerance)
+        x = QLabel("Valores alto implican una mayor sensidbiliada")
+        x.setStyleSheet(info_label_style)
+        tolerance_layout.addWidget(x)
 
         nav_layout.addLayout(tolerance_layout)
         main_layout.addLayout(nav_layout)
         main_layout.addSpacing(20)
-
-        # --- Emergency Stop Button ---
-        self.stop_btn = QPushButton("EMERGENCY STOP")
-        self.stop_btn.setStyleSheet(
-            "background-color: red; color: white; font-weight: bold; height: 40px;"
-        )
-        self.stop_btn.clicked.connect(self.stop_robot)
-        # main_layout.addWidget(self.stop_btn)
 
         self.setLayout(main_layout)
 
@@ -187,15 +202,33 @@ class RobotVelocityController(QWidget):
         self.publish_cmd_vel()
 
     def update_mode(self, mode):
+        selected_style = tertiary_button_style + "QPushButton { border: 1px solid red}"
+        no_selected_style = tertiary_button_style + "QPushButton { border: 1px solid}"
+
+        self.btn_soft.setStyleSheet(no_selected_style)
+        self.btn_medium.setStyleSheet(no_selected_style)
+        self.btn_aggressive.setStyleSheet(no_selected_style)
+
         if mode == "Soft":
             text = "Impact: Low acceleration/speed. Safe for crowded areas."
             style = "color: green;"
+            self.btn_soft.setStyleSheet(selected_style)
+            rospy.set_param("/max_linear_velocity", 0.1)
+            rospy.set_param("/max_angular_velocity", 0.3)
         elif mode == "Medium":
             text = "Impact: Balanced speed. Standard behavior."
             style = "color: blue;"
+            self.btn_medium.setStyleSheet(selected_style)
+            rospy.set_param("/max_linear_velocity", 0.2)
+            rospy.set_param("/max_angular_velocity", 0.5)
         elif mode == "Aggressive":
             text = "Impact: High torque/speed. Faster response."
             style = "color: darkred; font-weight: bold;"
+            self.btn_aggressive.setStyleSheet(selected_style)
+            rospy.set_param("/max_linear_velocity", 0.4)
+            rospy.set_param("/max_angular_velocity", 0.8)
+
+        self.user_config_hanler.update_value("conduction_mode", mode)
 
         self.mode_description.setText(text)
         self.mode_description.setStyleSheet(style)
@@ -203,13 +236,22 @@ class RobotVelocityController(QWidget):
 
     def update_timeout(self, text):
         print(f"Stuck Timeout updated to: {text}")
+        index = self.timeout_combo.findText(text)
+        self.user_config_hanler.update_value("stuck_timeout_index", index)
+
         # Add logic here to update the robot's navigation parameter
 
     def update_tolerance(self, value):
-        self.path_tolerance = value / 100.0
-        self.lcd_tolerance.display(self.path_tolerance)
-        print(f"Path Tolerance updated to: {self.path_tolerance} m")
+        self.PATH_TOLERANCE = value / 100.0
+        self.lcd_tolerance.display(self.PATH_TOLERANCE)
+        print(f"Path Tolerance updated to: {self.PATH_TOLERANCE} m")
+        rospy.set_param("/path_tolerance", self.PATH_TOLERANCE)
+        self.user_config_hanler.update_value("path_tolerance", self.PATH_TOLERANCE)
         # Add logic here to update the robot's navigation parameter
+
+    def init_tolerance(self, value):
+        self.slider_tolerance.setValue(value)
+        self.update_tolerance(value)
 
     def stop_robot(self):
         self.slider_linear.setValue(0)

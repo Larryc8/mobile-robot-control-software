@@ -148,9 +148,7 @@ class RobotCamera(QWidget):
         self.bridge = CvBridge()
 
         # Subscribe to image topic
-        self.image_sub = rospy.Subscriber(
-            "/camera/image_debug", Image, self.image_callback
-        )
+        self.image_sub = rospy.Subscriber("/camera/image", Image, self.image_callback)
 
         # Timer to check for new images
         self.timer = QTimer(self)

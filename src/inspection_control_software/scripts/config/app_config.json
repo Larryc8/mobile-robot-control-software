@@ -1,6 +1,19 @@
 {
-  "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/mse_octubre_23_9pm.csv",
-  "recent_map_files": [],
-  "max_linear_vel": 0,
-  "max_angular_vel": 0
+    "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/test_sqnet2.csv",
+    "recent_map_files": [
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test4.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test3.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml"
+    ],
+    "conduction_mode": "Medium",
+    "stuck_timeout_index": 0,
+    "path_tolerance": 0.05,
+    "robots": {
+        "turtlebot": {
+            "name": "Turtlebot3"
+        }
+    },
+    "max_linear_vel": 0,
+    "max_angular_vel": 0
 }
