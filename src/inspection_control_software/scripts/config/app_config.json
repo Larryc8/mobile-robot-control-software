@@ -6,12 +6,31 @@
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test3.yaml",
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml"
     ],
-    "conduction_mode": "Medium",
-    "stuck_timeout_index": 0,
+    "conduction_mode": "Aggressive",
+    "stuck_timeout_index": 3,
     "path_tolerance": 0.05,
     "robots": {
-        "turtlebot": {
-            "name": "Turtlebot3"
+        "turtlebot3": {
+            "name": "Turtlebot3",
+            "URDF_path": "empty",
+            "odom_topic": "odom",
+            "cmd_vel_topic": "cmd_vel",
+            "lidar_topic": "scan",
+            "base_frame": "base_link"
+        },
+        "name": {
+            "robot": "name",
+            "URDF_path": "",
+            "odom_topic": "",
+            "cmd_vel_topic": "",
+            "lidar_topic": ""
+        },
+        "harold": {
+            "robot": "harold",
+            "URDF_path": "qqq",
+            "odom_topic": "qqq",
+            "cmd_vel_topic": "qqq",
+            "lidar_topic": "qqq"
         }
     },
     "max_linear_vel": 0,

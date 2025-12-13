@@ -1732,13 +1732,13 @@ class Patrol(QGroupBox):
                 return
 
         if len(self.patrols_scheduler._points_to_visit) == 0:
-            toast = Toast(self.parent)
-            toast.setDuration(5000)  # Hide after 5 seconds
-            toast.setTitle("Error: Fallo inicio de patrullajes")
-            toast.setText("No hay puntos de interes")
-            toast.applyPreset(ToastPreset.ERROR)  # Apply style preset
-            Toast.setPositionRelativeToWidget(self.parent)
-            toast.show()
+            ntf = Notification(
+                parent=self.parent,
+                title="Fallo inicio de patrullajes",
+                msg="No hay puntos de interés",
+                preset=ToastPreset.ERROR,
+            )
+            ntf.show()
             return
 
         self.enable_single_patrol_exec.emit(str(self.id))

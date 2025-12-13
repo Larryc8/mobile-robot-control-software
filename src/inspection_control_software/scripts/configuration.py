@@ -53,7 +53,11 @@ from styles.buttons import (
     tertiary_button_style,
     toggle_button_style,
 )
-from styles.labels import inactive_label_style, minimal_label_style
+from styles.labels import (
+    inactive_label_style,
+    minimal_label_style,
+    subtitle_label_style,
+)
 
 # Usage example
 # if __name__ == "__main__":
@@ -485,7 +489,10 @@ class FriendlyConfig(QWidget):
 
         a = RobotConfigForm()
         b = RobotVelocityController()
-        self.layout.addWidget(QLabel("Detalles de robot"), 0, 0, 1, -1)
+        title = QLabel("Detalles de robot")
+        title.setStyleSheet(subtitle_label_style)
+        self.layout.addWidget(title, 0, 0, 1, -1)
+        # subtitle_label_style
         self.layout.addWidget(a, 1, 0)
         self.layout.addWidget(b, 2, 0)
         self.layout.addWidget(

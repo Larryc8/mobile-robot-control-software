@@ -1,39 +1,37 @@
 import sys
+
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
-    QVBoxLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
     QMessageBox,
-    QHBoxLayout,
+    QPushButton,
+    QVBoxLayout,
 )
-
-
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
-    primary_button_style,
-    secondary_button_style,
     colored_button_style,
-    tertiary_button_style,
-    toggle_button_style,
     minimal_button_style,
     patrol_checkbox_style,
+    primary_button_style,
+    secondary_button_style,
+    tertiary_button_style,
+    toggle_button_style,
 )
-
 from styles.labels import (
+    error_label_style,
     inactive_label_style,
     minimal_label_style,
+    normal_label_style,
     subtitle_label_style,
-    error_label_style,
-    normal_label_style
 )
 
 
 class InputDialog(QDialog):
-    def __init__(self, parent, title, child = None):
+    def __init__(self, parent, title, child=None):
         super().__init__(parent)
         self.setWindowTitle("Guardar archivo de mapeo")
         self.setGeometry(100, 100, 300, 150)
@@ -68,7 +66,7 @@ class InputDialog(QDialog):
         layout.addWidget(self.text_input)
 
         # Submit button
-        self.discard_btn = QPushButton('Descartar')
+        self.discard_btn = QPushButton("Descartar")
         self.submit_btn = QPushButton("Continuar")
         self.discard_btn.clicked.connect(self.on_discard)
         self.submit_btn.clicked.connect(self.on_submit)
@@ -110,16 +108,16 @@ class CustomDialog(QDialog):
         self,
         parent,
         title: str,
-        message: str = 'Hola mucho gusto! Soy un Error', 
+        message: str = "Hola mucho gusto! Soy un Error",
         positive_response: str = "Yes",
         negative_response: str = "No",
         retries: int = 0,
         interative: bool = True,
-        child = None
+        child=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Alerta!")
-        self.setFixedSize(500, 200)
+        self.setFixedSize(500, 150)
         self.response = "Negative"
         self.title = title
         self.message = message
@@ -128,7 +126,7 @@ class CustomDialog(QDialog):
         self.retries = retries
         self.interative = interative
         self.child = child
-        self.atempts = 0 
+        self.atempts = 0
 
         self.initUI()
 
@@ -150,7 +148,7 @@ class CustomDialog(QDialog):
         # Submit button
         self.positive_btn = QPushButton(self.positive_response)
         self.negative_btn = QPushButton(self.negative_response)
-        self.default_close_btn = QPushButton('Cerrar')
+        self.default_close_btn = QPushButton("Cerrar")
 
         self.positive_btn.clicked.connect(self.setPositiveResponse)
         self.negative_btn.clicked.connect(self.setNegativeResponse)
@@ -160,7 +158,7 @@ class CustomDialog(QDialog):
         self.default_close_btn.setStyleSheet(primary_button_style)
         self.negative_btn.setStyleSheet(secondary_button_style)
         self.title_label.setStyleSheet(subtitle_label_style)
-        self.message_label.setStyleSheet(normal_label_style )
+        self.message_label.setStyleSheet(normal_label_style)
         self.alert_label.setStyleSheet(error_label_style)
 
         if self.interative:
@@ -192,7 +190,6 @@ class CustomDialog(QDialog):
 
         if self.atempts == self.retries:
             self.alert_label.show()
-
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import sys
 
 import rospy
 from config_model import UserConfigFileManager
+from input_textdialog import CustomDialog, InputDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -52,25 +53,19 @@ class RobotConfigForm(QWidget):
 
         self.country_dropdown = QComboBox()
         # self.country_dropdown.currentIndexChanged.connect(self.on_country_changed)
+        # Load Config
+        config = self.user_config.read_data()
 
-        # Add countries with custom data (country codes)
-        robots_options = [
-            ("Turtlebot3", "US"),
-            ("Canada", "CA"),
-        ]
+        robots_options = list(config["robots"].keys())
 
-        for country, code in robots_options:
-            self.country_dropdown.addItem(country, code)
+        for country in robots_options:
+            self.country_dropdown.addItem(country)
 
         # Title
         title_label = QLabel("Enter Robot Details")
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-
-        # main_layout.addWidget(title_label)
+        main_layout.addWidget(title_label)
 
         main_layout.addWidget(self.country_dropdown)
-        main_layout.addLayout(buttons_layout)
         # Form Layout for inputs
         # main_layout.addStretch(0)
 
@@ -111,12 +106,14 @@ class RobotConfigForm(QWidget):
 
         # Add form layout to main layout
         main_layout.addLayout(form_layout)
+        main_layout.addLayout(buttons_layout)
+        main_layout.addStretch(2)
 
         # Submit Button
         self.submit_btn = QPushButton("Save Configuration")
         self.submit_btn.setStyleSheet(secondary_button_style)
-        self.submit_btn.clicked.connect(self.submit_form)
-        main_layout.addWidget(self.submit_btn)
+        add_option_btn.clicked.connect(self.submit_form)
+        # main_layout.addWidget(self.submit_btn)
 
         # Set the layout
         self.setLayout(main_layout)
@@ -136,23 +133,34 @@ class RobotConfigForm(QWidget):
 
     def submit_form(self):
         """Collects data and displays it."""
+        name = self.name_input.text()
         data = {
-            "Robot Name": self.name_input.text(),
-            "URDF Path": self.urdf_input.text(),
-            "Odom Topic": self.odom_input.text(),
-            "Cmd Vel Topic": self.cmd_vel_input.text(),
-            "Lidar Topic": self.lidar_input.text(),
+            "robot": self.name_input.text(),
+            "URDF_path": self.urdf_input.text(),
+            "odom_topic": self.odom_input.text(),
+            "cmd_vel_topic": self.cmd_vel_input.text(),
+            "lidar_topic": self.lidar_input.text(),
         }
-
         # Validation: Check if Robot Name is empty
-        if not data["Robot Name"]:
-            QMessageBox.warning(self, "Input Error", "Please enter a Robot Name.")
-            return
+        # if not data["Robot Name"]:
+        #     QMessageBox.warning(self, "Input Error", "Please enter a Robot Name.")
+        #     return
+        self.user_config.update_value(f"robots.{name}", data)
+        self.country_dropdown.addItem(name)
+
+        dg = CustomDialog(
+            self,
+            "Nuevo robot agregado",
+            message="perderá todo el progreso que tiene hasta ahora!",
+            positive_response="Seguir creando",
+            negative_response="Descartar",
+            retries=1,
+        )
+        dg.exec_()
 
         # Print to console (for debugging/logging)
         print("\n--- Form Submitted ---")
-        for key, value in data.items():
-            print(f"{key}: {value}")
+        print(data)
 
 
 if __name__ == "__main__":

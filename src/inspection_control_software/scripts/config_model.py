@@ -24,7 +24,7 @@ class UserConfigFileManager:
             initial_data = {}
             self.write_data(initial_data)
 
-    def read_data(self):
+    def read_data(self) -> dict:
         """Read data from JSON file"""
         try:
             with open(self.filename, "r") as file:

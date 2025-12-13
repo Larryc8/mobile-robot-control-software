@@ -38,7 +38,6 @@ class RobotVelocityController(QWidget):
 
     def init_ui(self):
         self.setWindowTitle("Robot Teleop Controller")
-        self.setGeometry(100, 100, 400, 600)  # Increased height to fit new elements
 
         # Main Layout
         main_layout = QVBoxLayout()
@@ -46,7 +45,6 @@ class RobotVelocityController(QWidget):
 
         # Title
         title_label = QLabel("Control Panel")
-        title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet(
             "font-size: 16px; font-weight: bold; margin-bottom: 10px;"
         )
@@ -98,7 +96,6 @@ class RobotVelocityController(QWidget):
         mode_layout = QVBoxLayout()
         mode_title = QLabel("Conduction Mode")
         mode_title.setStyleSheet("font-weight: bold;")
-        mode_title.setAlignment(Qt.AlignCenter)
         # mode_layout.addWidget(mode_title)
 
         # Buttons layout
@@ -121,7 +118,6 @@ class RobotVelocityController(QWidget):
 
         # Description Label
         self.mode_description = QLabel("Select a mode to see impact.")
-        self.mode_description.setAlignment(Qt.AlignCenter)
         self.mode_description.setWordWrap(True)
         self.mode_description.setStyleSheet(info_label_style)
         mode_layout.addWidget(self.mode_description)
@@ -135,7 +131,6 @@ class RobotVelocityController(QWidget):
         nav_title.setStyleSheet(
             "font-weight: bold; border-top: 1px solid #ccc; padding-top: 10px;"
         )
-        nav_title.setAlignment(Qt.AlignCenter)
         nav_layout.addWidget(nav_title)
 
         self.timeout_items = [
