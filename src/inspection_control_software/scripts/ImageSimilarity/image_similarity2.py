@@ -65,8 +65,9 @@ class ImgSimilarity:
 
         transform_list.extend(
             [
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
+                transforms.Resize(224),
+                # transforms.Resize(256),
+                # transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 # Standard ImageNet normalization
                 transforms.Normalize(

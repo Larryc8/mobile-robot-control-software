@@ -8,6 +8,7 @@ from datetime import datetime
 
 import rospy
 from config_model import UserConfigFileManager
+from utils.custom_toolbutton import CustomToolButtom
 from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPalette, QTextCursor
 from PyQt5.QtWidgets import (
@@ -28,6 +29,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 from sensor_msgs.msg import BatteryState
+from utils.custom_label import ElidedLabel
 from styles.buttons import border_button_style, secondary_button_style
 
 
@@ -56,6 +58,9 @@ class CsvHandler:
         Checks if the file exists. If not, creates it and writes the header.
         This is a private method, intended for internal use by the class.
         """
+        if not self.filepath:
+            return
+
         # os.path.exists() checks if a file or directory exists at the path
         if not os.path.exists(self.filepath):
             print(f"File '{self.filepath}' not found. Creating it now... ✍️")
@@ -116,9 +121,11 @@ def add_color(msg):
 
 class FixedMessage(QGroupBox):
     log_file_updated = pyqtSignal(str)
+    show_terminal = pyqtSignal(bool)
 
     def __init__(self) -> None:
         super().__init__()
+        self.__terminal_visible = True
         self.setStyleSheet("""
             QGroupBox {
                 background-color: #F5F5F5;
@@ -131,12 +138,18 @@ class FixedMessage(QGroupBox):
 
         # self.setContentsMargins(0, 0, 0, 0)
         self.user_config = UserConfigFileManager()
+        self.show_terminal_btn = CustomToolButtom(icon="./public/terminal_open.svg", icon2="./public/terminal_close.svg")
+        self.show_terminal_btn.clicked.connect(self.toggle_terminal)
+
         self.setFlat(True)
         config = self.user_config.read_data()
 
         layout = QHBoxLayout()
-        self.text = QLabel(
-            f"Para ver el historil revise <span style='color: royalblue; text-decoration: underline'>{config['log_history_filepath']}</span>"
+        # self.text = QLabel(
+        #     f"Para ver el historil revise <span style='color: royalblue; text-decoration: underline'>{config['log_history_filepath']}</span>"
+        # )
+        self.text = ElidedLabel(
+            f"Para ver el historil revise {config['log_history_filepath']}"
         )
 
         self.text.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -144,16 +157,22 @@ class FixedMessage(QGroupBox):
         layout.setContentsMargins(6, 6, 6, 6)
         self.show_btn = QPushButton("Mostrar")
         self.export_btn = QPushButton("Exportar")
-        self.export_btn.setIcon(QIcon("./public/export.svg"))
+        self.export_btn.setIcon(QIcon("./public/export-svgrepo-com.svg"))
 
         self.export_btn.clicked.connect(self.export_log)
 
         self.export_btn.setStyleSheet(secondary_button_style)
 
+        layout.addWidget(self.show_terminal_btn, 1)
         layout.addWidget(self.text, 7)
-        # layout.addWidget(self.show_btn, 1)
         layout.addWidget(self.export_btn, 1)
         self.setLayout(layout)
+
+    def toggle_terminal(self):
+        self.show_terminal.emit(self.__terminal_visible)
+        self.show_terminal_btn.toggle()
+
+        self.__terminal_visible = not self.__terminal_visible
 
     def export_log(self, x):
         options = QFileDialog.Options()
@@ -182,7 +201,7 @@ class RobotActionsLoggerView(QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._queue_size = 9
+        self._queue_size = 10
         self.log_queue = []
         self.log_history = []
         self.battery_state = 100
@@ -208,14 +227,14 @@ class RobotActionsLoggerView(QGroupBox):
 
         for l in self.labels:
             layout.addWidget(l)
+            l.hide()
             l.setStyleSheet("font-family: 'Courier New'; font-size: 14px;")
-        self.labels[0].setText(
-            "<span style='color: green; font-weight: bold'>CHALA ES SUPER LINDA! SOY TU FAN! BIENVENIDO!</span>"
-        )
+
 
         lb = FixedMessage()
         layout.addWidget(lb)
         lb.log_file_updated.connect(self.update_log_file)
+        lb.show_terminal.connect(self.toggle_terminal)
 
         buttons_layout.addWidget(self.up_btn)
         buttons_layout.addWidget(self.down_btn)
@@ -225,6 +244,16 @@ class RobotActionsLoggerView(QGroupBox):
         # main_layout.addLayout(buttons_layout, 0, 1)
 
         self.setLayout(main_layout)
+
+    def toggle_terminal(self, visible: bool) -> None:
+        for l in self.labels:
+            if visible:
+                l.show()
+            else:
+                l.hide()
+        print("terminal toggled: ", visible)
+        pass
+
 
     def update_log(self, log_msg: str) -> None:
         if len(self.log_queue) == self._queue_size:

@@ -376,7 +376,7 @@ class InternalStorageManager:
         try:
             allpoints = {}
             _points = []
-            mapfile = mapfile.split("/")[-1]
+            # mapfile = mapfile.split("/")[-1]
             mapfile = mapfile.split(".")[0]
             print(f"{__name__} map {mapfile}")
             map_db = session.query(Map).filter_by(file_path=mapfile).first()

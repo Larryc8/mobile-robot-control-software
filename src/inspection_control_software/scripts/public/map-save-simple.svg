@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="800px" height="800px" viewBox="0 0 1024 1024" class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Map base light panel -->
+  <path d="M618.666667 192L362.666667 106.666667 106.666667 192v682.666667l256-85.333334 256 85.333334 256-85.333334V106.666667z"
+        fill="#FFECB3" stroke="#C8860A" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Map center darker panel -->
+  <path d="M362.666667 106.666667v682.666666l256 85.333334V192z"
+        fill="#FFD54F" stroke="#C8860A" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Floppy disk body -->
+  <rect x="430" y="430" width="460" height="460" rx="36" ry="36"
+        fill="#42A5F5" stroke="#0D47A1" stroke-width="14" stroke-linejoin="round"/>
+
+  <!-- Top label window -->
+  <rect x="490" y="430" width="260" height="180" rx="0" ry="0"
+        fill="#E3F2FD" stroke="#0D47A1" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- Bottom disk slot -->
+  <rect x="490" y="660" width="320" height="180" rx="16" ry="16"
+        fill="#BBDEFB" stroke="#0D47A1" stroke-width="10" stroke-linejoin="round"/>
+
+</svg>

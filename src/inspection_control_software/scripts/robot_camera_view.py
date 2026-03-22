@@ -6,7 +6,7 @@ from datetime import datetime
 import cv2 as cv
 import rospy
 import tf
-from config_model import NodesManager
+from config_model import NodesManager, UserConfigFileManager
 from cv_bridge import CvBridge
 from database_manager import DataBase
 from geometry_msgs.msg import Pose2D, TransformStamped, Twist
@@ -131,6 +131,7 @@ class RobotCamera(QWidget):
         self.pose_getter = None
         # self.data_buffer2 = buffer
         #
+        self.user_config = UserConfigFileManager()
         self.image_label.setText("No hay datos de la camara")
         self.image_label.setStyleSheet(
             inactive_label_style + title_label_style + "font-famly: Helvetica"
@@ -179,7 +180,12 @@ class RobotCamera(QWidget):
         masked_pixmap = pixmap.copy()
         size = masked_pixmap.size()
         result = pixmap
-        rect_size = QSize(100, 90)
+
+        config = self.user_config.read_data()
+        w, h = config["roi"]
+
+        rect_size = QSize(w, h)
+
         x0 = size.width() // 2 - rect_size.width() // 2
         y0 = size.height() // 2 - rect_size.height() // 2
 

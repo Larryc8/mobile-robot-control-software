@@ -11,6 +11,8 @@ import rospy
 from better_image_display import ImageViewer
 from config_model import UserConfigFileManager
 from database_manager import AlertStatus
+from custom_tooltip import CustomToolTip
+from utils.custom_toolbutton import CustomToolButtom
 from image_carousel import ImageCarousel
 from input_textdialog import CustomDialog, InputDialog
 from joystick import Joypad
@@ -45,6 +47,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLayout,
+    QToolButton,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -58,6 +61,7 @@ from PyQt5.QtWidgets import (
     QToolTip,
     QVBoxLayout,
     QWidget,
+    QFrame,
 )
 from pyqttoast import Toast, ToastPosition, ToastPreset
 from robot_actions_logger import RobotActionsLoggerView
@@ -87,6 +91,10 @@ from styles.labels import (
 )
 from styles.patrols import patrol_base_style, patrol_selected_style
 from utils.patrol import PatrolEndState, operationMode, userOperation
+
+class StackingOptions(Enum):
+    MAP_ON_TOP = 1
+    CAMERA_ON_TOP = 0
 
 
 class HomePanel(QWidget):
@@ -214,6 +222,7 @@ class VisualizationPanel(QWidget):
         self.buffer_data_robot_camera = []
         self.view_options = {}
         self.map_recent_files = []
+        self._stack_policy = 0
 
         self.message = QLabel(
             "MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas "
@@ -242,7 +251,7 @@ class VisualizationPanel(QWidget):
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager,
             parent=self.parent,
-            # widget=self.drainage_checkpoints_win,
+            widget=self.drainage_checkpoints_win,
         )
         self.nodes = [
             {
@@ -252,29 +261,50 @@ class VisualizationPanel(QWidget):
             }
         ]
 
-        (
-            self.save_map_button,
-            self.load_map_button,
-            self.points_window_btn,
-            self.create_map_btn,
-        ) = (
-            QPushButton("Guardar mi mapita"),
-            QPushButton("Cargar mapa"),
-            QPushButton("puntos de interes"),
-            QPushButton("Crear mapa"),
-        )
+        self.load_map_button = CustomToolButtom(icon="./public/map-question-contrast.svg")
+        self.create_map_btn = CustomToolButtom(icon="./public/map-editing-svgrepo-com.svg", icon2="./public/map-save-simple.svg")
+        self.points_window_btn = CustomToolButtom(icon="./public/map-pin-contrast.svg")#"puntos de interes"
+        self.robot_focus_btn = CustomToolButtom(icon="./public/worldwide-location-svgrepo-com.svg")
+        self.map_layout_btn = CustomToolButtom(icon="./public/flag_corner_brackets_v3.svg", twist=True)
+        self.camera_layout_btn = CustomToolButtom(icon="./public/camera_centered.svg")
+        self.layout_type_btn = CustomToolButtom(icon="./public/squares_overlapped.svg", icon2="./public/squares_single_bigger.svg")
+
+        self.set_reference_btn = CustomToolButtom(icon="./public/map_pin_stroked.svg")
+
+        self.tooltip = CustomToolTip(self, delay=100)
+        self.tooltip.install(self.create_map_btn, "Haga clic para crear un nuevo mapa")
 
         self.view_menu_btn = QPushButton("Opciones")
 
-        [
-            self.buttons_layout.addWidget(button, r, c)
-            for button, r, c, rx, cx in (
-                (self.view_menu_btn, 0, 3, 0, 0),
-                (self.load_map_button, 0, 0, 1, 4),
-                (self.points_window_btn, 0, 2, 1, 3),
-                (self.create_map_btn, 0, 1, 1, 3),
-            )
-        ]
+        self.buttons_layout.addWidget(self.load_map_button, 0, 0)
+        self.buttons_layout.addWidget(self.points_window_btn, 0, 3)
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        # line.setLineWidth(1)
+        line.setStyleSheet("QFrame { background-color: lightgray; }")
+        self.buttons_layout.addWidget(line, 0, 2)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        # line.setLineWidth(2)
+        line.setStyleSheet("QFrame { background-color: lightgray; }")
+        self.buttons_layout.addWidget(line, 0, 5)
+
+        self.buttons_layout.addWidget(self.create_map_btn, 0, 1)
+        self.buttons_layout.addWidget(self.robot_focus_btn, 0, 6)
+        self.buttons_layout.addWidget(self.map_layout_btn, 0, 7)
+        self.buttons_layout.addWidget(self.camera_layout_btn, 0, 9)
+        self.buttons_layout.addWidget(self.layout_type_btn, 0, 10)
+        self.buttons_layout.addWidget(self.set_reference_btn, 0, 4)
+
+        self.set_reference_btn.clicked.connect(self.robotcamera.buffer_reference_image)
+        self.robot_focus_btn.clicked.connect(self.handleActionSelected)
+        self.map_layout_btn.clicked.connect(lambda: self.handleViewActionSelected(StackingOptions.MAP_ON_TOP))
+        self.camera_layout_btn.clicked.connect(lambda: self.handleViewActionSelected(StackingOptions.CAMERA_ON_TOP))
+        self.layout_type_btn.clicked.connect(self.toggleLayoutType)
+        # self.stack_policy_btn.clicked.connect(self.toggleStackPolicy)
+
+        self.set_reference_btn.setEnabled(False)
 
         # Create the QMenu
         view_menu = QMenu(self)
@@ -310,6 +340,8 @@ class VisualizationPanel(QWidget):
         # Set the menu to the button
         self.view_menu_btn.setMenu(view_menu)
 
+        self.points_window_btn.clicked.connect(self.show_points_window)
+
         map_files_menu = QMenu(self)
         new_action = QAction("cargar mapa", self)
         new_action.triggered.connect(self.handleLoadMap)
@@ -325,26 +357,14 @@ class VisualizationPanel(QWidget):
         # print(config)
         # self.map_recent_files = self.setup_recent_files(config["recent_map_files"])
 
-        self.load_map_button.setMenu(map_files_menu)
+        # self.load_map_button.setMenu(map_files_menu)
+        self.load_map_button.clicked.connect(self.handleLoadMap)
 
         # self.view_menu_btn.setStyleSheet(border_button_style + button_with_menu_style)
         self.message.setStyleSheet(warning_label_style)
         view_menu.setStyleSheet(menu_style)
         self.view_menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style)
-        self.load_map_button.setStyleSheet(
-            tertiary_button_style + button_with_menu_style
-        )
-        self.points_window_btn.setStyleSheet(
-            tertiary_button_style + button_with_menu_style
-        )
-        self.create_map_btn.setStyleSheet(tertiary_button_style)
 
-        icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
-        self.create_map_btn.setIcon(icon_start)
-        # self.create_map_btn.setText('ddd')
-
-        icon_load = QApplication.style().standardIcon(QStyle.SP_FileLinkIcon)
-        self.load_map_button.setIcon(icon_load)
 
         # self.load_map_button.clicked.connect(self.handleLoadMap)
         self.map_loaded.connect(self.parent.pointsWindow.load_map)
@@ -355,18 +375,18 @@ class VisualizationPanel(QWidget):
         show_checkpoints_action = QAction("Puntos de interes", self)
         show_dreinage_action = QAction("Fotos de referencia", self)
 
-        show_checkpoints_action.triggered.connect(self.show_points_window)
+        # show_checkpoints_action.triggered.connect(self.show_points_window)
         menu.addAction(show_checkpoints_action)
         show_dreinage_action.triggered.connect(self.show_dreinage_window)
         menu.addAction(show_dreinage_action)
-        self.points_window_btn.setMenu(menu)
+        # self.points_window_btn.setMenu(menu)
         # self.save_button.setEnabled(False)
         #
 
         self.logger.log_changed.connect(self.robot_actions_logger.update_log)
         self.robot_actions_logger.log_file_updated.connect(self.logger.update_log_file)
 
-        # self.points_window_btn.clicked.connect(self.show_points_window)
+        # self.oints_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
         self.map_saved.connect(self.robotcamera.save_buffered_data)
@@ -402,14 +422,24 @@ class VisualizationPanel(QWidget):
 
         self.message.hide()
 
+
+    def toggleStackPolicy(self):
+        self._stack_policy = (self._stack_policy + 1) % 2
+
+
+    def toggleLayoutType(self):
+        if self.layout_type_btn.toggle():
+            self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        else:
+            self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
+
+
+
+
     def handleActionSelected(self, action3):
-        self.setFollowRobot(action3.isChecked())
-        action3.setText(
-            "Desenfocar vista del robot"
-            if action3.isChecked()
-            else "Enfocar vista al robot"
-        )
-        print(action3.isChecked())
+        self.robot_focus_btn.toggle_selected()
+        self.setFollowRobot(self.robot_focus_btn.isSelected())
+
 
     def show_log(self):
         self.stacklayout.setCurrentIndex(2)
@@ -439,26 +469,50 @@ class VisualizationPanel(QWidget):
 
         ntf.show()
 
+    def handleViewActionSelected(self, index):
+        self.robotcamera.setMaximumSize(2000, 1000)
+        self.rviz.setMaximumSize(2000, 1000)
+
+        if index == StackingOptions.MAP_ON_TOP:
+            if not self.map_layout_btn.isSelected():
+                self.map_layout_btn.toggle_selected()
+                self.camera_layout_btn.toggle_selected()
+                self.stacklayout.setCurrentIndex(0)
+            if self.stacklayout.stackingMode() == QStackedLayout.StackingMode.StackAll:
+                self.stacklayout.currentWidget().setMaximumSize(200, 100)
+                # self.toggleCameraMapView()
+
+        if index == StackingOptions.CAMERA_ON_TOP:
+            if not self.camera_layout_btn.isSelected():
+                self.camera_layout_btn.toggle_selected()
+                self.map_layout_btn.toggle_selected()
+                self.stacklayout.setCurrentIndex(1)
+            if self.stacklayout.stackingMode() == QStackedLayout.StackingMode.StackAll:
+                self.stacklayout.currentWidget().setMaximumSize(200, 100)
+                # self.toggleCameraMapView()
+            return
+
+
     def toggleCameraMapView(self):
         if self.mapAsPrincipalView:
             self.stacklayout.setCurrentIndex(1)
             self.robotcamera.raise_()
-            print(self.stacklayout.currentWidget())
+            # print(self.stacklayout.currentWidget())
             self.robotcamera.update()
             self.mapAsPrincipalView = False
             self.robotcamera.setMaximumSize(250, 190)
-            self.robotcamera.move(50, 50)
+            # self.robotcamera.move(50, 50)
             self.rviz.setMaximumSize(2000, 1000)
             return
-
-        self.stacklayout.setCurrentIndex(0)
-        self.rviz.raise_()
-        print(self.stacklayout.currentWidget())
-        self.rviz.update()
-        self.mapAsPrincipalView = True
-        self.rviz.setMaximumSize(250, 250)
-        self.rviz.move(50, 50)
-        self.robotcamera.setMaximumSize(2000, 1000)
+        else:
+            self.stacklayout.setCurrentIndex(0)
+            self.rviz.raise_()
+            print(self.stacklayout.currentWidget())
+            self.rviz.update()
+            self.mapAsPrincipalView = True
+            self.rviz.setMaximumSize(250, 250)
+            self.rviz.move(50, 50)
+            self.robotcamera.setMaximumSize(2000, 1000)
 
     def setView(self, index):
         i = self.stacklayout.currentIndex()
@@ -484,9 +538,12 @@ class VisualizationPanel(QWidget):
 
     def toggleCreaeteSaveMap(self):
         if self.isCreateMap:
-            self.handleCreateMap()
+            if self.handleCreateMap():
+                self.create_map_btn.toggle()
         else:
-            self.saveMapHandler()
+            if self.saveMapHandler():
+                self.create_map_btn.toggle()
+
 
     def setFollowRobot(self, x):
         self.rviz.setUp("followrobot", x)
@@ -509,13 +566,13 @@ class VisualizationPanel(QWidget):
 
     def setup_recent_files(self, files):
         print(files)
-        for file_path in files:
-            print(file_path)
-            name = file_path.split("/")[-1]
-            new_action2 = QAction(name, self)
-            new_action2.triggered.connect(lambda: self.handleLoadMap(file_path))
-            self.recent_files_menu.addAction(new_action2)
-        return files
+        # for file_path in files:
+        #     print(file_path)
+        #     name = file_path.split("/")[-1]
+        #     new_action2 = QAction(name, self)
+        #     new_action2.triggered.connect(lambda: self.handleLoadMap(file_path))
+        #     self.recent_files_menu.addAction(new_action2)
+        # return files
 
     def open_recent_file(self, file):
         self.handleLoadMap(file)
@@ -584,7 +641,7 @@ class VisualizationPanel(QWidget):
                 )
                 self.add_recent_file(file_path)
 
-            print(file_path)
+            print("MAP FILE LOADED", file_path)
             self.map_loaded.emit(file_path)
 
             # self.rviz.setUp('globalframe', 'odom')
@@ -634,7 +691,7 @@ class VisualizationPanel(QWidget):
         except FileNotFoundError as error:
             print(error)
 
-    def saveMapHandler(self):
+    def saveMapHandler(self) -> bool:
         if not self.nodes_manager.nodeIsRunning("turtlebot3_slam_gmapping"):
             ntf = Notification(
                 title="Fallo en la creación del mapa",
@@ -643,7 +700,7 @@ class VisualizationPanel(QWidget):
                 parent=self.parent,
             )
             ntf.show()
-            return
+            return False
 
         # if self.nodes_manager.topicHasPublisher("/scan"):
         # self.save_map_button.setEnabled(False)
@@ -655,7 +712,7 @@ class VisualizationPanel(QWidget):
         print("VizPanel,dialog", dialog.filename)
         mapname = dialog.filename
         if mapname:
-            self.nodes_manager.save_map(f"./maps/{mapname}")
+            self.nodes_manager.save_map(mapname)
             # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
             ntf = Notification(
                 title="Se guardo el mapa exitosamente",
@@ -675,23 +732,22 @@ class VisualizationPanel(QWidget):
             self.map_saved.emit(mapname)
 
         self.setMapOperationState()
+        return True
 
     def setMapOperationState(self):
         icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
-        self.create_map_btn.setIcon(icon)
-        self.create_map_btn.setText("Crear Mapa")
         self.isCreateMap = True
         # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
         self.global_state_holder.currentUserOperation = userOperation.IDLE
         self.selected_user_operation.emit(userOperation.IDLE)
 
-        self.action4.setEnabled(False)
+        self.set_reference_btn.setEnabled(False)
 
     def handleSavePoints(self, points):
         self.update_points.emit(points)
         pass
 
-    def handleCreateMap(self):
+    def handleCreateMap(self) -> bool:
         if not self.currentOperationMode == operationMode.MANUAL:
             ntf = Notification(
                 title="Solo se puede crear mapas en modo manual",
@@ -701,12 +757,12 @@ class VisualizationPanel(QWidget):
             )
             ntf.show()
 
-            return
+            return False
 
         if not self.nodes_manager.topicHasPublisher("/scan"):
             ntf = Notification(parent=self.parent, type=NotificationType.LIDAR_ERROR)
             ntf.show()
-            return
+            return False
 
         self.action4.setEnabled(True)
         self.enable.emit("localization", False)
@@ -717,10 +773,6 @@ class VisualizationPanel(QWidget):
         # self.save_map_button.show()
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
-        # QIcon("./public/save.svg")
-        # icon = QApplication.style().standardIcon(QStyle.SP_DirLinkIcon)
-        self.create_map_btn.setIcon(icon)
-        self.create_map_btn.setText("Guardar Mapa...")
         self.isCreateMap = False
 
         self.nodes_manager.bringUpStop()
@@ -729,7 +781,8 @@ class VisualizationPanel(QWidget):
         self.nodes_manager.bringUpStart()
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
         self.selected_user_operation.emit(userOperation.CREATEMAP)
-        return
+
+        return True
 
     def show_points_window(self, checked):
         # self.parent.w = None
@@ -1824,6 +1877,9 @@ class BatteryIndicator(QWidget):
 
         # Battery percentage with dynamic colorSP_DialogCloseButton
         self.battery_icon = QPushButton()
+        icon_size = QSize(30, 30) # Set width and height in pixels
+        self.battery_icon.setIconSize(icon_size)
+
         self.battery_icon.setIcon(QIcon("./public/battery-twotone-100-svgrepo-com.svg"))
         # self.battery_icon.setIconSize(50, 50)
         self.battery_icon.setText("100%")
@@ -1850,11 +1906,25 @@ class BatteryIndicator(QWidget):
 
     def battery_callback(self, msg):
         self.percentage = self.map2percent(msg.percentage)
+        self.percentage = (self.percentage // 10) * 10
 
     def update_battery_state(self):
         self.battery_icon.setText(f"{self.percentage:.1f}%")
+        if self.percentage < 40:
+            self.battery_icon.setStyleSheet("""
+                font-size: 12px;
+                font-weight: bold;
+                color: red;  /* Initial green color */
+            """)
+        else:
+            self.battery_icon.setStyleSheet("""
+                font-size: 12px;
+                font-weight: bold;
+                color: #4CAF50;  /* Initial green color */
+            """)
+        # print("bATTERY: ", self.percentage)
         self.battery_icon.setIcon(
-            QIcon(f"./public/battery-twotone-{80}-svgrepo-com.svg")
+            QIcon(f"./public/battery-twotone-{int(self.percentage)}-svgrepo-com.svg")
         )
 
 

@@ -1,14 +1,19 @@
 {
-    "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/test_sqnet2.csv",
+    "roi": [
+        50,
+        50
+    ],
+    "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/prueba_squeezenet.csv",
     "recent_map_files": [
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test4.yaml",
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml",
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test3.yaml",
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml"
     ],
-    "conduction_mode": "Aggressive",
-    "stuck_timeout_index": 3,
-    "path_tolerance": 0.05,
+    "conduction_mode": "Soft",
+    "stuck_timeout_index": 2,
+    "path_tolerance": 0.45,
+    "robot": "turtlebot3",
     "robots": {
         "turtlebot3": {
             "name": "Turtlebot3",
@@ -16,21 +21,26 @@
             "odom_topic": "odom",
             "cmd_vel_topic": "cmd_vel",
             "lidar_topic": "scan",
-            "base_frame": "base_link"
+            "imu_topic": "imu",
+            "baseframe": "base_link"
         },
-        "name": {
-            "robot": "name",
-            "URDF_path": "",
-            "odom_topic": "",
-            "cmd_vel_topic": "",
-            "lidar_topic": ""
+        "terminatot": {
+            "robot": "terminatot",
+            "URDF_path": "hh",
+            "odom_topic": "odom2",
+            "cmd_vel_topic": "cmd_vel2",
+            "lidar_topic": "scan2",
+            "imu_topic": "imu2",
+            "baseframe": "base_link"
         },
-        "harold": {
-            "robot": "harold",
-            "URDF_path": "qqq",
-            "odom_topic": "qqq",
-            "cmd_vel_topic": "qqq",
-            "lidar_topic": "qqq"
+        "walle": {
+            "robot": "walle",
+            "URDF_path": "kkkkk",
+            "odom_topic": "ddddd",
+            "cmd_vel_topic": "lllll",
+            "lidar_topic": "jiju",
+            "imu_topic": "",
+            "baseframe": ""
         }
     },
     "max_linear_vel": 0,

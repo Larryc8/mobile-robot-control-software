@@ -7,8 +7,6 @@ import sys
 import time
 from ast import Dict, List
 from math import degrees, radians
-from random import randint
-from turtle import distance
 from typing import Any, Callable, NamedTuple
 
 import actionlib
@@ -21,6 +19,7 @@ import robot_actions_logger
 import rospy
 import tf
 from actionlib_msgs.msg import GoalStatus
+from config_model import UserConfigFileManager
 from cv_bridge import CvBridge
 from database_manager import AlertStatus, DataBase
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
@@ -41,18 +40,11 @@ from PyQt5.QtCore import (  # , pyqtSlot
     pyqtSignal,
 )
 from robot_actions_logger import add_color
-from robot_navigation_checker import RobotNavigationChecker
+from robot_navigation_checker import RobotNavigationChecker, StuckDetector
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import BatteryState, Image
 from utils.patrol import PatrolEndState
 from utils.sorting import sort_nearest_neighbor
-
-logger = logging.getLogger(__name__)
-file_handler = logging.FileHandler("checkpoint.log")
-file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
 
 
 class Pose(NamedTuple):
@@ -107,7 +99,9 @@ class PointsScheduler(QObject):
         self.camera_image_filepath = "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/reference_images/camera.jpg"
 
         self.track = [0]
+        self.user_config = UserConfigFileManager()
         self.navigation_checker = RobotNavigationChecker(self.track)
+        self.stuck_detector = StuckDetector()
 
         self.battery_state_sub = rospy.Subscriber(
             "/battery_state", BatteryState, self.update_battery
@@ -570,7 +564,19 @@ class PointsScheduler(QObject):
                 # reference = self.edit_image(self.current_reference_image_path)
                 camera = self.camera_image_filepath
                 # self.edit_image(self.camara_image_filepath)
-                r = ImgSim.similarity((reference, (130, 70, 230, 170)), (camera, None))
+                config = self.user_config.read_data()
+                img_width, img_height = 160, 120
+                crop_width, crop_height = config["roi"]
+
+                # Calculate the coordinates
+                left = (img_width - crop_width) / 2
+                top = (img_height - crop_height) / 2
+                right = left + crop_width
+                bottom = top + crop_height
+                # r = ImgSim.similarity((reference, (130, 70, 230, 170)), (camera, None))
+                r = ImgSim.similarity(
+                    (reference, (left, top, right, bottom)), (camera, None)
+                )
 
                 # for p in (source, target):
                 #     self.remove_image(p)

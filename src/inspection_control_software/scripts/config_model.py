@@ -179,6 +179,7 @@ class NodesManager(QObject):
         self._launcher = ROSLaunch()
         self.rosbag = None
         self.started_nodes = {}
+        self.user_configs = UserConfigFileManager()
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
         node_instances = {}
@@ -194,17 +195,31 @@ class NodesManager(QObject):
             if not respawn:
                 respawn = False
 
+            config = self.user_configs.read_data()
+            robot_name = config["robot"]
+            robot = config["robots"][robot_name]
+
+            # "URDF_path": "",
+            # "odom_topic": "",
+            # "cmd_vel_topic": "",
+            # "lidar_topic": ""
+
+            node = Node(
+                package=package,
+                node_type=exec,
+                name=name,
+                args=args,
+                respawn=False,
+                remap_args=[
+                    ("/cmd_vel", robot["cmd_vel_topic"]),
+                    ("/odom", robot["odom_topic"]),
+                    ("/scan", robot["lidar_topic"]),
+                    ("/imu", robot["imu_topic"]),
+                ],
+            )
             node_instances.update(
                 # {name: Node(package=package, node_type=exec, name=name, args=arg, output='screen',  respawn=respawn)}
-                {
-                    name: Node(
-                        package=package,
-                        node_type=exec,
-                        name=name,
-                        args=args,
-                        respawn=False,
-                    )
-                }
+                {name: node}
             )
             self.started_nodes.update(node_instances)
         return node_instances

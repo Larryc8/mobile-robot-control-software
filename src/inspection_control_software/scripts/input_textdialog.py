@@ -1,5 +1,6 @@
 import sys
 
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
@@ -31,7 +32,9 @@ from styles.labels import (
 
 
 class InputDialog(QDialog):
-    def __init__(self, parent, title, child=None):
+    submitted = pyqtSignal(str)
+
+    def __init__(self, parent, title, msg="Algo de texto", child=None):
         super().__init__(parent)
         self.setWindowTitle("Guardar archivo de mapeo")
         self.setGeometry(100, 100, 300, 150)
@@ -39,6 +42,7 @@ class InputDialog(QDialog):
         self.title = title
         self.atempts = 0
         self.child = child
+        self.msg = msg
         # self.setStyleSheet("""
         #     QMessageBox {
         #         background-color: #f8f9fa;
@@ -53,13 +57,15 @@ class InputDialog(QDialog):
         buttons_layout = QHBoxLayout()
 
         # Label
-        self.label = QLabel(self.title)
-        self.label.setStyleSheet(subtitle_label_style)
+        self.tittle_label = QLabel(self.title)
+        self.tittle_label.setStyleSheet(subtitle_label_style)
         self.alert_label = QLabel("Ingresa un nombre valido")
         self.alert_label.setStyleSheet(error_label_style)
         self.alert_label.hide()
-        layout.addWidget(self.label)
+        layout.addWidget(self.tittle_label)
         layout.addWidget(self.alert_label)
+        a = QLabel(self.msg)
+        layout.addWidget(a)
 
         # Text input field
         self.text_input = QLineEdit()
@@ -78,6 +84,7 @@ class InputDialog(QDialog):
         buttons_layout.addWidget(self.submit_btn)
 
         if self.child:
+            self.submitted.connect(self.child.handleSubmit)
             layout.addWidget(self.child)
 
         layout.addLayout(buttons_layout)
@@ -87,7 +94,8 @@ class InputDialog(QDialog):
     def on_submit(self):
         input_text = self.text_input.text()
         if input_text:
-            self.filename = input_text
+            self.filename = self.check_filename(input_text)
+            self.filename = f"{self.child.directory_path}/{self.filename}"
             self.accept()
             return
 
@@ -97,6 +105,20 @@ class InputDialog(QDialog):
             self.accept()  # Close the dialog
             return
         self.atempts = self.atempts + 1
+
+    def check_filename(self, filename):
+        """
+        Cleans a filename by removing leading/trailing whitespace
+        and replacing internal spaces with underscores.
+        """
+        if not filename:
+            return None  # or raise an error if strict
+
+        # 1. strip() removes spaces at the very start and end (e.g., "  file.txt  " -> "file.txt")
+        # 2. replace(" ", "_") changes remaining spaces to underscores (e.g., "my file.txt" -> "my_file.txt")
+        clean_name = filename.strip().replace(" ", "_")
+
+        return clean_name
 
     def on_discard(self):
         self.filename = None

@@ -51,21 +51,24 @@ class RobotConfigForm(QWidget):
         buttons_layout.addWidget(delete_option_btn)
         buttons_layout.addWidget(add_option_btn)
 
-        self.country_dropdown = QComboBox()
-        # self.country_dropdown.currentIndexChanged.connect(self.on_country_changed)
+        self.robots_dropdown = QComboBox()
         # Load Config
-        config = self.user_config.read_data()
+        self.config = self.user_config.read_data()
 
-        robots_options = list(config["robots"].keys())
+        robots_options = list(self.config["robots"].keys())
 
-        for country in robots_options:
-            self.country_dropdown.addItem(country)
+        for option in robots_options:
+            self.robots_dropdown.addItem(option)
+
+        self.robots_dropdown.setCurrentText(self.config["robot"])
+
+        self.robots_dropdown.currentIndexChanged.connect(self.handleDropDownRobotChange)
 
         # Title
         title_label = QLabel("Enter Robot Details")
         main_layout.addWidget(title_label)
 
-        main_layout.addWidget(self.country_dropdown)
+        main_layout.addWidget(self.robots_dropdown)
         # Form Layout for inputs
         # main_layout.addStretch(0)
 
@@ -104,8 +107,22 @@ class RobotConfigForm(QWidget):
         self.lidar_input.setPlaceholderText("e.g., /scan")
         form_layout.addRow("Lidar Topic Name:", self.lidar_input)
 
+        # 3. Odom Topic
+        self.imu_input = QLineEdit()
+        self.imu_input.setPlaceholderText("e.g., /imu")
+        form_layout.addRow("Imu Topic Name:", self.imu_input)
+
+        self.baseframe_input = QLineEdit()
+        self.baseframe_input.setPlaceholderText("e.g., /base_link")
+        form_layout.addRow("Base Frame Name:", self.baseframe_input)
+
         # Add form layout to main layout
         main_layout.addLayout(form_layout)
+
+        self.alert_label = QLabel("")
+        main_layout.addWidget(self.alert_label)
+        self.alert_label.setStyleSheet("color: red; font-weight: bold")
+
         main_layout.addLayout(buttons_layout)
         main_layout.addStretch(2)
 
@@ -113,6 +130,7 @@ class RobotConfigForm(QWidget):
         self.submit_btn = QPushButton("Save Configuration")
         self.submit_btn.setStyleSheet(secondary_button_style)
         add_option_btn.clicked.connect(self.submit_form)
+        delete_option_btn.clicked.connect(self.delete_robot)
         # main_layout.addWidget(self.submit_btn)
 
         # Set the layout
@@ -131,6 +149,21 @@ class RobotConfigForm(QWidget):
         if file_path:
             self.urdf_input.setText(file_path)
 
+    def handleDropDownRobotChange(self):
+        robot = self.robots_dropdown.currentText()
+
+        dg = CustomDialog(
+            self,
+            f"Acabas de seleccionar {robot}!",
+            message="Para ejecutar los cambios, cierre y abra la aplicacion nuevamente",
+            interative=False,
+            retries=0,
+        )
+        dg.exec_()
+
+        self.user_config.update_value("robot", robot)
+        print("HI, HOLA! SE CAMBIO DE ROBot", robot)
+
     def submit_form(self):
         """Collects data and displays it."""
         name = self.name_input.text()
@@ -140,19 +173,40 @@ class RobotConfigForm(QWidget):
             "odom_topic": self.odom_input.text(),
             "cmd_vel_topic": self.cmd_vel_input.text(),
             "lidar_topic": self.lidar_input.text(),
+            "imu_topic": self.imu_input.text(),
+            "baseframe": self.baseframe_input.text(),
         }
-        # Validation: Check if Robot Name is empty
-        # if not data["Robot Name"]:
-        #     QMessageBox.warning(self, "Input Error", "Please enter a Robot Name.")
-        #     return
+
+        if not data["robot"]:
+            self.alert_label.setText("Llene todos los campos, ingrese un nombre valido")
+            return
+        if not data["odom_topic"]:
+            self.alert_label.setText(
+                "Llene todos los campos, ingrese un topico para la odometria"
+            )
+            return
+
+        if not data["cmd_vel_topic"]:
+            self.alert_label.setText(
+                "Llene todos los campos, ingrese un topico valido de cmd_vel"
+            )
+            return
+
+        if not data["lidar_topic"]:
+            self.alert_label.setText(
+                "Llene todos los campos, ingrese un topico valido para el lidar"
+            )
+            return
+
+        self.alert_label.setText("")
         self.user_config.update_value(f"robots.{name}", data)
-        self.country_dropdown.addItem(name)
+        self.robots_dropdown.addItem(name)
 
         dg = CustomDialog(
             self,
-            "Nuevo robot agregado",
-            message="perderá todo el progreso que tiene hasta ahora!",
-            positive_response="Seguir creando",
+            "Quieres agregar un nuevo robot?",
+            message="Quedará guardado de forma <span style={font-weight: bold}>permanente</span>",
+            positive_response="Guardar",
             negative_response="Descartar",
             retries=1,
         )
@@ -161,6 +215,23 @@ class RobotConfigForm(QWidget):
         # Print to console (for debugging/logging)
         print("\n--- Form Submitted ---")
         print(data)
+
+    def delete_robot(self):
+        robot = self.robots_dropdown.currentText()
+        dg = CustomDialog(
+            self,
+            f"Quieres eliminar: {robot}?",
+            message="Se eliminara de forma <span style={font-weight: bold}>permanente</span>",
+            positive_response="Cancelar",
+            negative_response="Eliminar",
+            retries=1,
+        )
+        dg.exec_()
+
+        if dg.response == "Positive":
+            return
+
+        pass
 
 
 if __name__ == "__main__":

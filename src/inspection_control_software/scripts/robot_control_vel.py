@@ -2,6 +2,7 @@ import sys
 
 import rospy
 from config_model import UserConfigFileManager
+from utils.custom_toolbutton import CustomToolButtom
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -37,57 +38,19 @@ class RobotVelocityController(QWidget):
         self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
 
     def init_ui(self):
-        self.setWindowTitle("Robot Teleop Controller")
-
         # Main Layout
         main_layout = QVBoxLayout()
         info_label_style = "color: gray; font-style: italic; margin-top: 5px;"
 
         # Title
         title_label = QLabel("Control Panel")
-        title_label.setStyleSheet(
-            "font-size: 16px; font-weight: bold; margin-bottom: 10px;"
-        )
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; ")
         main_layout.addWidget(title_label)
 
         # --- Linear Velocity Section ---
-        linear_layout = QVBoxLayout()
-        linear_label = QLabel("Linear Velocity (m/s)")
-        linear_layout.addWidget(linear_label)
-
-        # LCD Display for Linear
-        self.lcd_linear = QLCDNumber()
-        self.lcd_linear.setSegmentStyle(QLCDNumber.Flat)
-        linear_layout.addWidget(self.lcd_linear)
-
-        # Slider for Linear
-        self.slider_linear = QSlider(Qt.Horizontal)
-        self.slider_linear.setMinimum(-100)  # Represents -1.0 m/s
-        self.slider_linear.setMaximum(100)  # Represents 1.0 m/s
-        self.slider_linear.setValue(0)
-        self.slider_linear.valueChanged.connect(self.update_linear_vel)
-        linear_layout.addWidget(self.slider_linear)
 
         # main_layout.addLayout(linear_layout)
         # main_layout.addSpacing(15)
-
-        # --- Angular Velocity Section ---
-        angular_layout = QVBoxLayout()
-        angular_label = QLabel("Angular Velocity (rad/s)")
-        angular_layout.addWidget(angular_label)
-
-        # LCD Display for Angular
-        self.lcd_angular = QLCDNumber()
-        self.lcd_angular.setSegmentStyle(QLCDNumber.Flat)
-        angular_layout.addWidget(self.lcd_angular)
-
-        # Slider for Angular
-        self.slider_angular = QSlider(Qt.Horizontal)
-        self.slider_angular.setMinimum(-200)  # Represents -2.0 rad/s
-        self.slider_angular.setMaximum(200)  # Represents 2.0 rad/s
-        self.slider_angular.setValue(0)
-        self.slider_angular.valueChanged.connect(self.update_angular_vel)
-        angular_layout.addWidget(self.slider_angular)
 
         # main_layout.addLayout(angular_layout)
         # main_layout.addSpacing(15)
@@ -96,20 +59,23 @@ class RobotVelocityController(QWidget):
         mode_layout = QVBoxLayout()
         mode_title = QLabel("Conduction Mode")
         mode_title.setStyleSheet("font-weight: bold;")
-        # mode_layout.addWidget(mode_title)
+        mode_layout.addWidget(mode_title)
 
         # Buttons layout
         buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(40)
+        # buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setAlignment(Qt.AlignLeft)
 
-        self.btn_soft = QPushButton("Soft")
+        self.btn_soft = CustomToolButtom('Soft', icon='./public/speed_low.svg', size=60)
         self.btn_soft.clicked.connect(lambda: self.update_mode("Soft"))
-        buttons_layout.addWidget(self.btn_soft)
+        buttons_layout.addWidget(self.btn_soft, 2)
 
-        self.btn_medium = QPushButton("Medium")
+        self.btn_medium = CustomToolButtom('Medium', icon='./public/speed_medium.svg', size=60)
         self.btn_medium.clicked.connect(lambda: self.update_mode("Medium"))
         buttons_layout.addWidget(self.btn_medium)
 
-        self.btn_aggressive = QPushButton("Aggressive")
+        self.btn_aggressive = CustomToolButtom('Aggressive', icon='./public/speed_high.svg', size=60)
         self.btn_aggressive.setStyleSheet("color: red;")
         self.btn_aggressive.clicked.connect(lambda: self.update_mode("Aggressive"))
         buttons_layout.addWidget(self.btn_aggressive)
@@ -123,7 +89,7 @@ class RobotVelocityController(QWidget):
         mode_layout.addWidget(self.mode_description)
 
         main_layout.addLayout(mode_layout)
-        main_layout.addSpacing(15)
+        # main_layout.addSpacing(15)
 
         # --- Navigation Parameters Section (New) ---
         nav_layout = QVBoxLayout()
@@ -177,7 +143,6 @@ class RobotVelocityController(QWidget):
         self.slider_tolerance.valueChanged.connect(self.update_tolerance)
         tolerance_layout.addWidget(self.slider_tolerance)
         x = QLabel("Valores alto implican una mayor sensidbiliada")
-        x.setStyleSheet(info_label_style)
         tolerance_layout.addWidget(x)
 
         nav_layout.addLayout(tolerance_layout)
@@ -197,36 +162,41 @@ class RobotVelocityController(QWidget):
         self.publish_cmd_vel()
 
     def update_mode(self, mode):
-        selected_style = tertiary_button_style + "QPushButton { border: 1px solid red}"
-        no_selected_style = tertiary_button_style + "QPushButton { border: 1px solid}"
-
-        self.btn_soft.setStyleSheet(no_selected_style)
-        self.btn_medium.setStyleSheet(no_selected_style)
-        self.btn_aggressive.setStyleSheet(no_selected_style)
-
         if mode == "Soft":
             text = "Impact: Low acceleration/speed. Safe for crowded areas."
-            style = "color: green;"
-            self.btn_soft.setStyleSheet(selected_style)
-            rospy.set_param("/max_linear_velocity", 0.1)
-            rospy.set_param("/max_angular_velocity", 0.3)
+            if not self.btn_soft.isSelected():
+                self.btn_soft.toggle_selected()
+                rospy.set_param("/max_linear_velocity", 0.1)
+                rospy.set_param("/max_angular_velocity", 0.3)
+            if self.btn_medium.isSelected():
+                self.btn_medium.toggle_selected()
+            if self.btn_aggressive.isSelected():
+                self.btn_aggressive.toggle_selected()
         elif mode == "Medium":
             text = "Impact: Balanced speed. Standard behavior."
-            style = "color: blue;"
-            self.btn_medium.setStyleSheet(selected_style)
-            rospy.set_param("/max_linear_velocity", 0.2)
-            rospy.set_param("/max_angular_velocity", 0.5)
+            if not self.btn_medium.isSelected():
+                self.btn_medium.toggle_selected()
+                rospy.set_param("/max_linear_velocity", 0.2)
+                rospy.set_param("/max_angular_velocity", 0.5)
+            if self.btn_soft.isSelected():
+                self.btn_soft.toggle_selected()
+            if self.btn_aggressive.isSelected():
+                self.btn_aggressive.toggle_selected()
         elif mode == "Aggressive":
             text = "Impact: High torque/speed. Faster response."
-            style = "color: darkred; font-weight: bold;"
-            self.btn_aggressive.setStyleSheet(selected_style)
-            rospy.set_param("/max_linear_velocity", 0.4)
-            rospy.set_param("/max_angular_velocity", 0.8)
+            if not self.btn_aggressive.isSelected():
+                self.btn_aggressive.toggle_selected()
+                rospy.set_param("/max_linear_velocity", 0.4)
+                rospy.set_param("/max_angular_velocity", 0.8)
+            if self.btn_medium.isSelected():
+                self.btn_medium.toggle_selected()
+            if self.btn_soft.isSelected():
+                self.btn_soft.toggle_selected()
+
 
         self.user_config_hanler.update_value("conduction_mode", mode)
 
         self.mode_description.setText(text)
-        self.mode_description.setStyleSheet(style)
         print(f"Mode changed to: {mode}")
 
     def update_timeout(self, text):

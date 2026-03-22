@@ -1,21 +1,23 @@
 import sys
+
+from database_manager import DataBase
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
+    QMainWindow,
     QMessageBox,
-    QComboBox,
-    QGroupBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
-from PyQt5.QtCore import Qt
-
-
-from  database_manager import DataBase
 
 class GroupWrapper(QGroupBox):
     def __init__(self, text, children=[]) -> None:
@@ -28,61 +30,63 @@ class GroupWrapper(QGroupBox):
         self.setLayout(self.layout)
 
 
-class PlaceForm(QGroupBox):
+class PlaceForm(QWidget):
     def __init__(self):
-        super().__init__("Informacion del lugar de inspeccion")
+        super().__init__()
+        self.directory_path: str = ""
+        form_layout = QFormLayout()
+        self.setFixedWidth(550)
+
+        browse_btn = QPushButton("Buscar...")
+        browse_btn.clicked.connect(self.browse_file)
+
+        urdf_layout = QHBoxLayout()
+        self.urdf_input = QLineEdit()
+        self.urdf_input.setPlaceholderText("/path/to/model.urdf")
+
+        urdf_layout.addWidget(self.urdf_input)
+        urdf_layout.addWidget(browse_btn)
+        form_layout.addRow("URDF File Path:", urdf_layout)
+
+        a = QComboBox()
+        a.addItems(["opcion 1", "opcion 2"])
+        form_layout.addRow("Seleccione un lugar", a)
+
+        self.odom_input = QLineEdit()
+        self.odom_input.setPlaceholderText("e.g., /odom")
+        form_layout.addRow("Odom Topic Name:", self.odom_input)
+
+        self.odom_input1 = QLineEdit()
+        self.odom_input1.setPlaceholderText("e.g., /odom")
+        form_layout.addRow("Odom Topic Name:", self.odom_input1)
+
         layout = QVBoxLayout()
-        self.setMaximumWidth(700)
-
-        # Create UI elements
-
-        self.name_label = QLabel("Nombre")
-        self.name_input = QLineEdit()
-
-        self.email_label = QLabel("Institucion")
-        self.email_input = QLineEdit()
-
-        self.password_label = QLabel("Direccion")
-        self.password_input = QLineEdit()
-        # self.password_input.setEchoMode(QLineEdit.Password)
-
-        self.phone_label = QLabel("Contacto (Numeor telefonico)")
-        self.phone_input = QLineEdit()
-
-        # Add dropdown menu for user type
-        self.type_label = QLabel("Seleccione un lugar o creo uno")
-        self.type_label.setWordWrap(True)
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(
-            ["Seleccione un lugar", "University", "Job", "Student", "Teacher", "Employee"]
-        )
-
-        self.create_button = QPushButton("Añadir Lugar")
-        self.create_button.clicked.connect(self.create_place)
-
-        # Add widgets to layout
-
-        select_place_widgets = (self.type_label, self.type_combo, )
-
-        widgets = (
-            self.name_label,
-            self.name_input,
-            self.email_label,
-            self.email_input,
-            self.password_label,
-            self.password_input,
-            self.phone_label,
-            self.phone_input,
-        )
-
-
-
-        layout.addWidget(self.type_combo)
-        # layout.addWidget(crete_place_container)
-        layout.addWidget(self.create_button)
-        layout.setSpacing(30)
+        layout.addLayout(form_layout)
 
         self.setLayout(layout)
+
+    def handleSubmit(self, filename):
+        pass
+
+    def browse_file(self):
+        """Opens a file dialog to select the URDF file."""
+        options = QFileDialog.Options()
+        # 1. Tell it to only show directories
+        options |= QFileDialog.ShowDirsOnly
+        # 2. Force Qt to use its own dialog instead of the Windows/Mac one
+        # (This ensures files are actually hidden, not just grayed out)
+        # options |= QFileDialog.DontUseNativeDialog
+        # We use getExistingDirectory instead of getOpenFileName
+        self.directory_path = QFileDialog.getExistingDirectory(
+            self,
+            "Seleccione un directorio válido",  # Title of the window
+            "",  # Starting directory (empty = current)
+            options=options,
+        )
+
+        # Note: getExistingDirectory returns a string (the path), not a tuple.
+        if self.directory_path:
+            self.urdf_input.setText(self.directory_path)
 
     def create_place(self):
         name = self.name_input.text()

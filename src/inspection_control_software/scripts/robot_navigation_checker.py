@@ -130,6 +130,8 @@ class StuckDetector:
         # Variables to store latest data
         self.current_velocity = (0, 0)
         self.commanded_velocity = (0, 0)
+        self.actual_linear_x = 0
+        self.target_linear_x = 0
 
         # Subscribers
         rospy.Subscriber("/odom", Odometry, self.odom_callback)
@@ -137,10 +139,19 @@ class StuckDetector:
         rospy.Subscriber("/imu", Imu, self.imu_callback)
 
     def odom_callback(self, msg):
+        self.actual_linear_x = msg.twist.twist.linear.x
         pass
 
     def imu_callback(self, msg):
         pass
 
     def cmd_vel_callback(self, msg):
+        if not self.target_linear_x:
+            return
+
+        self.target_linear_x = msg.linear.x
+        effort = abs(self.target_linear_x - self.actual_linear_x) / self.target_linear_x
+
+        if effort < 0.6:
+            print("STUCKKKKKKKK!!!!!!!")
         pass

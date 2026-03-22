@@ -282,6 +282,7 @@ class ImageViewer(QMainWindow):
         self.save_in_database.emit(self.pointsInMap)
 
     def load_map(self, file_path, stored_database_points=[]):
+        self.stackedlayout.setCurrentIndex(0)
         if file_path == "NO_MAP":
             self.graphics_view.display_image("")
             return
@@ -296,10 +297,10 @@ class ImageViewer(QMainWindow):
             image = data["image"]
             resolution = data["resolution"]
 
-            file_path_array = file_path.split("/")
-            root_file_path = "/".join(file_path_array[:-1])
-            print(root_file_path)
-            self.graphics_view.display_image(f"{root_file_path}/{image}")
+            # file_path_array = file_path.split("/")
+            # root_file_path = "/".join(file_path_array[:-1])
+            # print(root_file_path)
+            self.graphics_view.display_image(f"{image}")
             self.resolution = resolution
             self.botton_left_map = (x, y)
             self.graphics_view.botton_left_map = (x, y)
@@ -707,7 +708,8 @@ class Example(QGraphicsView):
         self.scene.clear()
         # self.reset_view()
 
-        self.pixmap = QPixmap(file_path)
+        print("BetterImageDisplay, display_image", file_path)
+        self.pixmap = QPixmap("/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/"+file_path)
         if self.pixmap.isNull():
             print("Failed to load image")
             return

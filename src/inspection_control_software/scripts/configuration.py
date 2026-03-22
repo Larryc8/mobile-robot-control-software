@@ -493,8 +493,8 @@ class FriendlyConfig(QWidget):
         title.setStyleSheet(subtitle_label_style)
         self.layout.addWidget(title, 0, 0, 1, -1)
         # subtitle_label_style
-        self.layout.addWidget(a, 1, 0)
-        self.layout.addWidget(b, 2, 0)
+        self.layout.addWidget(a, 1, 0, 3, 1)
+        self.layout.addWidget(b, 4, 0)
         self.layout.addWidget(
             Wrapper(
                 children=[
@@ -508,6 +508,15 @@ class FriendlyConfig(QWidget):
             1,
             1,
         )
+        image_label2 = QLabel()
+        pixmap2 = QPixmap("./public/robot.svg")
+        image_label2.setStyleSheet("background-color: blue")
+        # scaled_pixmap = pixmap2
+        scaled_pixmap = pixmap2.scaled(
+            300, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        image_label2.setPixmap(scaled_pixmap)
+        self.layout.addWidget(image_label2, 2, 1)
         self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
         self.setLayout(self.layout)
 
@@ -558,7 +567,7 @@ class FriendlyConfig(QWidget):
         self.start_calibrations_btn.setText("Comenzar calibraciones")
 
 
-class Wrapper(QWidget):
+class Wrapper(QGroupBox):
     def __init__(self, title="Estatdiaticas", children: list = []) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
@@ -566,6 +575,7 @@ class Wrapper(QWidget):
             self.layout.addWidget(w)
         self.layout.addStretch(4)
         self.setLayout(self.layout)
+        # self.setStyleSheet("background-color: red")
 
 
 class DataSetConfigContainer(QGroupBox):
