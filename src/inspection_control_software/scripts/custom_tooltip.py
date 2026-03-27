@@ -19,11 +19,11 @@ class TooltipWidget(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         # Font settings
-        self.font = QFont("Segoe UI", 10)
+        self.font = QFont("Segoe UI", 9)
         # self.font.setBold(True)
 
         # Metrics
-        self.padding = 10
+        self.padding = 7
         self.arrow_height = 8
         self.arrow_width = 14
         self.border_radius = 6
@@ -46,8 +46,8 @@ class TooltipWidget(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         # Colors
-        bg_color = QColor("#2d2d2d")
-        text_color = QColor("#ffffff")
+        bg_color = QColor("black")
+        text_color = QColor("white")
         border_color = QColor("gray")
 
         # Draw path
@@ -76,7 +76,7 @@ class TooltipWidget(QWidget):
 
         # Draw border
         pen = QPen(border_color)
-        pen.setWidth(2)
+        pen.setWidth(1)
         painter.setPen(pen)
         painter.drawPath(path)
 

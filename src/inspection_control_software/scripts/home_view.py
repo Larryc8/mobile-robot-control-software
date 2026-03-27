@@ -261,18 +261,18 @@ class VisualizationPanel(QWidget):
             }
         ]
 
-        self.load_map_button = CustomToolButtom(icon="./public/map-question-contrast.svg")
-        self.create_map_btn = CustomToolButtom(icon="./public/map-editing-svgrepo-com.svg", icon2="./public/map-save-simple.svg")
-        self.points_window_btn = CustomToolButtom(icon="./public/map-pin-contrast.svg")#"puntos de interes"
-        self.robot_focus_btn = CustomToolButtom(icon="./public/worldwide-location-svgrepo-com.svg")
-        self.map_layout_btn = CustomToolButtom(icon="./public/flag_corner_brackets_v3.svg", twist=True)
-        self.camera_layout_btn = CustomToolButtom(icon="./public/camera_centered.svg")
-        self.layout_type_btn = CustomToolButtom(icon="./public/squares_overlapped.svg", icon2="./public/squares_single_bigger.svg")
+        self.load_map_button = CustomToolButtom(icon="./public/map-question-contrast.svg", tooltip="Cargar mapa")
+        self.create_map_btn = CustomToolButtom(icon="./public/map-editing-svgrepo-com.svg", icon2="./public/map-save-simple.svg", tooltip="Crear nuevo mapa")
+        self.points_window_btn = CustomToolButtom(icon="./public/map-pin-contrast.svg", tooltip="Ver puntos")
+        self.robot_focus_btn = CustomToolButtom(icon="./public/worldwide-location-svgrepo-com.svg", tooltip="Enfocar robot")
+        self.map_layout_btn = CustomToolButtom(icon="./public/flag_corner_brackets_v3.svg", twist=True, tooltip="Mapa")
+        self.camera_layout_btn = CustomToolButtom(icon="./public/camera_centered.svg", tooltip="Cámara")
+        self.layout_type_btn = CustomToolButtom(icon="./public/squares_overlapped.svg", icon2="./public/squares_single_bigger.svg", tooltip="Layout")
 
-        self.set_reference_btn = CustomToolButtom(icon="./public/map_pin_stroked.svg")
+        self.set_reference_btn = CustomToolButtom(icon="./public/map_pin_stroked.svg", tooltip="Establecer referencia")
 
-        self.tooltip = CustomToolTip(self, delay=100)
-        self.tooltip.install(self.create_map_btn, "Haga clic para crear un nuevo mapa")
+        # self.tooltip = CustomToolTip(self, delay=100)
+        # self.tooltip.install(self.create_map_btn, "Haga clic para crear un nuevo mapa")
 
         self.view_menu_btn = QPushButton("Opciones")
 
