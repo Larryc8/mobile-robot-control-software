@@ -134,7 +134,7 @@ colored_button_style = """
         font-weight: bold;
         color: white;
         border: none;
-        padding: 6px 6px;
+        padding: 8px 8px;
     }
     QPushButton:hover {
         background-color: #45a049;

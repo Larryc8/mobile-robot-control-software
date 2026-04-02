@@ -1,5 +1,13 @@
 from enum import Enum
 
+class MarkerActionTriggered(Enum):
+    NONE = 0
+    HELLO = 1
+    GOODBYE = 2
+    RESET = 3
+    LOG_STATUS = 4
+    DELETE_MARKER = 5
+
 class PatrolEndState(Enum):
     ACTIVE = 0
     CANCELLED = 1

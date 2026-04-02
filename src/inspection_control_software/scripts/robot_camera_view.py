@@ -45,7 +45,11 @@ from styles.buttons import (
 )
 from styles.labels import inactive_label_style, title_label_style
 from tf.transformations import euler_from_quaternion
+from tf.transformations import quaternion_from_euler
+from geometry_msgs.msg import Quaternion
 from tf2_msgs.msg import TFMessage
+from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 
 groupbox_style = """
             QWidget {
@@ -139,6 +143,7 @@ class RobotCamera(QWidget):
 
         self.current_aruco_pose = Pose2D()
 
+        self.buffered_data_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=2)
         self.nodes_manager = NodesManager()
         self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.get_transforms)
         self.aruco_odom_sub = rospy.Subscriber(
@@ -315,6 +320,19 @@ class RobotCamera(QWidget):
             # self.data_buffer2.append(pixmap)
             # print(f'{__name__} curent image shape', self.current_image.shape)
             self.send_buffered_data.emit(self.data_buffer)
+            yaw = pose[2]
+            quat_tuple = quaternion_from_euler(0, 0, yaw)
+            data = PoseStamped()
+            data.header.stamp = rospy.Time.now()
+            data.header.frame_id = "map"
+            data.pose.position.x = pose[0]
+            data.pose.position.y = pose[1]
+            data.pose.position.z = 0
+            data.pose.orientation.x = quat_tuple[0]
+            data.pose.orientation.y = quat_tuple[1]
+            data.pose.orientation.z = quat_tuple[2]
+            data.pose.orientation.w = quat_tuple[3]
+            self.buffered_data_pub.publish(data)
 
         print(f"{__name__} pose", pose)
 

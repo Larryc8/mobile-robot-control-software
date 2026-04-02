@@ -215,6 +215,7 @@ class NodesManager(QObject):
                     ("/odom", robot["odom_topic"]),
                     ("/scan", robot["lidar_topic"]),
                     ("/imu", robot["imu_topic"]),
+                    ("/move_base_simple/goal", "/move_base_simple/goal2")
                 ],
             )
             node_instances.update(

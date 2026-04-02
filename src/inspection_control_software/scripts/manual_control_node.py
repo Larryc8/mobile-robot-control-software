@@ -17,7 +17,7 @@ class DynamicPoseController(QObject):
     def __init__(self, max_speed=None, max_turn=None):
         super().__init__()
         # rospy.init_node("imu_to_cmd_vel", anonymous=True)
-        rospy.init_node("harold_start_launch", anonymous=True)
+        # rospy.init_node("harold_start_launch", anonymous=True)
 
         self.max_linear_velocity = 0.1  # m/s
         self.max_angular_velocity = 0.3  # rad/s

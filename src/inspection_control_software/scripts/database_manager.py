@@ -375,7 +375,8 @@ class InternalStorageManager:
         session = Session()
         try:
             allpoints = {}
-            _points = []
+            _points = {}
+            # _points = []
             # mapfile = mapfile.split("/")[-1]
             mapfile = mapfile.split(".")[0]
             print(f"{__name__} map {mapfile}")
@@ -391,19 +392,30 @@ class InternalStorageManager:
                 session.commit()
 
                 for point, _ in points:
+                    _points[point.id] = {
+                        'id': point.id,
+                        'x': point.x_position,
+                        'y': point.y_position,
+                        'map_file': mapfile,
+                        'yaw': point.yaw,
+                        # 'gui_yaw': point.gui_yaw,
+                        'image': point.image,
+                        'aruco_pose_vector': point.aruco_pose_vector,
+                    }
+
                     # id, x_meters, y_meters, map_file, yaw = point
-                    _points.append(
-                        (
-                            point.id,
-                            point.x_position,
-                            point.y_position,
-                            mapfile,
-                            point.yaw,
-                            point.gui_yaw,
-                            point.image,
-                            point.aruco_pose_vector,
-                        )
-                    )
+                    # _points.append(
+                    #     (
+                    #         point.id,
+                    #         point.x_position,
+                    #         point.y_position,
+                    #         mapfile,
+                    #         point.yaw,
+                    #         point.gui_yaw,
+                    #         point.image,
+                    #         point.aruco_pose_vector,
+                    #     )
+                    # )
 
             allpoints.update({"points": _points})
             return allpoints

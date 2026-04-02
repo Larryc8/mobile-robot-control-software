@@ -138,7 +138,7 @@ class FixedMessage(QGroupBox):
 
         # self.setContentsMargins(0, 0, 0, 0)
         self.user_config = UserConfigFileManager()
-        self.show_terminal_btn = CustomToolButtom(icon="./public/terminal_open.svg", icon2="./public/terminal_close.svg")
+        self.show_terminal_btn = CustomToolButtom(icon="./public/terminal_open.svg", icon2="./public/terminal_close.svg", tooltip="Terminal")
         self.show_terminal_btn.clicked.connect(self.toggle_terminal)
 
         self.setFlat(True)

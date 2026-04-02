@@ -93,7 +93,10 @@ class InputDialog(QDialog):
 
     def on_submit(self):
         input_text = self.text_input.text()
-        if input_text:
+        if self.child.directory_path:
+            return
+
+        if input_text :
             self.filename = self.check_filename(input_text)
             self.filename = f"{self.child.directory_path}/{self.filename}"
             self.accept()

@@ -22,6 +22,7 @@ from styles.buttons import (
     border_button_style,
     border_button_style_danger,
     secondary_button_style,
+    colored_button_style,
 )
 
 
@@ -46,7 +47,7 @@ class RobotConfigForm(QWidget):
         )
 
         delete_option_btn.setStyleSheet(border_button_style_danger)
-        add_option_btn.setStyleSheet(border_button_style)
+        add_option_btn.setStyleSheet(colored_button_style )
 
         buttons_layout.addWidget(delete_option_btn)
         buttons_layout.addWidget(add_option_btn)

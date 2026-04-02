@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QFrame,
 )
 from pyqttoast import Toast, ToastPreset
 from robot_control_vel import (
@@ -508,15 +509,8 @@ class FriendlyConfig(QWidget):
             1,
             1,
         )
-        image_label2 = QLabel()
-        pixmap2 = QPixmap("./public/robot.svg")
-        image_label2.setStyleSheet("background-color: blue")
-        # scaled_pixmap = pixmap2
-        scaled_pixmap = pixmap2.scaled(
-            300, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation
-        )
-        image_label2.setPixmap(scaled_pixmap)
-        self.layout.addWidget(image_label2, 2, 1)
+        self.todo_widget = TodoWidget()
+        self.layout.addWidget(self.todo_widget, 3, 1, 4, 1) # Add it to column 1
         self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
         self.setLayout(self.layout)
 
@@ -599,6 +593,137 @@ class DataSetConfigContainer(QGroupBox):
             "All Files (*);;Text Files (*.txt);;Python Files (*.py)",
             options=options,
         )
+
+
+class TodoItem(QWidget):
+    deleted = pyqtSignal(object)
+
+    def __init__(self, title, details="No details provided"):
+        super().__init__()
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        # Header section
+        self.header = QFrame()
+        self.header.setObjectName("todo_header")
+        self.header_layout = QHBoxLayout(self.header)
+        self.header_layout.setContentsMargins(10, 5, 10, 5)
+
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #333;")
+        
+        self.expand_icon = QLabel("▼") # Dropdown indicator
+        self.expand_icon.setStyleSheet("color: #666; font-size: 10px;")
+
+        self.delete_btn = QPushButton()
+        self.delete_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_TrashIcon))
+        self.delete_btn.setFixedSize(24, 24)
+        self.delete_btn.setStyleSheet(border_button_style_danger)
+        self.delete_btn.clicked.connect(lambda: self.deleted.emit(self))
+
+        self.header_layout.addWidget(self.title_label)
+        self.header_layout.addStretch()
+        self.header_layout.addWidget(self.expand_icon)
+        self.header_layout.addWidget(self.delete_btn)
+
+        # Details section (hidden by default)
+        self.details_widget = QWidget()
+        self.details_layout = QVBoxLayout(self.details_widget)
+        self.details_label = QLabel(details)
+        self.details_label.setWordWrap(True)
+        self.details_label.setStyleSheet("color: #555; padding: 5px; font-style: italic;")
+        self.details_layout.addWidget(self.details_label)
+        self.details_widget.setVisible(False)
+
+        self.layout.addWidget(self.header)
+        self.layout.addWidget(self.details_widget)
+        self.setLayout(self.layout)
+
+        # Styling
+        self.header.setStyleSheet("""
+            QFrame#todo_header {
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            QFrame#todo_header:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.toggle_details()
+        super().mousePressEvent(event)
+
+    def toggle_details(self):
+        is_visible = self.details_widget.isVisible()
+        self.details_widget.setVisible(not is_visible)
+        self.expand_icon.setText("▲" if not is_visible else "▼")
+
+
+class TodoWidget(QGroupBox):
+    def __init__(self, title="ToDos / Tareas"):
+        super().__init__(title)
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+        """)
+        
+        self.main_layout = QVBoxLayout()
+        
+        # Input section
+        input_container = QHBoxLayout()
+        self.todo_input = QLineEdit()
+        self.todo_input.setPlaceholderText("Nueva tarea...")
+        self.todo_input.setStyleSheet(modern_line_edit_style)
+        
+        self.add_btn = QPushButton("Añadir")
+        self.add_btn.setStyleSheet(primary_button_style)
+        self.add_btn.setFixedWidth(80)
+        self.add_btn.clicked.connect(self.add_todo)
+        
+        input_container.addWidget(self.todo_input)
+        input_container.addWidget(self.add_btn)
+        
+        # Details input (optional for better demo)
+        self.details_input = QLineEdit()
+        self.details_input.setPlaceholderText("Detalles (opcional)...")
+        self.details_input.setStyleSheet(simple_line_edit_style)
+        
+        self.main_layout.addLayout(input_container)
+        self.main_layout.addWidget(self.details_input)
+        
+        # List container
+        self.list_layout = QVBoxLayout()
+        self.list_layout.setAlignment(Qt.AlignTop)
+        self.list_layout.setSpacing(5)
+        
+        self.main_layout.addLayout(self.list_layout)
+        self.main_layout.addStretch()
+        
+        self.setLayout(self.main_layout)
+
+    def add_todo(self):
+        text = self.todo_input.text().strip()
+        details = self.details_input.text().strip() or "Sin descripción detallada."
+        if text:
+            item = TodoItem(text, details)
+            item.deleted.connect(self.remove_todo)
+            self.list_layout.addWidget(item)
+            self.todo_input.clear()
+            self.details_input.clear()
+
+    def remove_todo(self, item):
+        self.list_layout.removeWidget(item)
+        item.deleteLater()
 
 
 if __name__ == "__main__":

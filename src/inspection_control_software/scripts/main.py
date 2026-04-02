@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import sys
+import rospy
+
 from PyQt5.QtWidgets import (
     QMainWindow,
     QApplication,
@@ -13,7 +15,7 @@ from PyQt5.QtWidgets import (
 from config_model import NodesManager
 # from rvizgui import MyViz
 from navbar import TopBar
-from home_view import HomePanel  
+from home_view import HomePanel
 from configuration import ConfigPanel
 # from map_view import MappingPanel
 from better_image_display import ImageViewer
@@ -41,13 +43,13 @@ class MyTableWidget(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.nodes_manager = NodesManager()
         self.tabs_names = ["Home", "Configuracion", "Sistema de alertas"]
-        
+
         # self.tabs_names = ["Home", "Configuracion"]
         self.parent = parent
         self.parent.w = None
 
         self.tabs = QTabWidget()
-        # self.tabs.setTabPosition(QTabWidget.West) 
+        # self.tabs.setTabPosition(QTabWidget.West)
         self.tabs_widget = {name: QWidget() for name in self.tabs_names}
 
         [
@@ -63,7 +65,7 @@ class MyTableWidget(QWidget):
                 margin: 4px 2px;
                 border-radius: 2px;
             }
-            
+
             QTabBar::tab:selected {
                 background: lightblue;
                 color: #333;
@@ -108,7 +110,7 @@ class MyTableWidget(QWidget):
         [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]
         self.button = QPushButton("Push for Window")
         self.button.clicked.connect(self.show_new_window)
-        
+
         self.layout.addWidget(topbar)
         # self.layout.addWidget(self.button)
         self.layout.addWidget(self.tabs)
@@ -124,6 +126,8 @@ class MyTableWidget(QWidget):
 
 
 if __name__ == "__main__":
+    # rospy.init_node("interactive_markers_demo_node")
+    rospy.init_node("harold_start_launch", anonymous=True)
     app = QApplication(sys.argv)
     app.setStyleSheet("""
         QToolTip {

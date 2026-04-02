@@ -74,11 +74,11 @@ class CustomLabel(QWidget):
             print("clicked one carousel")
 
 
-class ImageCarousel(QWidget):
+class ImageCarousel(QGroupBox):
     def __init__(self, buffer):
         super().__init__()
         self.setWindowTitle("Image Carousel")
-        self.setGeometry(100, 100, 800, 650)
+
 
         # Image variables
         self.buffer_data = []

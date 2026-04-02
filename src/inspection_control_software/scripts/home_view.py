@@ -8,10 +8,12 @@ import robot_actions_logger
 import rospy
 
 # from points_manager import PointsGenerator
+from interactive_markers_demo import InteractiveMarkerDemo
 from better_image_display import ImageViewer
 from config_model import UserConfigFileManager
 from database_manager import AlertStatus
 from custom_tooltip import CustomToolTip
+from custom_tooltip import ActionToolTip
 from utils.custom_toolbutton import CustomToolButtom
 from image_carousel import ImageCarousel
 from input_textdialog import CustomDialog, InputDialog
@@ -90,7 +92,7 @@ from styles.labels import (
     warning_label_style,
 )
 from styles.patrols import patrol_base_style, patrol_selected_style
-from utils.patrol import PatrolEndState, operationMode, userOperation
+from utils.patrol import PatrolEndState, operationMode, userOperation, MarkerActionTriggered
 
 class StackingOptions(Enum):
     MAP_ON_TOP = 1
@@ -138,6 +140,12 @@ class HomePanel(QWidget):
         self.visualization_panel.map_loaded.connect(
             self.patrol_panel.patrols_container.patrols_scheduler.send_points_data
         )
+
+        # self.visualization_panel.map_loaded.connect(
+        #     self.patrol_panel.patrols_container.patrols_scheduler.send_points_data
+        # )
+
+
         self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
             self.visualization_panel.parent.pointsWindow.load_stored_points
         )
@@ -145,6 +153,10 @@ class HomePanel(QWidget):
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
             self.visualization_panel.parent.pointsWindow.update_points_state
         )
+        self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
+            self.visualization_panel.interactive_markers.update_markers
+        )#Here is the problematic part mr Rabbit
+
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
             self.visualization_panel.parent.pointsWindow.reset_points_state
         )
@@ -161,19 +173,19 @@ class HomePanel(QWidget):
             self.visualization_panel.handleAlertGeneration
         )
 
-        self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
-            self.visualization_panel.drainage_checkpoints_win.update_dreinage_info
-        )
+        # self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
+        #     self.visualization_panel.drainage_checkpoints_win.update_dreinage_info
+        # )
 
-        self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
-            self.visualization_panel.drainage_checkpoints_win.load_stored_points
-        )
+        # self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
+        #     self.visualization_panel.drainage_checkpoints_win.load_stored_points
+        # )
 
         self.visualization_panel.change_mode.connect(select_mode_panel.handleChangeMode)
 
-        self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
-            self.visualization_panel.drainage_checkpoints_win.reset_dreinage_status
-        )
+        # self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
+        #     self.visualization_panel.drainage_checkpoints_win.reset_dreinage_status
+        # )
 
         self.layout.addWidget(self.visualization_panel, 0, 0, 8, 1)
         self.layout.addWidget(select_mode_panel, 0, 2, 1, 1)
@@ -251,7 +263,7 @@ class VisualizationPanel(QWidget):
         self.parent.pointsWindow = ImageViewer(
             nodes_manager=self.nodes_manager,
             parent=self.parent,
-            widget=self.drainage_checkpoints_win,
+            # widget=self.drainage_checkpoints_win,
         )
         self.nodes = [
             {
@@ -304,7 +316,7 @@ class VisualizationPanel(QWidget):
         self.layout_type_btn.clicked.connect(self.toggleLayoutType)
         # self.stack_policy_btn.clicked.connect(self.toggleStackPolicy)
 
-        self.set_reference_btn.setEnabled(False)
+        # self.set_reference_btn.setEnabled(False)
 
         # Create the QMenu
         view_menu = QMenu(self)
@@ -367,7 +379,7 @@ class VisualizationPanel(QWidget):
 
 
         # self.load_map_button.clicked.connect(self.handleLoadMap)
-        self.map_loaded.connect(self.parent.pointsWindow.load_map)
+        # self.map_loaded.connect(self.parent.pointsWindow.load_map)
         self.create_map_btn.clicked.connect(self.toggleCreaeteSaveMap)
 
         menu = QMenu("checkpoints", self)
@@ -388,18 +400,25 @@ class VisualizationPanel(QWidget):
 
         # self.oints_window_btn.clicked.connect(self.show_points_window)
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
+        self.interactive_markers = InteractiveMarkerDemo()
+        self.interactive_markers.points_changed.connect(self.handleSavePoints)
+        self.interactive_markers.action_triggered.connect(self.handleMarkerActionTriggered)
+        self.selected_user_operation.connect(self.interactive_markers.set_user_operation)
+        self.map_loaded.connect(self.interactive_markers.send_database_action)
+
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
         self.map_saved.connect(self.robotcamera.save_buffered_data)
-        self.robotcamera.send_buffered_data.connect(
-            self.drainage_checkpoints_win.load_images
-        )
+        # self.robotcamera.send_buffered_data.connect(
+        #     self.drainage_checkpoints_win.load_images
+        # )
         # self.robotcamera.custom_option_clicked.connect(self.toggleCameraMapView)
-        self.selected_user_operation.connect(
-            self.drainage_checkpoints_win.get_user_operation
-        )
+        # self.selected_user_operation.connect(
+        #     self.drainage_checkpoints_win.get_user_operation
+        # )
 
         self.stacklayout.addWidget(self.rviz)
         self.stacklayout.addWidget(self.robotcamera)
+        self.stacklayout.addWidget(self.drainage_checkpoints_win)
         # self.setView(0)
         # self.rviz.hide()
         # self.toggleCameraMapView()
@@ -421,6 +440,19 @@ class VisualizationPanel(QWidget):
             return
 
         self.message.hide()
+
+    def handleMarkerActionTriggered(self, action):
+        if action == MarkerActionTriggered.HELLO:
+            self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
+            self.stacklayout.setCurrentIndex(2)
+        elif action == MarkerActionTriggered.GOODBYE:
+            pass
+        elif action == MarkerActionTriggered.RESET:
+            pass
+        elif action == MarkerActionTriggered.LOG_STATUS:
+            pass
+        elif action == MarkerActionTriggered.DELETE_MARKER:
+            pass
 
 
     def toggleStackPolicy(self):
@@ -706,7 +738,7 @@ class VisualizationPanel(QWidget):
         # self.save_map_button.setEnabled(False)
         place_form = PlaceForm()
         dialog = InputDialog(
-            self.parent, title="Guardar archivo de mapeo como:", child=place_form
+            self.parent, title="Guardar archivo de mapeo como:", child=place_form, msg="Nombre del archivo:"
         )
         dialog.exec_()
         print("VizPanel,dialog", dialog.filename)
@@ -768,7 +800,7 @@ class VisualizationPanel(QWidget):
         self.enable.emit("localization", False)
         self.global_state_holder.currentUserOperation = userOperation.CREATEMAP
         file_path = ""
-        self.map_loaded.emit(file_path)
+        # self.map_loaded.emit(file_path)
 
         # self.save_map_button.show()
 
@@ -1068,6 +1100,18 @@ class PatrolsPanel(QGroupBox):
                 # (self.stop_patrols_btn, 1, 1,1,1),
             ]
         ]
+        # Setup the controller
+        self.alert_tooltip = ActionToolTip(self)
+
+        # buttons and callbacks
+        self.alert_tooltip.install(
+            self.start_patrols_btn,
+            "Potential obstacle detected. Clear path?",
+            btn1_text="Clear Path",
+            btn1_callback=lambda x: print("Hola action"),
+            btn2_text="Ignore",
+            btn2_callback=lambda x: print("Hola action")
+        )
 
         self.navigation_buttons = QHBoxLayout()
         self.labels_layout = QHBoxLayout()
@@ -1673,9 +1717,14 @@ class Patrol(QGroupBox):
         self.patrol_name_label.setText(elided_text)
 
         # self.menu_button.setMaximumWidth(30)
-        self.patrol_time_label.setToolTip("<b>Hora</b> programada para el patrullaje")
-        self.patrol_name_label.setToolTip("<b>Dias</b> programados para el patrullaje")
-        self.points_checked_label.setToolTip("<b>Puntos recorridos</b>/puntos totales")
+
+        # from custom_tooltip import CustomToolTip
+        tooltip = CustomToolTip(self, delay=100)
+        tooltip.install(self.patrol_time_label, "Hora patrulla")
+        tooltip1 = CustomToolTip(self, delay=100)
+        tooltip1.install(self.patrol_name_label, "Dias patrulla")
+        tooltip2 = CustomToolTip(self, delay=100)
+        tooltip2.install(self.points_checked_label, "Puntos patrulla")
 
         self.checkbox.stateChanged.connect(self.select)
         self.layout.setSpacing(2)

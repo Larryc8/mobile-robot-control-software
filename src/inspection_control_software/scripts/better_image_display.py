@@ -317,6 +317,7 @@ class ImageViewer(QMainWindow):
             print(e)
 
     def load_stored_points(self, data):
+        return
         print("ImageViewer", data)
         self.graphics_view.load_stored_points(data)
         if len(data.get("points")):

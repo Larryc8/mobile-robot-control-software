@@ -42,23 +42,23 @@ class PlaceForm(QWidget):
 
         urdf_layout = QHBoxLayout()
         self.urdf_input = QLineEdit()
-        self.urdf_input.setPlaceholderText("/path/to/model.urdf")
+        self.urdf_input.setPlaceholderText("/ruta/del/archivo")
 
         urdf_layout.addWidget(self.urdf_input)
         urdf_layout.addWidget(browse_btn)
-        form_layout.addRow("URDF File Path:", urdf_layout)
+        form_layout.addRow("Seleccione la ruta", urdf_layout)
 
         a = QComboBox()
         a.addItems(["opcion 1", "opcion 2"])
         form_layout.addRow("Seleccione un lugar", a)
 
-        self.odom_input = QLineEdit()
-        self.odom_input.setPlaceholderText("e.g., /odom")
-        form_layout.addRow("Odom Topic Name:", self.odom_input)
+        # self.odom_input = QLineEdit()
+        # self.odom_input.setPlaceholderText("e.g., /odom")
+        # form_layout.addRow("Odom Topic Name:", self.odom_input)
 
-        self.odom_input1 = QLineEdit()
-        self.odom_input1.setPlaceholderText("e.g., /odom")
-        form_layout.addRow("Odom Topic Name:", self.odom_input1)
+        # self.odom_input1 = QLineEdit()
+        # self.odom_input1.setPlaceholderText("e.g., /odom")
+        # form_layout.addRow("Odom Topic Name:", self.odom_input1)
 
         layout = QVBoxLayout()
         layout.addLayout(form_layout)
