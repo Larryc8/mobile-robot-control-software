@@ -1,7 +1,7 @@
 import os
 import sys
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt5.QtGui import QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
@@ -75,6 +75,7 @@ class CustomLabel(QWidget):
 
 
 class ImageCarousel(QGroupBox):
+    on_exit_view = pyqtSignal(bool)
     def __init__(self, buffer):
         super().__init__()
         self.setWindowTitle("Image Carousel")
@@ -91,6 +92,7 @@ class ImageCarousel(QGroupBox):
         self.imaages_to_show = []
         self.use_filepath = False
         self.data_model = {}
+        self.__image_path = None
 
         # UI Elements
         self.image_label = QLabel()
@@ -113,35 +115,35 @@ class ImageCarousel(QGroupBox):
         )
 
         # Button connections
-        self.prev_button.clicked.connect(self.show_previous_image)
-        self.next_button.clicked.connect(self.show_next_image)
-        self.delete_button.clicked.connect(self.discard_buffered_data)
+        # self.prev_button.clicked.connect(self.show_previous_image)
+        # self.next_button.clicked.connect(self.show_next_image)
+        # self.delete_button.clicked.connect(self.discard_buffered_data)
 
         # Layout
-        button_layout = QHBoxLayout()
-        # button_layout.addWidget(self.page_label)
-        button_layout.addWidget(self.delete_button)
-        self.delete_button.hide()
+        # button_layout = QHBoxLayout()
+        # # button_layout.addWidget(self.page_label)
+        # button_layout.addWidget(self.delete_button)
+        # self.delete_button.hide()
 
         layout = QHBoxLayout()
         thumbnails_layout = QHBoxLayout()
 
-        self.images_thumbnail = [
-            CustomLabel(text="Image", index=i) for i in range(self.MAX_THUMBNAILS)
-        ]
-        [
-            label.clicked.connect(self.update_thumbnail)
-            for label in self.images_thumbnail
-        ]
+        # self.images_thumbnail = [
+        #     CustomLabel(text="Image", index=i) for i in range(self.MAX_THUMBNAILS)
+        # ]
+        # [
+        #     label.clicked.connect(self.update_thumbnail)
+        #     for label in self.images_thumbnail
+        # ]
 
-        for label in self.images_thumbnail:
-            label.setStyleSheet("border: 2px solid #A9A9A9; background-color: #808080")
-            thumbnails_layout.addWidget(label)
-            label.setFixedSize(200, 170)
+        # for label in self.images_thumbnail:
+        #     label.setStyleSheet("border: 2px solid #A9A9A9; background-color: #808080")
+        #     thumbnails_layout.addWidget(label)
+        #     label.setFixedSize(200, 170)
 
-        layout.addWidget(self.prev_button)
-        layout.addLayout(thumbnails_layout)
-        layout.addWidget(self.next_button)
+        # layout.addWidget(self.prev_button)
+        # layout.addLayout(thumbnails_layout)
+        # layout.addWidget(self.next_button)
 
         main_layout = QVBoxLayout()
         # main_layout.addWidget(
@@ -149,12 +151,18 @@ class ImageCarousel(QGroupBox):
         #         "fotos de referencia para la inspeccion tomadas de la zonas de interes"
         #     )
         # )
+        self.exit_btn = QPushButton("Exit")
+        self.exit_btn.clicked.connect(self.exit_view)
+        main_layout.addWidget(self.exit_btn)
         main_layout.addWidget(self.image_label)
-        main_layout.addLayout(layout)
-        main_layout.addLayout(button_layout)
+        # main_layout.addLayout(layout)
+        # main_layout.addLayout(button_layout)
 
         self.setLayout(main_layout)
         self.show_empty_image()
+
+    def exit_view(self):
+        self.on_exit_view.emit(True)
 
     def create_data_model(self) -> None:
         pass
@@ -215,6 +223,17 @@ class ImageCarousel(QGroupBox):
                 ],
                 use_filepath=self.use_filepath,
             )
+
+    def set_main_image(self, image_path):
+        # self.use_filepath = False
+        # self.display_current_image()
+        # self.__image_path = image_path
+        pixmap = QPixmap(image_path)
+
+        self.image_label.setPixmap(pixmap)
+        self.image_label.setScaledContents(True)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        print(f"set_main_image: {image_path}")
 
     def show_empty_image(self):
         # Create a blank pixmap

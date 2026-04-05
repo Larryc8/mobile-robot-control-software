@@ -13,7 +13,7 @@ class ElidedLabel(QLabel):
     def __init__(self, text="", parent=None):
         super().__init__(parent)
         self._full_text = text
-        self.setToolTip(text) # Show full text on hover
+        # self.setToolTip(text) # Show full text on hover
         tooltip = text
         self.tooltip = CustomToolTip(self, delay=100)
         self.tooltip.install(self, tooltip)
@@ -21,7 +21,7 @@ class ElidedLabel(QLabel):
 
     def setText(self, text):
         self._full_text = text
-        self.setToolTip(text)
+        # self.setToolTip(text)
         super().setText(text)
 
     def paintEvent(self, event):

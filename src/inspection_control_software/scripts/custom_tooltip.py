@@ -205,7 +205,7 @@ class CustomToolTip(QObject):
          self.widget.removeEventFilter(self)
 
     def show_tooltip(self):
-        if self.widget and self.widget.underMouse():
+        if True or self.widget and self.widget.underMouse():
             self._create_tooltip()
             self._position_tooltip()
             self.tooltip_widget.show()

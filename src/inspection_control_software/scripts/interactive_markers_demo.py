@@ -27,7 +27,7 @@ from utils.patrol import PatrolEndState, operationMode, userOperation, MarkerAct
 
 class InteractiveMarkerDemo(QObject):
     points_changed = pyqtSignal(dict)
-    action_triggered = pyqtSignal(MarkerActionTriggered)
+    action_triggered = pyqtSignal(MarkerActionTriggered, Marker)
 
     def __init__(self):
         super().__init__()
@@ -36,7 +36,10 @@ class InteractiveMarkerDemo(QObject):
 
         self.__path = {}
         self.__isUpdated = False
-        self.__action_triggered =  None
+        self.__action_triggered = {
+            'owner': None,
+            'action': None,
+        }
         self.markers_name = []
         self.__interactive_markers = {}
         self.__database = None
@@ -44,7 +47,7 @@ class InteractiveMarkerDemo(QObject):
 
         # Create a menu handler
         self.menu_handler = MenuHandler()
-        self.menu_handler.insert("Say Hello", callback=self.process_feedback)
+        self.menu_handler.insert("Mostrar imagen", callback=self.process_feedback)
         self.menu_handler.insert("Say Goodbye", callback=self.process_feedback)
 
         # Create a sub-menu
@@ -95,7 +98,7 @@ class InteractiveMarkerDemo(QObject):
             quat_msg.y = quat_tuple[1]
             quat_msg.z = quat_tuple[2]
             quat_msg.w = quat_tuple[3]
-            self.make_6dof_marker(point["id"], "Marker", Pose(position=Point(point["x"], point["y"], 0), orientation=quat_msg))
+            self.make_6dof_marker(point["id"], "Marker", Pose(position=Point(point["x"], point["y"], 0), orientation=quat_msg), img=point.get("image"))
         self.server.applyChanges()
 
     def send_database_action(self, map_file):
@@ -141,7 +144,7 @@ class InteractiveMarkerDemo(QObject):
                     "mapfile": "NA",
                     "type": 0,
                     "gui_yaw": 0, #point.get("gui_yaw"),
-                    "image": '', #point.get("image"),
+                    "image": p.controls[0].markers[0].mesh_resource, #point.get("image"),
                     "aruco_pose_vector": None
                 }
 
@@ -149,9 +152,12 @@ class InteractiveMarkerDemo(QObject):
 
             self.__isUpdated = False
 
-        if self.__action_triggered is not None:
-            self.action_triggered.emit(self.__action_triggered)
-            self.__action_triggered = None
+        if self.__action_triggered['owner'] is not None:
+            self.action_triggered.emit(self.__action_triggered['action'], self.__action_triggered['owner'].controls[0].markers[0])
+            self.__action_triggered = {
+                'owner': None,
+                'action': None,
+            }
 
     def process_feedback(self, feedback):
         """Callback to handle marker feedback."""
@@ -170,7 +176,10 @@ class InteractiveMarkerDemo(QObject):
             # Handle specific menu items
             if feedback.menu_entry_id == 1: # Say Hello
                 rospy.loginfo(">>> HELLO FROM INTERACTIVE MARKER! <<<")
-                self.__action_triggered = MarkerActionTriggered.HELLO
+                self.__action_triggered = {
+                    'owner': self.__interactive_markers[feedback.marker_name],
+                    'action': MarkerActionTriggered.HELLO,
+                }
             elif feedback.menu_entry_id == 2: # Say Goodbye
                 rospy.loginfo(">>> GOODBYE FROM INTERACTIVE MARKER! <<<")
             elif feedback.menu_entry_id == 4: # Reset Position (ID 3 is the 'Actions' folder)
@@ -223,7 +232,7 @@ class InteractiveMarkerDemo(QObject):
             self.server.applyChanges()
             rospy.loginfo(f"Changed {name} color to RGB({r},{g},{b})")
 
-    def make_6dof_marker(self, name, description, position):
+    def make_6dof_marker(self, name, description, position, img=''):
             """Creates a marker with a custom floating text label."""
             int_marker = InteractiveMarker()
             int_marker.header.frame_id = "map"
@@ -245,6 +254,7 @@ class InteractiveMarkerDemo(QObject):
             box_marker.type = Marker.ARROW
             box_marker.color = ColorRGBA(r=1.0, g=0.5, b=0.3, a=0.8)
             box_marker.scale = Vector3(x=0.5, y=0.2, z=0.05)
+            box_marker.mesh_resource = img
             control.markers.append(box_marker)
 
             # 3. Define the Floating Text (The "Description")

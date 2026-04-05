@@ -46,7 +46,7 @@ class HeatmapGenerator:
         final_map = add_heatmap(self.map, heatmap)
         heatmap_filename = 'heatmap_final_version.png'
         cv2.imwrite(heatmap_filename, cv2.cvtColor(final_map, cv2.COLOR_RGB2BGR))
-        return heatmap_filename 
+        return heatmap_filename
 
 
     def generate(self, data=[]):
@@ -70,7 +70,7 @@ class HeatmapGenerator:
             (-1.7, 1.8, 0),
         ]
         a.extend(s)
-        a.extend(data)
+        # a.extend(data)
 
         for x, y, rssi in a:
             self.set_data(x, y, rssi)
@@ -79,5 +79,3 @@ class HeatmapGenerator:
 if __name__ == "__main__":
     heatmapgenerator = HeatmapGenerator()
     heatmapgenerator.generate()
-
-

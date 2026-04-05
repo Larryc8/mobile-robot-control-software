@@ -8,6 +8,7 @@ import robot_actions_logger
 import rospy
 
 # from points_manager import PointsGenerator
+from utils.custom_file_dialog import CustomFileDialog
 from interactive_markers_demo import InteractiveMarkerDemo
 from better_image_display import ImageViewer
 from config_model import UserConfigFileManager
@@ -256,6 +257,8 @@ class VisualizationPanel(QWidget):
             buffer=self.buffer_data_robot_camera
         )
 
+        self.drainage_checkpoints_win.on_exit_view.connect(lambda: self.stacklayout.setCurrentIndex(0))
+
         # self.parent.pointWindow = None
         self.currentOperationMode = operationMode.MANUAL
         # self.global_state_holder.currentUserOperation = userOperation.IDLE
@@ -441,10 +444,11 @@ class VisualizationPanel(QWidget):
 
         self.message.hide()
 
-    def handleMarkerActionTriggered(self, action):
+    def handleMarkerActionTriggered(self, action, marker):
         if action == MarkerActionTriggered.HELLO:
             self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
             self.stacklayout.setCurrentIndex(2)
+            self.drainage_checkpoints_win.set_main_image(marker.mesh_resource)
         elif action == MarkerActionTriggered.GOODBYE:
             pass
         elif action == MarkerActionTriggered.RESET:
@@ -665,13 +669,18 @@ class VisualizationPanel(QWidget):
             file_path = file  # God, please help me!
 
             if not file:
-                file_path, _ = QFileDialog.getOpenFileName(
-                    self,
-                    "Abrir archivo de configuración de mapa",
-                    "",
-                    "Archivo de configuración (*.yaml)",
-                )
-                self.add_recent_file(file_path)
+                # file_path, _ = QFileDialog.getOpenFileName(
+                #     self,
+                #     "Abrir archivo de configuración de mapa",
+                #     "",
+                #     "Archivo de configuración (*.yaml)",
+                # )
+                # self.add_recent_file(file_path)
+                dialog = CustomFileDialog()
+                if dialog.exec_():
+                    file_path = dialog.selected_file
+                    file_path = dialog.selected_file
+
 
             print("MAP FILE LOADED", file_path)
             self.map_loaded.emit(file_path)
@@ -1112,6 +1121,7 @@ class PatrolsPanel(QGroupBox):
             btn2_text="Ignore",
             btn2_callback=lambda x: print("Hola action")
         )
+        self.alert_tooltip.show_tooltip()
 
         self.navigation_buttons = QHBoxLayout()
         self.labels_layout = QHBoxLayout()
