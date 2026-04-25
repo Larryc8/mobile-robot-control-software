@@ -1,22 +1,23 @@
 import random
-from datetime import datetime, time, date
+from datetime import date, datetime, time
 
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-    ForeignKey,
-    Date,
-    Time,
-    Float,
     CheckConstraint,
+    Column,
+    Date,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Time,
+    create_engine,
 )
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
+
 
 class Place(Base):
     __tablename__ = "places"
@@ -33,6 +34,30 @@ class Place(Base):
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
+
+class MediaStorageImage(Base):
+    __tablename__ = "media_storage"
+
+    place_id = Column(Integer, ForeignKey("places.id"))
+    id = Column(Integer, primary_key=True)
+    filename = Column(String(255))
+    extension = Column(String(10))  # To track if it's .pgm, .png, etc.
+    image_bytes = Column(LargeBinary)
+
+    map = relationship("Map", back_populates="place")
+
+
+class MediaStorageFile(Base):
+    __tablename__ = "media_storage"
+
+    place_id = Column(Integer, ForeignKey("places.id"))
+    id = Column(Integer, primary_key=True)
+    filename = Column(String(255))
+    extension = Column(String(10))  # To track if it's .pgm, .png, etc.
+    metadata_json = Column(JSONB)
+
+    map = relationship("Map", back_populates="place")
 
 
 class Map(Base):
@@ -84,10 +109,10 @@ class Checkpoint(Base):
     y_position = Column(Float)
     yaw = Column(Float)
     gui_yaw = Column(Float)
-    status = Column( Integer) 
+    status = Column(Integer)
     # You should specify enum values, e.g., Enum('active', 'inactive', name='status_enum'))
     image = Column(String)
-    aruco_pose_vector  = Column(ARRAY(Float))
+    aruco_pose_vector = Column(ARRAY(Float))
 
     alerts = relationship("Alert", back_populates="checkpoint")
     checkpoint_link = relationship("CheckpointLink", back_populates="checkpoint")
@@ -96,8 +121,11 @@ class Checkpoint(Base):
     calibrations = relationship("Calibration", back_populates="checkpoint_cal")
 
     __table_args__ = (
-        CheckConstraint('array_length(aruco_pose_vector, 1) = 3', name='check_vector_length'),
+        CheckConstraint(
+            "array_length(aruco_pose_vector, 1) = 3", name="check_vector_length"
+        ),
     )
+
 
 class CheckpointLink(Base):
     __tablename__ = "checkpoints_link"
@@ -128,10 +156,10 @@ class Alert(Base):
     checkpoint = relationship("Checkpoint", back_populates="alerts")
     patrol = relationship("Patrol", back_populates="alerts")
     map = relationship("Map", back_populates="alerts")
-    
+
 
 class Calibration(Base):
-    __tablename__ = 'calibrations'
+    __tablename__ = "calibrations"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
@@ -139,14 +167,17 @@ class Calibration(Base):
     calibration_value = Column(Float)
     # Defines a column that is an array of Floats
     # The 'dimensions=1' means it's a 1D array (a list)
-    calibration_vector  = Column(ARRAY(Float))
+    calibration_vector = Column(ARRAY(Float))
 
     checkpoint_cal = relationship("Checkpoint", back_populates="calibrations")
 
     # To enforce the length of 4, you add a database CHECK constraint
     __table_args__ = (
-        CheckConstraint('array_length(calibration_vector, 1) = 8', name='check_vector_length'),
+        CheckConstraint(
+            "array_length(calibration_vector, 1) = 8", name="check_vector_length"
+        ),
     )
+
 
 if __name__ == "__main__":
     DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
@@ -159,27 +190,26 @@ if __name__ == "__main__":
     session.add(patrol)
     session.commit()
     # session = Session()
-    map = Map(file_path="/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/mymap.yaml")
+    map = Map(
+        file_path="/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/mymap.yaml"
+    )
 
     session.add(map)
     session.commit()
 
-
-
-
     status_options = [-100, -50, 0]  # 0=active, 1=resolved, 2=ignored
     checkpoint_ids = [f"cp_{i}" for i in range(1, 11)]  # 10 checkpoints
-    patrol_ids = [f"patrol_{i}" for i in range(1, 6)]   # 5 patrols
-    map_ids = [1, 2, 3]                                # 3 maps
-    
+    patrol_ids = [f"patrol_{i}" for i in range(1, 6)]  # 5 patrols
+    map_ids = [1, 2, 3]  # 3 maps
+
     alerts = []
-    
+
     try:
         for i in range(100):
             alert = Alert(
                 # checkpoint_id=random.choice(checkpoint_ids),
                 # patrol_id=random.choice(patrol_ids),
-                message =random.choice(['Error', 'Advertencia', 'Info']),
+                message=random.choice(["Error", "Advertencia", "Info"]),
                 x_position=random.uniform(-1.3, 1.3),
                 y_position=random.uniform(-1.3, 1.3),
                 yaw=random.uniform(-1.6, 1.6),
@@ -190,12 +220,12 @@ if __name__ == "__main__":
                 time=time(
                     hour=random.randint(0, 23),
                     minute=random.randint(0, 59),
-                    second=random.randint(0, 59)
+                    second=random.randint(0, 59),
                 ),
-                map=map
+                map=map,
             )
             alerts.append(alert)
-        
+
         session.add_all(alerts)
         session.commit()
     except Exception as e:

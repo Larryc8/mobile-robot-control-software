@@ -101,13 +101,13 @@ class ActionTooltipWidget(BaseTooltipWidget):
 
         # Text Label
         self.label = QLabel(self.text)
-        self.label.setStyleSheet(f"color: white; font-family: 'Segoe UI'; font-size: 10pt;")
+        self.label.setStyleSheet(f"color: white; font-family: 'Segoe UI'; font-size: 9pt;")
         self.label.setAlignment(Qt.AlignCenter)
         self.main_layout.addWidget(self.label)
 
         # Buttons Layout
         if btn1_text or btn2_text:
-            self.btn_layout = QHBoxLayout()
+            self.btn_layout = QVBoxLayout()
             self.btn_layout.setSpacing(6)
 
             self.btn1 = None
@@ -166,6 +166,7 @@ class CustomToolTip(QObject):
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.show_tooltip)
+        self._active_hover = True
 
         self.hide_timer = QTimer(self)
         self.hide_timer.setSingleShot(True)
@@ -182,6 +183,9 @@ class CustomToolTip(QObject):
         widget.installEventFilter(self)
 
     def eventFilter(self, obj, event):
+        if not self._active_hover:
+            return super().eventFilter(obj, event)
+
         if obj == self.widget:
             if event.type() == QEvent.Enter:
                 self.hide_timer.stop()
@@ -240,6 +244,8 @@ class ActionToolTip(CustomToolTip):
         self.btn1_callback = None
         self.btn2_text = None
         self.btn2_callback = None
+        self._active_hover = False
+        self.widget = None
 
     def install(
         self,
@@ -254,11 +260,19 @@ class ActionToolTip(CustomToolTip):
         self.btn1_callback = btn1_callback
         self.btn2_text = btn2_text
         self.btn2_callback = btn2_callback
+        self.widget = widget
+        self.widget.setObjectName("specific")
+        self._current = self.widget.styleSheet()
         super().install(widget, text)
 
     def _create_tooltip(self):
         if self.tooltip_widget:
             self.tooltip_widget.close()
+
+        extra = "\n#specific { border:2px solid  blue; border-radius: 4px;}"
+        self.widget.setStyleSheet(self._current + extra)
+        print("Widget style sheet:", self.widget.styleSheet())
+        print("Widget:", self.widget)
 
         self.tooltip_widget = ActionTooltipWidget(
             self.text, self.btn1_text, self.btn2_text
@@ -276,3 +290,4 @@ class ActionToolTip(CustomToolTip):
     def hide_tooltip_forced(self):
         if self.tooltip_widget:
             self.tooltip_widget.hide()
+            self.widget.setStyleSheet(self._current)

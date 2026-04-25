@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QGraphicsView,
     QGraphicsScene,
+    QStackedLayout,
     QFileDialog,
     QVBoxLayout,
     QWidget,
@@ -179,7 +180,7 @@ class PatrolStatsViewer(QMainWindow):
 
 
 # import pyqtgraph as pg
-class ImageViewer(QMainWindow):
+class ImageViewer(QWidget):
     def __init__(
         self,
         ylm_map_filepath=None,
@@ -188,28 +189,28 @@ class ImageViewer(QMainWindow):
         patrols_scheduler=None,
     ):
         super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        # self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
 
         self.init_ui()
 
         self.zoom_factor = 1.0
         self.nodes_manager = nodes_manager
         self.parent = parent
-        self.setGeometry(
-            self.parent.x(),
-            self.parent.y(),
-            self.parent.width() + 100,
-            self.parent.height() + 200,
-        )
+        # self.setGeometry(
+        #     self.parent.x(),
+        #     self.parent.y(),
+        #     self.parent.width() + 100,
+        #     self.parent.height() + 200,
+        # )
         self.setStyleSheet("QMainWindow { background-color: white;}")
 
     def init_ui(self):
         # Central widget and layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        # central_widget = QWidget()
+        # self.setCentralWidget(central_widget)
         layout = QVBoxLayout()
-        layout.setSpacing(20)
-        layout.setContentsMargins(50, 50, 50, 10)
+        # layout.setSpacing(20)
+        # layout.setContentsMargins(50, 50, 50, 10)
 
         gradientbar_layout = QHBoxLayout()
         title_label = QLabel("Mapa de calor de incidencia de alertas")
@@ -244,10 +245,10 @@ class ImageViewer(QMainWindow):
 
         self.close_button.clicked.connect(self.close_win)
 
-        layout.addWidget(title_label)
-        layout.addWidget(description_label)
+        # layout.addWidget(title_label)
+        # layout.addWidget(description_label)
         layout.addLayout(gradientbar_layout)
-        layout.addWidget(data_info)
+        # layout.addWidget(data_info)
         buttons_layout = QHBoxLayout()
         self.graphics_view = Example(parent=self.parent)
         self.success_label = QLabel("✓ SUCCESS: File saved successfully")
@@ -258,19 +259,19 @@ class ImageViewer(QMainWindow):
         layout.addWidget(self.graphics_view)
 
         buttons_layout.addWidget(self.close_button, 1)
-        layout.addLayout(buttons_layout)
+        # layout.addLayout(buttons_layout)
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogCloseButton)
         self.close_button.setIcon(icon)
 
-        central_widget.setLayout(layout)
+        self.setLayout(layout)
 
     def show_win(self, file_path):
         self.graphics_view.display_image(file_path=file_path)
-        popup_x = self.parent.x() + (self.parent.width() - self.width())
-        popup_y = self.parent.y()
-        self.move(popup_x, popup_y)
-        self.show()
+        # popup_x = self.parent.x() + (self.parent.width() - self.width())
+        # popup_y = self.parent.y()
+        # self.move(popup_x, popup_y)
+        # self.show()
 
     def close_win(self, e):
         self.hide()
@@ -370,6 +371,8 @@ class InfoPanel(QGroupBox):
         self.stats_panel = QWidget()
         self.alert_details = AlertDetails()
         layout = QVBoxLayout(self)
+        self.stacked_layout = QStackedLayout()
+        self.container = QWidget()
 
         self.setStyleSheet("""
         QGroupBox {
@@ -414,7 +417,11 @@ class InfoPanel(QGroupBox):
         self.main_layout.addWidget(self.stats_panel)
         self.main_layout.addWidget(self.alert_details)
 
-        self.setLayout(self.main_layout)
+        self.container.setLayout(self.main_layout)
+        self.stacked_layout.addWidget(self.container)
+        self.stacked_layout.addWidget(self.heatmap)
+
+        self.setLayout(self.stacked_layout)
 
     def go2stats(self):
         self.main_layout.setCurrentIndex(0)
@@ -455,6 +462,7 @@ class InfoPanel(QGroupBox):
     def show_heatmap(self, m):
         if self.heatmap_img_filepath:
             self.heatmap.show_win(self.heatmap_img_filepath)
+            self.stacked_layout.setCurrentIndex(1)
 
     def set_map(self, map_filepath):
         self.map_loaded.emit(map_filepath)
@@ -516,7 +524,7 @@ class StatContainer(QGroupBox):
                 color: gray;
                 background-color: white;
             }
-            
+
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
@@ -656,9 +664,10 @@ class LogPanel(QWidget):
         self.ascendant = False
         self.PAGE_ZISE = 12
         self.map = None
+        self.stacked_layout = QStackedLayout()
+        self.main_layout.addLayout(self.stacked_layout)
 
         # self.getAlerts()
-
         # rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.poseMonitor)
         # rospy.Subscriber('/scan', LaserScan,  self.obstacleMonitor)
         # rospy.Subscriber('/imu', Imu,  self.imuMonitor)

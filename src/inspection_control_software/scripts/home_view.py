@@ -6,18 +6,13 @@ from typing import List
 
 import robot_actions_logger
 import rospy
-
-# from points_manager import PointsGenerator
-from utils.custom_file_dialog import CustomFileDialog
-from interactive_markers_demo import InteractiveMarkerDemo
 from better_image_display import ImageViewer
 from config_model import UserConfigFileManager
+from custom_tooltip import ActionToolTip, CustomToolTip
 from database_manager import AlertStatus
-from custom_tooltip import CustomToolTip
-from custom_tooltip import ActionToolTip
-from utils.custom_toolbutton import CustomToolButtom
 from image_carousel import ImageCarousel
 from input_textdialog import CustomDialog, InputDialog
+from interactive_markers_demo import InteractiveMarkerDemo
 from joystick import Joypad
 from notification import Notification, NotificationType
 from patrol_menu import PatrolsMenu
@@ -29,6 +24,7 @@ from PyQt5.QtCore import (
     QParallelAnimationGroup,
     QPoint,
     QPropertyAnimation,
+    QSettings,
     QSize,
     Qt,
     QTime,
@@ -44,13 +40,13 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QFrame,
     QGraphicsOpacityEffect,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLayout,
-    QToolButton,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -61,10 +57,10 @@ from PyQt5.QtWidgets import (
     QStackedLayout,
     QStyle,
     QTabWidget,
+    QToolButton,
     QToolTip,
     QVBoxLayout,
     QWidget,
-    QFrame,
 )
 from pyqttoast import Toast, ToastPosition, ToastPreset
 from robot_actions_logger import RobotActionsLoggerView
@@ -93,7 +89,17 @@ from styles.labels import (
     warning_label_style,
 )
 from styles.patrols import patrol_base_style, patrol_selected_style
-from utils.patrol import PatrolEndState, operationMode, userOperation, MarkerActionTriggered
+
+# from points_manager import PointsGenerator
+from utils.custom_file_dialog import CustomFileDialog
+from utils.custom_toolbutton import CustomToolButtom
+from utils.patrol import (
+    MarkerActionTriggered,
+    PatrolEndState,
+    operationMode,
+    userOperation,
+)
+
 
 class StackingOptions(Enum):
     MAP_ON_TOP = 1
@@ -146,7 +152,6 @@ class HomePanel(QWidget):
         #     self.patrol_panel.patrols_container.patrols_scheduler.send_points_data
         # )
 
-
         self.patrol_panel.patrols_container.patrols_scheduler.set_stored_database_points.connect(
             self.visualization_panel.parent.pointsWindow.load_stored_points
         )
@@ -154,9 +159,12 @@ class HomePanel(QWidget):
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
             self.visualization_panel.parent.pointsWindow.update_points_state
         )
+        self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.recovery_mode.connect(
+            self.visualization_panel.on_battery_alert
+        )
         self.patrol_panel.patrols_container.patrols_scheduler.points_scheduler.points_state.connect(
             self.visualization_panel.interactive_markers.update_markers
-        )#Here is the problematic part mr Rabbit
+        )  # Here is the problematic part mr Rabbit
 
         self.patrol_panel.patrols_container.patrols_scheduler.set_running_patrol.connect(
             self.visualization_panel.parent.pointsWindow.reset_points_state
@@ -221,6 +229,7 @@ class VisualizationPanel(QWidget):
         self.layout = QGridLayout()
         self.buttons_layout = QGridLayout()
         self.rviz_options_layout = QHBoxLayout()
+        self.settings = QSettings("MyCompany", "MyApp")
 
         self.stacklayout = QStackedLayout()
         self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackAll)
@@ -237,10 +246,10 @@ class VisualizationPanel(QWidget):
         self.map_recent_files = []
         self._stack_policy = 0
 
-        self.message = QLabel(
+        self.visualization_panel_static_message = QLabel(
             "MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas "
         )
-        self.message.hide()
+        self.visualization_panel_static_message.hide()
 
         self.rviz = MyViz(configfile="./config/config_navigation.rviz")
 
@@ -257,7 +266,9 @@ class VisualizationPanel(QWidget):
             buffer=self.buffer_data_robot_camera
         )
 
-        self.drainage_checkpoints_win.on_exit_view.connect(lambda: self.stacklayout.setCurrentIndex(0))
+        self.drainage_checkpoints_win.on_exit_view.connect(
+            lambda: self.stacklayout.setCurrentIndex(0)
+        )
 
         # self.parent.pointWindow = None
         self.currentOperationMode = operationMode.MANUAL
@@ -276,15 +287,56 @@ class VisualizationPanel(QWidget):
             }
         ]
 
-        self.load_map_button = CustomToolButtom(icon="./public/map-question-contrast.svg", tooltip="Cargar mapa")
-        self.create_map_btn = CustomToolButtom(icon="./public/map-editing-svgrepo-com.svg", icon2="./public/map-save-simple.svg", tooltip="Crear nuevo mapa")
-        self.points_window_btn = CustomToolButtom(icon="./public/map-pin-contrast.svg", tooltip="Ver puntos")
-        self.robot_focus_btn = CustomToolButtom(icon="./public/worldwide-location-svgrepo-com.svg", tooltip="Enfocar robot")
-        self.map_layout_btn = CustomToolButtom(icon="./public/flag_corner_brackets_v3.svg", twist=True, tooltip="Mapa")
-        self.camera_layout_btn = CustomToolButtom(icon="./public/camera_centered.svg", tooltip="Cámara")
-        self.layout_type_btn = CustomToolButtom(icon="./public/squares_overlapped.svg", icon2="./public/squares_single_bigger.svg", tooltip="Layout")
+        self.load_map_button = CustomToolButtom(
+            icon="./public/map-question-contrast.svg", tooltip="Cargar mapa"
+        )
+        self.create_map_btn = CustomToolButtom(
+            icon="./public/map-editing-svgrepo-com.svg",
+            icon2="./public/map-save-simple.svg",
+            tooltip="Crear nuevo mapa",
+        )
+        self.points_window_btn = CustomToolButtom(
+            icon="./public/map-pin-contrast.svg", tooltip="Ver puntos"
+        )
+        self.robot_focus_btn = CustomToolButtom(
+            icon="./public/worldwide-location-svgrepo-com.svg", tooltip="Enfocar robot"
+        )
+        self.map_layout_btn = CustomToolButtom(
+            icon="./public/flag_corner_brackets_v3.svg", twist=True, tooltip="Mapa"
+        )
+        self.camera_layout_btn = CustomToolButtom(
+            icon="./public/camera_centered.svg", tooltip="Cámara"
+        )
+        self.layout_type_btn = CustomToolButtom(
+            icon="./public/squares_overlapped.svg",
+            icon2="./public/squares_single_bigger.svg",
+            tooltip="Layout",
+        )
+        self.set_reference_btn = CustomToolButtom(
+            icon="./public/map_pin_stroked.svg", tooltip="Establecer referencia"
+        )
 
-        self.set_reference_btn = CustomToolButtom(icon="./public/map_pin_stroked.svg", tooltip="Establecer referencia")
+        self.load_map_tutorial = ActionToolTip(self)
+        # buttons and callbacks
+        self.load_map_tutorial.install(
+            self.load_map_button,
+            "Da click para \ncargar un mapa",
+            btn1_text="Entendido",
+            btn1_callback=lambda x: print("Hola action"),
+            btn2_text="Ignorar",
+            btn2_callback=lambda x: print("Hola action"),
+        )
+
+        self.create_map_tutorial = ActionToolTip(self)
+        # buttons and callbacks
+        self.create_map_tutorial.install(
+            self.create_map_btn,
+            "Da click para \ncrear un nuevo mapa",
+            btn1_text="Entendido",
+            btn1_callback=lambda x: print("Hola action"),
+            btn2_text="Ignorar",
+            btn2_callback=lambda x: print("Hola action"),
+        )
 
         # self.tooltip = CustomToolTip(self, delay=100)
         # self.tooltip.install(self.create_map_btn, "Haga clic para crear un nuevo mapa")
@@ -314,8 +366,12 @@ class VisualizationPanel(QWidget):
 
         self.set_reference_btn.clicked.connect(self.robotcamera.buffer_reference_image)
         self.robot_focus_btn.clicked.connect(self.handleActionSelected)
-        self.map_layout_btn.clicked.connect(lambda: self.handleViewActionSelected(StackingOptions.MAP_ON_TOP))
-        self.camera_layout_btn.clicked.connect(lambda: self.handleViewActionSelected(StackingOptions.CAMERA_ON_TOP))
+        self.map_layout_btn.clicked.connect(
+            lambda: self.handleViewActionSelected(StackingOptions.MAP_ON_TOP)
+        )
+        self.camera_layout_btn.clicked.connect(
+            lambda: self.handleViewActionSelected(StackingOptions.CAMERA_ON_TOP)
+        )
         self.layout_type_btn.clicked.connect(self.toggleLayoutType)
         # self.stack_policy_btn.clicked.connect(self.toggleStackPolicy)
 
@@ -376,10 +432,9 @@ class VisualizationPanel(QWidget):
         self.load_map_button.clicked.connect(self.handleLoadMap)
 
         # self.view_menu_btn.setStyleSheet(border_button_style + button_with_menu_style)
-        self.message.setStyleSheet(warning_label_style)
+        self.visualization_panel_static_message.setStyleSheet(warning_label_style)
         view_menu.setStyleSheet(menu_style)
         self.view_menu_btn.setStyleSheet(tertiary_button_style + button_with_menu_style)
-
 
         # self.load_map_button.clicked.connect(self.handleLoadMap)
         # self.map_loaded.connect(self.parent.pointsWindow.load_map)
@@ -405,8 +460,12 @@ class VisualizationPanel(QWidget):
         self.parent.pointsWindow.save_selected_points.connect(self.handleSavePoints)
         self.interactive_markers = InteractiveMarkerDemo()
         self.interactive_markers.points_changed.connect(self.handleSavePoints)
-        self.interactive_markers.action_triggered.connect(self.handleMarkerActionTriggered)
-        self.selected_user_operation.connect(self.interactive_markers.set_user_operation)
+        self.interactive_markers.action_triggered.connect(
+            self.handleMarkerActionTriggered
+        )
+        self.selected_user_operation.connect(
+            self.interactive_markers.set_user_operation
+        )
         self.map_loaded.connect(self.interactive_markers.send_database_action)
 
         self.parent.pointsWindow.save_in_database.connect(self.handleSaveInDatabase)
@@ -426,10 +485,11 @@ class VisualizationPanel(QWidget):
         # self.rviz.hide()
         # self.toggleCameraMapView()
         self.battery_state = BatteryIndicator()
+        self.battery_state.battery_alert.connect(self.on_battery_alert)
 
         # self.layout.addLayout(self.rviz_options_layout, 0, 0)
         self.layout.addLayout(self.buttons_layout, 1, 0)
-        self.layout.addWidget(self.message, 0, 0, 1, -1)
+        self.layout.addWidget(self.visualization_panel_static_message, 0, 0, 1, -1)
         self.layout.addWidget(self.battery_state, 1, 3)
         self.layout.addWidget(self.stacked_widgets_container, 2, 0, 1, 4)
         self.layout.addWidget(self.robot_actions_logger, 3, 0, 1, 4)
@@ -437,12 +497,61 @@ class VisualizationPanel(QWidget):
 
         self.layout.setAlignment(self.battery_state, Qt.AlignLeft)
 
-    def enable_components(self, enable):
-        if not enable:
-            self.message.show()
+        self.settings.setValue("tutorial_step", 0)
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.on_mount)
+        self.timer.start(2000)
+
+    def on_battery_alert(self, message):
+        if message:
+            self.visualization_panel_static_message.setText(message)
+            self.visualization_panel_static_message.show()
+        else:
+            self.visualization_panel_static_message.hide()
+
+    def on_mount(self):
+
+        followTutorial = self.settings.value("followTutorial")
+        if followTutorial == False:
             return
 
-        self.message.hide()
+        dg = CustomDialog(
+            self,
+            "Tutorial",
+            message="Desea seguir e tutorial?",
+            positive_response="Seguir",
+            negative_response="Ignorar",
+            retries=0,
+        )
+        if self.settings.value("tutorial_step") == 0:
+            dg.exec_()
+
+        if not "Positive" == "Positive":
+            self.settings.setValue("followTutorial", False)
+            print("Tutorial ignorado")
+        else:
+            step = self.settings.value("tutorial_step")
+
+            if step == 0:
+                self.load_map_tutorial.show_tooltip()
+                self.settings.setValue("tutorial_step", 1)
+                self.timer.start(1000)
+
+            if step == 1:
+                self.create_map_tutorial.show_tooltip()
+                self.settings.setValue("tutorial_step", 2)
+                self.timer.start(1000)
+
+    def tutorial(self):
+        pass
+
+    def enable_components(self, enable):
+        if not enable:
+            self.visualization_panel_static_message.show()
+            return
+
+        self.visualization_panel_static_message.hide()
 
     def handleMarkerActionTriggered(self, action, marker):
         if action == MarkerActionTriggered.HELLO:
@@ -458,10 +567,8 @@ class VisualizationPanel(QWidget):
         elif action == MarkerActionTriggered.DELETE_MARKER:
             pass
 
-
     def toggleStackPolicy(self):
         self._stack_policy = (self._stack_policy + 1) % 2
-
 
     def toggleLayoutType(self):
         if self.layout_type_btn.toggle():
@@ -469,13 +576,9 @@ class VisualizationPanel(QWidget):
         else:
             self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
 
-
-
-
     def handleActionSelected(self, action3):
         self.robot_focus_btn.toggle_selected()
         self.setFollowRobot(self.robot_focus_btn.isSelected())
-
 
     def show_log(self):
         self.stacklayout.setCurrentIndex(2)
@@ -528,7 +631,6 @@ class VisualizationPanel(QWidget):
                 # self.toggleCameraMapView()
             return
 
-
     def toggleCameraMapView(self):
         if self.mapAsPrincipalView:
             self.stacklayout.setCurrentIndex(1)
@@ -579,7 +681,6 @@ class VisualizationPanel(QWidget):
         else:
             if self.saveMapHandler():
                 self.create_map_btn.toggle()
-
 
     def setFollowRobot(self, x):
         self.rviz.setUp("followrobot", x)
@@ -681,7 +782,6 @@ class VisualizationPanel(QWidget):
                     file_path = dialog.selected_file
                     file_path = dialog.selected_file
 
-
             print("MAP FILE LOADED", file_path)
             self.map_loaded.emit(file_path)
 
@@ -747,7 +847,10 @@ class VisualizationPanel(QWidget):
         # self.save_map_button.setEnabled(False)
         place_form = PlaceForm()
         dialog = InputDialog(
-            self.parent, title="Guardar archivo de mapeo como:", child=place_form, msg="Nombre del archivo:"
+            self.parent,
+            title="Guardar archivo de mapeo como:",
+            child=place_form,
+            msg="Nombre del archivo:",
         )
         dialog.exec_()
         print("VizPanel,dialog", dialog.filename)
@@ -1110,18 +1213,6 @@ class PatrolsPanel(QGroupBox):
             ]
         ]
         # Setup the controller
-        self.alert_tooltip = ActionToolTip(self)
-
-        # buttons and callbacks
-        self.alert_tooltip.install(
-            self.start_patrols_btn,
-            "Potential obstacle detected. Clear path?",
-            btn1_text="Clear Path",
-            btn1_callback=lambda x: print("Hola action"),
-            btn2_text="Ignore",
-            btn2_callback=lambda x: print("Hola action")
-        )
-        self.alert_tooltip.show_tooltip()
 
         self.navigation_buttons = QHBoxLayout()
         self.labels_layout = QHBoxLayout()
@@ -1148,7 +1239,7 @@ class PatrolsPanel(QGroupBox):
         self.delete_btn.clicked.connect(self.delete_patrols)
         self.left_btn.clicked.connect(self.set_previous_page)
         self.right_btn.clicked.connect(self.set_next_page)
-        self.patrols_scheduler.patrol_finished.connect(self.patrol_finished)
+        self.patrols_scheduler.patrol_finished.connect(self.on_patrol_finished)
         # self.stop_patrols_btn.clicked.connect(self.stop_any_patrol)
         self.patrols_scheduler.update_patrols_view.connect(self.get_current_patrols)
         # self.patrols_scheduler.update_patrols_view.connect(self.update_patrols_indexing_label)
@@ -1376,7 +1467,7 @@ class PatrolsPanel(QGroupBox):
         # self.delete_btn.setEnabled(False)
         pass
 
-    def patrol_finished(self, message):
+    def on_patrol_finished(self, message):
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
@@ -1411,6 +1502,17 @@ class PatrolsPanel(QGroupBox):
         self.start_patrols_btn.setIcon(icon_start)
         self.start_patrols_btn.setText("Comenzar")
         self.isStart = True
+
+        if "HomeDoesntExist" in message:
+            dg = CustomDialog(
+                None,
+                "Home no encontrado",
+                message="Establezca un púnto Home antes antes de iniciar la inspección",
+                positive_response="Seguir",
+                negative_response="Ignorar",
+                retries=0,
+            )
+            dg.exec_()
 
     def set_next_page(self):
         max_pag, pag_index = self.patrols_container.move_page_index(1)
@@ -1919,6 +2021,8 @@ class Patrol(QGroupBox):
 
 
 class BatteryIndicator(QWidget):
+    battery_alert = pyqtSignal(str)
+
     def __init__(self):
         super().__init__(None)
         self.battery_state_sub = rospy.Subscriber(
@@ -1933,10 +2037,11 @@ class BatteryIndicator(QWidget):
         self.layout = QHBoxLayout()
 
         self.layout.setContentsMargins(1, 1, 1, 1)
+        self.showBatteryWarning = True
 
         # Battery percentage with dynamic colorSP_DialogCloseButton
         self.battery_icon = QPushButton()
-        icon_size = QSize(30, 30) # Set width and height in pixels
+        icon_size = QSize(30, 30)  # Set width and height in pixels
         self.battery_icon.setIconSize(icon_size)
 
         self.battery_icon.setIcon(QIcon("./public/battery-twotone-100-svgrepo-com.svg"))
@@ -1958,6 +2063,7 @@ class BatteryIndicator(QWidget):
         self.current_level = 100
 
     def map2percent(self, val):
+        return val
         max = 1.1
         min = 0.99
         h = max - min
@@ -1965,26 +2071,107 @@ class BatteryIndicator(QWidget):
 
     def battery_callback(self, msg):
         self.percentage = self.map2percent(msg.percentage)
+        # self.percentage = (self.percentage // 10) * 10
+        self.percentage = (self.percentage) * 100
         self.percentage = (self.percentage // 10) * 10
+        rospy.loginfo(f"Battery percentage: {self.percentage:.1f}%")
 
     def update_battery_state(self):
+        # 1. Round percentage to the nearest 10 for icon selection (e.g., 87% -> 80 or 90)
+        # Assuming you have icons for 0, 10, 20... 100
+        icon_level = int(round(self.percentage / 10.0)) * 10
+        icon_level = max(0, min(100, icon_level))  # Clamp between 0-100
+
+        # 2. Update Text and Icon
         self.battery_icon.setText(f"{self.percentage:.1f}%")
-        if self.percentage < 40:
-            self.battery_icon.setStyleSheet("""
-                font-size: 12px;
-                font-weight: bold;
-                color: red;  /* Initial green color */
-            """)
+        icon_path = f"./public/battery-twotone-{icon_level}-svgrepo-com.svg"
+        self.battery_icon.setIcon(QIcon(icon_path))
+
+        # 3. Logic for Styles and Alerts
+        if self.percentage < 20:
+            # CRITICAL STATE: Red + Blinking effect (using the 30fps timer)
+            # We use a simple modulo on a counter or timestamp to blink
+            is_visible = (rospy.get_time() % 1.0) > 0.5
+            color = "red" if is_visible else "transparent"
+
+            self.battery_icon.setStyleSheet(
+                f"font-size: 12px; font-weight: bold; color: {color};"
+            )
+            self.status_label.setText("CRÍTICO: Cargar ahora")
+            self.status_label.setStyleSheet(
+                "font-size: 14px; color: red; font-weight: bold;"
+            )
+
+            if self.showBatteryWarning:
+                self.show_critical_dialog()
+                self.showBatteryWarning = False
+                self.battery_alert.emit("CRITICAL: Battery low!")
+
+        elif self.percentage < 40:
+            # LOW STATE: Orange/Yellow
+            self.battery_icon.setStyleSheet(
+                "font-size: 12px; font-weight: bold; color: #FFA500;"
+            )
+            self.status_label.setText("Batería Baja")
+            self.status_label.setStyleSheet("font-size: 14px; color: #FFA500;")
+            self.showBatteryWarning = True  # Reset for next drop
+
         else:
-            self.battery_icon.setStyleSheet("""
-                font-size: 12px;
-                font-weight: bold;
-                color: #4CAF50;  /* Initial green color */
-            """)
-        # print("bATTERY: ", self.percentage)
-        self.battery_icon.setIcon(
-            QIcon(f"./public/battery-twotone-{int(self.percentage)}-svgrepo-com.svg")
+            # HEALTHY STATE: Green
+            self.battery_icon.setStyleSheet(
+                "font-size: 12px; font-weight: bold; color: #4CAF50;"
+            )
+            self.status_label.setText("Cargada")
+            self.status_label.setStyleSheet("font-size: 14px; color: #666;")
+            self.showBatteryWarning = True
+            self.battery_alert.emit("")
+
+    def show_critical_dialog(self):
+        dg = CustomDialog(
+            self,
+            "Bateria en valor critico",
+            message="Iniciando el modo de recuperación...",
+            positive_response="Seguir en modo Auto",
+            negative_response="Cambiar a Manual",
+            retries=1,
         )
+        dg.exec_()
+
+    def odom_callback(self, msg):
+        """Called every time a new odometry message arrives."""
+        # Extract current position (x, y)
+        curr_x = msg.pose.pose.position.x
+        curr_y = msg.pose.pose.position.y
+
+        # If this is the first message, just store the position and return
+        if self.prev_x is None or self.prev_y is None:
+            self.prev_x = curr_x
+            self.prev_y = curr_y
+            return
+
+        # Compute displacement since last message
+        dx = curr_x - self.prev_x
+        dy = curr_y - self.prev_y
+        displacement = math.sqrt(dx * dx + dy * dy)
+
+        # Update accumulated distance
+        self.accumulated_distance += displacement
+
+        # Check if threshold has been reached (or exceeded)
+        if self.accumulated_distance >= self.threshold:
+            # Calculate how many full thresholds we passed
+            # This handles large jumps (e.g., teleportation or fast movement)
+            num_triggers = int(self.accumulated_distance // self.threshold)
+            for _ in range(num_triggers):
+                rospy.loginfo(
+                    "Robot moved 10 cm (%.2f m total threshold crossed)", self.threshold
+                )
+            # Keep the remainder distance for next cycles
+            self.accumulated_distance -= num_triggers * self.threshold
+
+        # Update previous position for next callback
+        self.prev_x = curr_x
+        self.prev_y = curr_y
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import sys
 import time
 from ast import Dict, List
 from math import degrees, radians
+from queue import Queue
 from typing import Any, Callable, NamedTuple
 
 import actionlib
@@ -23,6 +24,7 @@ from config_model import UserConfigFileManager
 from cv_bridge import CvBridge
 from database_manager import AlertStatus, DataBase
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
+from input_textdialog import CustomDialog
 from move_base_msgs.msg import (
     MoveBaseAction,
     MoveBaseFeedback,
@@ -58,6 +60,7 @@ class PointsScheduler(QObject):
     patrol_progress = pyqtSignal(str, int, int, PatrolEndState)
     alert_generated = pyqtSignal(str, AlertStatus)
     check_done = pyqtSignal(int)
+    recovery_mode = pyqtSignal(str)
 
     def __init__(self, points=[], done_task=None, feedback_task=None) -> None:
         super().__init__()
@@ -68,6 +71,14 @@ class PointsScheduler(QObject):
         #     {"x_meters": -1.7, "y_meters": 1.1, "yaw_degrees": 0, "checked": False},
         #     {"x_meters": -1.7, "y_meters": -1.1, "yaw_degrees": 0, "checked": False},
         # ]
+        self.BATTERY_THRESHOLD = 20
+        self.num_predicts = 0
+        self.total_distance = 0
+        self.last_battery_state = None
+        self.last_odom_pose = None
+        self.current_acml_pose: PoseStamped = None
+        self.__home_point = None
+        self.batteryIsLow = False
         self.currrent_pose = (None, None, None)
         self.currrent_aruco_pose = (None, None, None)
         self.scan_angles = [180, 100, 90, 60, 30, 0]
@@ -82,7 +93,7 @@ class PointsScheduler(QObject):
         # self.goals = self._goals.copy()
         self.done_task = done_task
         self.feedback_task = feedback_task
-        self.cancelled = False
+        self.schedulingCancelled = False
         self.emit_callback = None
         self.client = None
         self.points_left = 999
@@ -115,6 +126,9 @@ class PointsScheduler(QObject):
         self.simple_goal_pub = rospy.Publisher(
             "/move_base_simple/goal", PoseStamped, queue_size=2
         )
+        self.acml_sub = rospy.Subscriber(
+            "/amcl_pose", PoseWithCovarianceStamped, self.acml_callback
+        )
 
         self.navigation_checker.alert_generated.connect(self.handleAlertGeneration)
 
@@ -122,27 +136,148 @@ class PointsScheduler(QObject):
         #
         #
 
+    def handle_prediction(self, e1, e2, dx, target_dist):
+        """
+        Predicts battery level at a target distance.
+        Note: The SetBool request.data is used as the distance input.
+        In a production environment, a custom .srv would be better than SetBool.
+        """
+        if dx == 0:
+            return None
+
+        slope = (e2 - e1) / dx
+        # rospy.loginfo(f"slope: {slope:.2f}, e1: {e1:.2f}, e2: {e2:.2f}, dx: {dx:.2f}")
+
+        # Linear Extrapolation: y = y2 + slope * (target_x - x2)
+        prediction = e1 + slope * (target_dist + dx)
+        prediction = max(0, min(100, prediction))  # Clamp between 0-100
+
+        rospy.loginfo(
+            f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
+        )
+        robot_actions_logger.logger.log(
+            f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
+        )
+
+        return prediction
+
+    def acml_callback(self, msg):
+        # Accessing the position
+        self.current_acml_pose = msg.pose.pose
+
+    def odom_callback(self, msg):
+        """Calculates cumulative Euclidean distance."""
+
+        if self.current_acml_pose is None:
+            rospy.loginfo("current_acml_pose is None")
+            return
+
+        if self.last_odom_pose is None:
+            rospy.loginfo("last_odom_pose is None")
+            self.last_odom_pose = msg.pose.pose.position
+            return
+
+        if self.__home_point is None:
+            rospy.loginfo("__home_point is None")
+            return
+
+        current_pose = msg.pose.pose.position
+
+        if self.total_distance == 0:
+            self.last_battery_state = self.battery_state
+
+        dist = math.sqrt(
+            (current_pose.x - self.last_odom_pose.x) ** 2
+            + (current_pose.y - self.last_odom_pose.y) ** 2
+            + (current_pose.z - self.last_odom_pose.z) ** 2
+        )
+        self.total_distance += dist
+
+        self.last_odom_pose = current_pose
+
+        if self.total_distance < 0.1:
+            # rospy.loginfo(f"total_distance: {self.total_distance}")
+            return
+
+        if self.last_battery_state is None:
+            return
+
+        e1 = self.last_battery_state
+        e2 = self.battery_state
+        pos = self.current_acml_pose.position
+
+        home = list(self.__home_point.values())[0]
+        target_x = home["x_meters"]
+        target_y = home["y_meters"]
+        current_x = pos.x
+        current_y = pos.y
+        distance = math.sqrt((target_x - current_x) ** 2 + (target_y - current_y) ** 2)
+
+        predicted_battery_state = self.handle_prediction(
+            e1,
+            e2,
+            self.total_distance,
+            distance,
+        )
+        self.total_distance = 0
+
+        rospy.loginfo(f"battery_state predicted: {predicted_battery_state}")
+
+        if predicted_battery_state is None:
+            return
+
+        if self.batteryIsLow:
+            if not predicted_battery_state < self.BATTERY_THRESHOLD:
+                self.batteryIsLow = False
+            return
+
+        if predicted_battery_state < self.BATTERY_THRESHOLD:
+            if self.num_predicts < 3:
+                self.num_predicts += 1
+                return
+
+            self.batteryIsLow = True
+            self.cancel_points_scheduling()
+            self.setup(rospy_thread=True)
+            self.goals = self.__home_point.copy()
+            self.dispatch()
+            self.batteryIsLow = True
+            self.num_predicts = 0
+            self.recovery_mode.emit("RecoveryModeActive")
+
     def update_battery(self, msg):
         self.battery_state = msg.percentage * 100
 
-    def setup(self, on_calibration: bool = False) -> int:
+    def setup(self, on_calibration: bool = False, rospy_thread: bool = False) -> int:
         """
         this function sets the initials conditions for the patrols scheduler
         sort the point to make the robot follow the shrortest path
         """
+        if self.battery_state < self.BATTERY_THRESHOLD and not rospy_thread:
+            raise Exception("BatteryLow")
+
         points: dict = self._goals.copy()
         new_goals: dict
         self.on_calibration = on_calibration
-        self.cancelled = False
+        self.schedulingCancelled = False
+
+        new_goals = {}
+        for id in points.keys():
+            if not points.get(id).get("is_home"):
+                new_goals[id] = points.get(id)
+            else:
+                self.__home_point = {id: points.get(id)}
 
         if on_calibration:
             new_goals = {
-                id: points.get(id)
-                for id in points.keys()
-                if points.get(id).get("image")
+                id: new_goals.get(id)
+                for id in new_goals.keys()
+                if new_goals.get(id).get("image")
             }
-        else:
-            new_goals = points
+        # else:
+        #     new_goals = points
+        if self.__home_point is None:
+            raise RuntimeError("HomeDoesntExist")
 
         print("NEW POIINT", new_goals)
 
@@ -222,8 +357,9 @@ class PointsScheduler(QObject):
                 self.client.cancel_goal()
                 # self.done_task()
                 # self.restart()
-        self.cancelled = True
-        print("points canceled from points sche", self.cancelled)
+                self.client.wait_for_result()
+        self.schedulingCancelled = True
+        print("points canceled from points sche", self.schedulingCancelled)
 
     def dispatch(self, patrolid=None):
         print(f"{__name__} dispatched!! len(goals): {len(self.goals)}")
@@ -315,8 +451,14 @@ class PointsScheduler(QObject):
             print("TODAS LOS PUNTOS HAN SIDO RECORRIDOS")
             return
 
-        if self.cancelled:
+        if self.schedulingCancelled:
             print("POINTS CANCELLED WITH state ", state)
+            return
+
+        if self.batteryIsLow:
+            rospy.loginfo("Battery is low, stopping points scheduling")
+            self.recovery_mode.emit("")
+            # raise Exception("RecoveryModeActive")
             return
 
         self.dispatch(str(self.current_patrolid))
@@ -426,7 +568,7 @@ class PointsScheduler(QObject):
             pos = 888
 
             while not (pos == 0):
-                if self.cancelled:
+                if self.schedulingCancelled:
                     break
                 goal_reached, pos = controller.control_loop()
                 # print(f"inside the while in  pid controller yaw error: {goal_reached} pose error: {pos}")
@@ -435,7 +577,7 @@ class PointsScheduler(QObject):
             pos = 888
             goal_reached = 777
             while not (goal_reached == 0):
-                if self.cancelled:
+                if self.schedulingCancelled:
                     break
                 goal_reached, pos = controller.control_loop(yaw=True)
                 # print(f"inside the while in  pid controller yaw error: {goal_reached} pose error: {pos}")
@@ -448,41 +590,42 @@ class PointsScheduler(QObject):
         #     f"Fin del escaneo.... after fine-tuning sim: {rate:.3f}"
         # )
 
-    def odom_callback(self, msg):
-        """
-        Callback function to process the Odometry message.
-        """
-        # --- Position ---
-        position_x = msg.pose.pose.position.x
-        position_y = msg.pose.pose.position.y
+    # def odom_callback(self, msg):
+    # BORRAR
+    #     """
+    #     Callback function to process the Odometry message.
+    #     """
+    #     # --- Position ---
+    #     position_x = msg.pose.pose.position.x
+    #     position_y = msg.pose.pose.position.y
 
-        # --- Orientation (Quaternion to Euler) ---
-        orientation_q = msg.pose.pose.orientation
-        orientation_list = [
-            orientation_q.x,
-            orientation_q.y,
-            orientation_q.z,
-            orientation_q.w,
-        ]
-        (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(orientation_list)
+    #     # --- Orientation (Quaternion to Euler) ---
+    #     orientation_q = msg.pose.pose.orientation
+    #     orientation_list = [
+    #         orientation_q.x,
+    #         orientation_q.y,
+    #         orientation_q.z,
+    #         orientation_q.w,
+    #     ]
+    #     (roll, pitch, yaw) = tf.transformations.euler_from_quaternion(orientation_list)
 
-        # Convert yaw from radians to degrees
-        yaw_deg = degrees(yaw)
-        self.current_yaw = yaw_deg % 360
+    #     # Convert yaw from radians to degrees
+    #     yaw_deg = degrees(yaw)
+    #     self.current_yaw = yaw_deg % 360
 
-        # --- Velocities ---
-        linear_velocity_x = msg.twist.twist.linear.x
-        angular_velocity_z = msg.twist.twist.angular.z  # Yaw rate
+    #     # --- Velocities ---
+    #     linear_velocity_x = msg.twist.twist.linear.x
+    #     angular_velocity_z = msg.twist.twist.angular.z  # Yaw rate
 
-        distance: float = math.sqrt(
-            (position_x - self.init_pose.x) ** 2 + (position_y - self.init_pose.y) ** 2
-        )
-        if distance > 0.20:
-            # print('RECALCULADO CONSUMO DE ENERGIA')
-            # robot_actions_logger.logger.log(f'RECALCULADO CONSUMO DE ENERGIA {distance}')
-            self.init_pose = Pose(position_x, position_y)
-            # self.init_pose.x = position_x
-            # self.init_pose.y = position_y
+    #     distance: float = math.sqrt(
+    #         (position_x - self.init_pose.x) ** 2 + (position_y - self.init_pose.y) ** 2
+    #     )
+    #     if distance > 0.20:
+    #         # print('RECALCULADO CONSUMO DE ENERGIA')
+    #         # robot_actions_logger.logger.log(f'RECALCULADO CONSUMO DE ENERGIA {distance}')
+    #         self.init_pose = Pose(position_x, position_y)
+    #         # self.init_pose.x = position_x
+    #         # self.init_pose.y = position_y
 
     def recovery_subroutine(self):
         pass
@@ -497,7 +640,7 @@ class PointsScheduler(QObject):
             % 360
         )
 
-        if self.cancelled:
+        if self.schedulingCancelled:
             print("scan scan_subroutine cancelled")
             return [0]
 
@@ -531,7 +674,7 @@ class PointsScheduler(QObject):
         # time.sleep(3)
 
         while abs(self.current_yaw - theta_degrees) > yaw_tolerance:
-            if self.cancelled:
+            if self.schedulingCancelled:
                 print("cancelled set_target_pose")
                 return [0]
 

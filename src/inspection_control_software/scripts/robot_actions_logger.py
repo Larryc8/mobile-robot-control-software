@@ -8,7 +8,6 @@ from datetime import datetime
 
 import rospy
 from config_model import UserConfigFileManager
-from utils.custom_toolbutton import CustomToolButtom
 from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPalette, QTextCursor
 from PyQt5.QtWidgets import (
@@ -29,8 +28,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 from sensor_msgs.msg import BatteryState
-from utils.custom_label import ElidedLabel
 from styles.buttons import border_button_style, secondary_button_style
+from utils.custom_label import ElidedLabel
+from utils.custom_toolbutton import CustomToolButtom
 
 
 class CsvHandler:
@@ -85,7 +85,7 @@ class CsvHandler:
         with open(self.filepath, mode="a", newline="") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow(row_data)
-        print(f"Appended row: {row_data}")
+        # print(f"Appended row: {row_data}")
 
 
 # from PyQt5.QtGui import QDesktopServices
@@ -138,7 +138,11 @@ class FixedMessage(QGroupBox):
 
         # self.setContentsMargins(0, 0, 0, 0)
         self.user_config = UserConfigFileManager()
-        self.show_terminal_btn = CustomToolButtom(icon="./public/terminal_open.svg", icon2="./public/terminal_close.svg", tooltip="Terminal")
+        self.show_terminal_btn = CustomToolButtom(
+            icon="./public/terminal_open.svg",
+            icon2="./public/terminal_close.svg",
+            tooltip="Terminal",
+        )
         self.show_terminal_btn.clicked.connect(self.toggle_terminal)
 
         self.setFlat(True)
@@ -183,7 +187,7 @@ class FixedMessage(QGroupBox):
             "All Files (*);;Text Files (*.txt);;Python Files (*.py)",  # Filter
             options=options,
         )
-        print(fileName)
+        # print(fileName)
         self.text.setText(
             f"Para ver el historial de logs revise <span style='color: royalblue; text-decoration: underline'>{fileName}</span>"
         )
@@ -201,7 +205,7 @@ class RobotActionsLoggerView(QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._queue_size = 10
+        self._queue_size = 12
         self.log_queue = []
         self.log_history = []
         self.battery_state = 100
@@ -230,7 +234,6 @@ class RobotActionsLoggerView(QGroupBox):
             l.hide()
             l.setStyleSheet("font-family: 'Courier New'; font-size: 14px;")
 
-
         lb = FixedMessage()
         layout.addWidget(lb)
         lb.log_file_updated.connect(self.update_log_file)
@@ -251,9 +254,8 @@ class RobotActionsLoggerView(QGroupBox):
                 l.show()
             else:
                 l.hide()
-        print("terminal toggled: ", visible)
+        # print("terminal toggled: ", visible)
         pass
-
 
     def update_log(self, log_msg: str) -> None:
         if len(self.log_queue) == self._queue_size:
@@ -264,7 +266,7 @@ class RobotActionsLoggerView(QGroupBox):
 
         # self.log_display.clear()
         for i, text in enumerate(self.log_queue):
-            print(text)
+            # print(text)
             self.labels[i].setText(text)
 
     def update_log_file(self, filepath):
