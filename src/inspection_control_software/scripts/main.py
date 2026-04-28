@@ -5,35 +5,39 @@ import rospy
 from PyQt5.QtWidgets import (
     QMainWindow,
     QApplication,
-    QPushButton,
     QWidget,
     QTabWidget,
     QVBoxLayout,
-    QLabel
+    QMessageBox
 )
 
 from config_model import NodesManager
-# from rvizgui import MyViz
 from navbar import TopBar
 from home_view import HomePanel
 from configuration import ConfigPanel
-# from map_view import MappingPanel
-from better_image_display import ImageViewer
 from logsystem_view import LogPanel
 
 class App(QMainWindow):
     def __init__(self):
         super().__init__()
-        title = "The best GUI of the whole world"
-        left = 50
-        top = 50
-        width = 1500
-        height = 800
-        self.setWindowTitle(title)
-        self.setGeometry(left, top, width, height)
+        self.setWindowTitle("Panel de Control del Robot")
+        self.setGeometry(50, 50, 1500, 800)
 
         self.table_widget = MyTableWidget(self)
         self.setCentralWidget(self.table_widget)
+
+    def closeEvent(self, event):
+        reply = QMessageBox.warning(
+            self,
+            "Confirmar salida",
+            "¿Está seguro de que desea cerrar la aplicación?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
 
 
 class MyTableWidget(QWidget):
@@ -44,18 +48,12 @@ class MyTableWidget(QWidget):
         self.nodes_manager = NodesManager()
         self.tabs_names = ["Home", "Configuracion", "Sistema de alertas"]
 
-        # self.tabs_names = ["Home", "Configuracion"]
         self.parent = parent
-        self.parent.w = None
 
         self.tabs = QTabWidget()
-        # self.tabs.setTabPosition(QTabWidget.West)
         self.tabs_widget = {name: QWidget() for name in self.tabs_names}
 
-        [
-            self.tabs.addTab(tab, name)
-            for name, tab in  self.tabs_widget.items()
-        ]
+        [self.tabs.addTab(tab, name) for name, tab in self.tabs_widget.items()]
 
         self.tabs.setStyleSheet("""
             QTabBar::tab {
@@ -78,11 +76,9 @@ class MyTableWidget(QWidget):
 
         topbar = TopBar()
 
-        # Create  tab
         for name in self.tabs_widget.keys():
             self.tabs_widget[name].layout = QVBoxLayout()
 
-        print('main', parent)
         home_panel = HomePanel(nodes_manager=self.nodes_manager, parent=parent)
         patrols_scheduler = home_panel.patrol_panel.patrols_container.patrols_scheduler
         config_panel = ConfigPanel(nodes_manager=self.nodes_manager, parent=parent, patrols_scheduler=patrols_scheduler)
@@ -108,25 +104,13 @@ class MyTableWidget(QWidget):
         self.tabs_widget["Sistema de alertas"].layout.addWidget(LogPanel(node_manager=self.nodes_manager, parent=parent))
 
         [tab.setLayout(tab.layout) for tab in self.tabs_widget.values()]
-        self.button = QPushButton("Push for Window")
-        self.button.clicked.connect(self.show_new_window)
 
         self.layout.addWidget(topbar)
-        # self.layout.addWidget(self.button)
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)
 
-    def show_new_window(self, checked):
-        # self.parent.w = None
-        if self.parent.w is None:
-            self.parent.w = ImageViewer()
-            print('None ;; multiwindows')
-        self.parent.w.show()
-
-
 
 if __name__ == "__main__":
-    # rospy.init_node("interactive_markers_demo_node")
     rospy.init_node("harold_start_launch", anonymous=True)
     app = QApplication(sys.argv)
     app.setStyleSheet("""

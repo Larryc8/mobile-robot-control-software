@@ -37,27 +37,28 @@ class Place(Base):
 
 
 class MediaStorageImage(Base):
-    __tablename__ = "media_storage"
+    __tablename__ = "media_storage_images"
 
-    place_id = Column(Integer, ForeignKey("places.id"))
     id = Column(Integer, primary_key=True)
+    checkpoint_id = Column(Integer, ForeignKey("checkpoints.id"))
     filename = Column(String(255))
     extension = Column(String(10))  # To track if it's .pgm, .png, etc.
     image_bytes = Column(LargeBinary)
 
-    map = relationship("Map", back_populates="place")
+    checkpoint = relationship("Checkpoint", back_populates="media_storage")
 
 
 class MediaStorageFile(Base):
-    __tablename__ = "media_storage"
+    __tablename__ = "media_storage_map_files"
 
-    place_id = Column(Integer, ForeignKey("places.id"))
     id = Column(Integer, primary_key=True)
+    map_id = Column(Integer, ForeignKey("maps.id"))
     filename = Column(String(255))
     extension = Column(String(10))  # To track if it's .pgm, .png, etc.
+    image_bytes = Column(LargeBinary)
     metadata_json = Column(JSONB)
 
-    map = relationship("Map", back_populates="place")
+    map = relationship("Map", back_populates="media_storage")
 
 
 class Map(Base):
@@ -70,6 +71,7 @@ class Map(Base):
     place = relationship("Place", back_populates="map")
     checkpoint = relationship("Checkpoint", back_populates="map")
     alerts = relationship("Alert", back_populates="map")
+    media_storage = relationship("MediaStorageFile", back_populates="map")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
@@ -119,6 +121,7 @@ class Checkpoint(Base):
     map = relationship("Map", back_populates="checkpoint")
 
     calibrations = relationship("Calibration", back_populates="checkpoint_cal")
+    media_storage = relationship("MediaStorageImage", back_populates="checkpoint")
 
     __table_args__ = (
         CheckConstraint(

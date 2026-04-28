@@ -1,15 +1,26 @@
+import os
 from datetime import datetime
+from enum import Enum
+from typing import List, Optional, Tuple
 
 import numpy as np
 import psycopg2
-from sklearn.feature_selection import mutual_info_regression
+import yaml
+from internal_storage.tables import (
+    Alert,
+    Calibration,
+    Checkpoint,
+    CheckpointLink,
+    Map,
+    MediaStorageFile,
+    MediaStorageImage,
+    Patrol,
+    PatrolLink,
+    Place,
+)
+from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
 from sklearn.metrics import mean_squared_error
-from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    String,
     and_,
     asc,
     create_engine,
@@ -19,22 +30,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
-
-from enum import Enum
-from typing import List, Optional, Tuple
-
-from internal_storage.tables import (
-    Alert,
-    Calibration,
-    Checkpoint,
-    CheckpointLink,
-    Map,
-    Patrol,
-    PatrolLink,
-    Place,
-)
-from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
-
 # cursor.execute("SELECT version();")
 # db_version = cursor.fetchone()
 # print(f"Database version: {db_version[0]}")
@@ -393,14 +388,14 @@ class InternalStorageManager:
 
                 for point, _ in points:
                     _points[point.id] = {
-                        'id': point.id,
-                        'x': point.x_position,
-                        'y': point.y_position,
-                        'map_file': mapfile,
-                        'yaw': point.yaw,
+                        "id": point.id,
+                        "x": point.x_position,
+                        "y": point.y_position,
+                        "map_file": mapfile,
+                        "yaw": point.yaw,
                         # 'gui_yaw': point.gui_yaw,
-                        'image': point.image,
-                        'aruco_pose_vector': point.aruco_pose_vector,
+                        "image": point.image,
+                        "aruco_pose_vector": point.aruco_pose_vector,
                     }
 
                     # id, x_meters, y_meters, map_file, yaw = point
@@ -717,6 +712,78 @@ class InternalStorageManager:
             print(f"Error setting up data: {e}")
             # return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
             return {"std_dev_value": -1, "mean_value": -1}
+
+    def save_ondisk_backup_files(
+        self, record_id, output_image_name: str = "", output_yaml_name: str = ""
+    ):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        # 1. Fetch the record by ID
+        record = session.query(MediaStorageFiles).filter_by(id=record_id).first()
+
+        if not record:
+            print(f"No record found with ID: {record_id}")
+            return
+
+        # 2. Save the Image (PGM, PNG, etc.)
+        # Since we stored it as LargeBinary, we write 'wb' (write binary)
+        if output_image_name:
+            with open(output_image_name, "wb") as img_file:
+                img_file.write(record.image_bytes)
+
+        # 3. Save the YAML
+        # We retrieve the JSONB as a Python dict, then dump it to YAML format
+        if output_yaml_name:
+            with open(output_yaml_name, "w") as yml_file:
+                yaml.dump(record.metadata_json, yml_file, default_flow_style=False)
+
+        print(
+            f"Success! Saved image to '{output_image_name}' and YAML to '{output_yaml_name}'."
+        )
+
+        # Example Usage:
+        # save_from_db_to_disk(1, 'restored_image.pgm', 'restored_config.yaml')
+
+    def backup_file(self, image_path: str = "", yaml_path: str = ""):
+
+        # Extract file info
+        name = os.path.basename(image_path)
+        ext = os.path.splitext(image_path)[1].lower()
+        new_file = None
+        yaml_data = None
+        binary_data = None
+
+        # 1. Read Image (Works for PGM, PNG, JPG, etc.)
+        if image_path:
+            with open(image_path, "rb") as f:
+                binary_data = f.read()
+
+        # 2. Read YAML
+        if yaml_path:
+            with open(yaml_path, "r") as f:
+                yaml_data = yaml.safe_load(f)
+
+        if yaml_data and binary_data:
+            new_file = MediaStorageFile(
+                filename=name,
+                extension=ext,
+                image_bytes=binary_data,
+                metadata_json=yaml_data,
+            )
+        else:
+            new_file = MediaStorageImage(
+                filename=name,
+                extension=ext,
+                image_bytes=binary_data,
+            )
+
+        # 3. Store in Database
+
+        session.add(new_file)
+        session.commit()
+        print(f"Stored {name} and {yaml_path} successfully.")
 
     def loss_func(self, x, y):
         # x = np.array(x).reshape(-1, 1)
