@@ -34,7 +34,7 @@ class RobotConfigForm(QWidget):
 
     def init_ui(self):
         # Window settings
-        self.setWindowTitle("Robot Configuration Setup")
+        self.setWindowTitle("Configuración del Robot")
         # self.setGeometry(100, 100, 500, 300)  # x, y, width, height
 
         # Main Layout
@@ -66,7 +66,7 @@ class RobotConfigForm(QWidget):
         self.robots_dropdown.currentIndexChanged.connect(self.handleDropDownRobotChange)
 
         # Title
-        title_label = QLabel("Enter Robot Details")
+        title_label = QLabel("Ingrese los detalles del robot")
         main_layout.addWidget(title_label)
 
         main_layout.addWidget(self.robots_dropdown)
@@ -77,45 +77,45 @@ class RobotConfigForm(QWidget):
 
         # 1. Robot Name
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("e.g., TurtleBot3")
-        form_layout.addRow("Robot Name:", self.name_input)
+        self.name_input.setPlaceholderText("ej., TurtleBot3")
+        form_layout.addRow("Nombre del robot:", self.name_input)
 
         # 2. URDF File Path (Custom layout for line edit + browse button)
         self.urdf_input = QLineEdit()
-        self.urdf_input.setPlaceholderText("/path/to/model.urdf")
+        self.urdf_input.setPlaceholderText("/ruta/al/modelo.urdf")
 
-        browse_btn = QPushButton("Browse...")
+        browse_btn = QPushButton("Explorar...")
         browse_btn.clicked.connect(self.browse_file)
 
         urdf_layout = QHBoxLayout()
         urdf_layout.addWidget(self.urdf_input)
         urdf_layout.addWidget(browse_btn)
 
-        form_layout.addRow("URDF File Path:", urdf_layout)
+        form_layout.addRow("Ruta del archivo URDF:", urdf_layout)
 
         # 3. Odom Topic
         self.odom_input = QLineEdit()
-        self.odom_input.setPlaceholderText("e.g., /odom")
-        form_layout.addRow("Odom Topic Name:", self.odom_input)
+        self.odom_input.setPlaceholderText("ej., /odom")
+        form_layout.addRow("Nombre del tópico Odom:", self.odom_input)
 
         # 4. Command Vel Topic
         self.cmd_vel_input = QLineEdit()
-        self.cmd_vel_input.setPlaceholderText("e.g., /cmd_vel")
-        form_layout.addRow("Cmd Vel Topic Name:", self.cmd_vel_input)
+        self.cmd_vel_input.setPlaceholderText("ej., /cmd_vel")
+        form_layout.addRow("Nombre del tópico Cmd Vel:", self.cmd_vel_input)
 
         # 5. Lidar Topic
         self.lidar_input = QLineEdit()
-        self.lidar_input.setPlaceholderText("e.g., /scan")
-        form_layout.addRow("Lidar Topic Name:", self.lidar_input)
+        self.lidar_input.setPlaceholderText("ej., /scan")
+        form_layout.addRow("Nombre del tópico Lidar:", self.lidar_input)
 
         # 3. Odom Topic
         self.imu_input = QLineEdit()
-        self.imu_input.setPlaceholderText("e.g., /imu")
-        form_layout.addRow("Imu Topic Name:", self.imu_input)
+        self.imu_input.setPlaceholderText("ej., /imu")
+        form_layout.addRow("Nombre del tópico IMU:", self.imu_input)
 
         self.baseframe_input = QLineEdit()
-        self.baseframe_input.setPlaceholderText("e.g., /base_link")
-        form_layout.addRow("Base Frame Name:", self.baseframe_input)
+        self.baseframe_input.setPlaceholderText("ej., /base_link")
+        form_layout.addRow("Nombre del marco base:", self.baseframe_input)
 
         # Add form layout to main layout
         main_layout.addLayout(form_layout)
@@ -128,7 +128,7 @@ class RobotConfigForm(QWidget):
         main_layout.addStretch(2)
 
         # Submit Button
-        self.submit_btn = QPushButton("Save Configuration")
+        self.submit_btn = QPushButton("Guardar configuración")
         self.submit_btn.setStyleSheet(secondary_button_style)
         add_option_btn.clicked.connect(self.submit_form)
         delete_option_btn.clicked.connect(self.delete_robot)
@@ -142,9 +142,9 @@ class RobotConfigForm(QWidget):
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select URDF File",
+            "Seleccionar archivo URDF",
             "",
-            "URDF Files (*.urdf);;All Files (*)",
+            "Archivos URDF (*.urdf);;Todos los archivos (*)",
             options=options,
         )
         if file_path:
@@ -179,23 +179,23 @@ class RobotConfigForm(QWidget):
         }
 
         if not data["robot"]:
-            self.alert_label.setText("Llene todos los campos, ingrese un nombre valido")
+            self.alert_label.setText("Llene todos los campos, ingrese un nombre válido")
             return
         if not data["odom_topic"]:
             self.alert_label.setText(
-                "Llene todos los campos, ingrese un topico para la odometria"
+                "Llene todos los campos, ingrese un tópico para la odometría"
             )
             return
 
         if not data["cmd_vel_topic"]:
             self.alert_label.setText(
-                "Llene todos los campos, ingrese un topico valido de cmd_vel"
+                "Llene todos los campos, ingrese un tópico válido de cmd_vel"
             )
             return
 
         if not data["lidar_topic"]:
             self.alert_label.setText(
-                "Llene todos los campos, ingrese un topico valido para el lidar"
+                "Llene todos los campos, ingrese un tópico válido para el lidar"
             )
             return
 

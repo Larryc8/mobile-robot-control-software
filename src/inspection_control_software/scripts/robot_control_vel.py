@@ -2,7 +2,6 @@ import sys
 
 import rospy
 from config_model import UserConfigFileManager
-from utils.custom_toolbutton import CustomToolButtom
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
@@ -16,6 +15,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 from styles.buttons import dropdown_style, secondary_button_style, tertiary_button_style
+from utils.custom_toolbutton import CustomToolButtom
 
 # Dios mio dame m*a
 
@@ -43,7 +43,7 @@ class RobotVelocityController(QWidget):
         info_label_style = "color: gray; font-style: italic; margin-top: 5px;"
 
         # Title
-        title_label = QLabel("Control Panel")
+        title_label = QLabel("Panel de Control")
         title_label.setStyleSheet("font-size: 16px; font-weight: bold; ")
         main_layout.addWidget(title_label)
 
@@ -57,7 +57,7 @@ class RobotVelocityController(QWidget):
 
         # --- Conduction Mode Section ---
         mode_layout = QVBoxLayout()
-        mode_title = QLabel("Conduction Mode")
+        mode_title = QLabel("Modo de Conducción")
         mode_title.setStyleSheet("font-weight: bold;")
         mode_layout.addWidget(mode_title)
 
@@ -67,15 +67,21 @@ class RobotVelocityController(QWidget):
         # buttons_layout.setContentsMargins(0, 0, 0, 0)
         buttons_layout.setAlignment(Qt.AlignLeft)
 
-        self.btn_soft = CustomToolButtom('Soft', icon='./public/speed_low.svg', size=60)
+        self.btn_soft = CustomToolButtom(
+            "Suave", icon="./public/speed_low.svg", size=60
+        )
         self.btn_soft.clicked.connect(lambda: self.update_mode("Soft"))
         buttons_layout.addWidget(self.btn_soft, 2)
 
-        self.btn_medium = CustomToolButtom('Medium', icon='./public/speed_medium.svg', size=60)
+        self.btn_medium = CustomToolButtom(
+            "Media", icon="./public/speed_medium.svg", size=60
+        )
         self.btn_medium.clicked.connect(lambda: self.update_mode("Medium"))
         buttons_layout.addWidget(self.btn_medium)
 
-        self.btn_aggressive = CustomToolButtom('Aggressive', icon='./public/speed_high.svg', size=60)
+        self.btn_aggressive = CustomToolButtom(
+            "Agresivo", icon="./public/speed_high.svg", size=60
+        )
         self.btn_aggressive.setStyleSheet("color: red;")
         self.btn_aggressive.clicked.connect(lambda: self.update_mode("Aggressive"))
         buttons_layout.addWidget(self.btn_aggressive)
@@ -83,7 +89,7 @@ class RobotVelocityController(QWidget):
         mode_layout.addLayout(buttons_layout)
 
         # Description Label
-        self.mode_description = QLabel("Select a mode to see impact.")
+        self.mode_description = QLabel("Seleccione un modo para ver su impacto.")
         self.mode_description.setWordWrap(True)
         self.mode_description.setStyleSheet(info_label_style)
         mode_layout.addWidget(self.mode_description)
@@ -93,23 +99,23 @@ class RobotVelocityController(QWidget):
 
         # --- Navigation Parameters Section (New) ---
         nav_layout = QVBoxLayout()
-        nav_title = QLabel("Navigation Parameters")
+        nav_title = QLabel("Parámetros de Navegación")
         nav_title.setStyleSheet(
             "font-weight: bold; border-top: 1px solid #ccc; padding-top: 10px;"
         )
         nav_layout.addWidget(nav_title)
 
         self.timeout_items = [
-            ("5 seconds", 5),
-            ("10 seconds", 10),
-            ("20 seconds", 20),
-            ("30 seconds", 30),
-            ("60 seconds", 60),
+            ("5 segundos", 5),
+            ("10 segundos", 10),
+            ("20 segundos", 20),
+            ("30 segundos", 30),
+            ("60 segundos", 60),
         ]
 
         # Stuck Timeout Dropdown
         timeout_layout = QHBoxLayout()
-        timeout_label = QLabel("Stuck Timeout:")
+        timeout_label = QLabel("Tiempo límite de bloqueo:")
         self.timeout_combo = QComboBox()
         # self.timeout_combo.setStyleSheet(dropdown_style)
 
@@ -126,7 +132,7 @@ class RobotVelocityController(QWidget):
         # Path Tolerance Slider
         tolerance_layout = QVBoxLayout()
         tolerance_header = QHBoxLayout()
-        tolerance_label = QLabel("Path Tolerance (m):")
+        tolerance_label = QLabel("Tolerancia de ruta (m):")
 
         self.lcd_tolerance = QLCDNumber()
         self.lcd_tolerance.setSegmentStyle(QLCDNumber.Flat)
@@ -163,7 +169,7 @@ class RobotVelocityController(QWidget):
 
     def update_mode(self, mode):
         if mode == "Soft":
-            text = "Impact: Low acceleration/speed. Safe for crowded areas."
+            text = "Impacto: Baja aceleración/velocidad. Seguro para áreas concurridas."
             if not self.btn_soft.isSelected():
                 self.btn_soft.toggle_selected()
                 rospy.set_param("/max_linear_velocity", 0.1)
@@ -173,7 +179,7 @@ class RobotVelocityController(QWidget):
             if self.btn_aggressive.isSelected():
                 self.btn_aggressive.toggle_selected()
         elif mode == "Medium":
-            text = "Impact: Balanced speed. Standard behavior."
+            text = "Impacto: Velocidad equilibrada. Comportamiento estándar."
             if not self.btn_medium.isSelected():
                 self.btn_medium.toggle_selected()
                 rospy.set_param("/max_linear_velocity", 0.2)
@@ -183,7 +189,7 @@ class RobotVelocityController(QWidget):
             if self.btn_aggressive.isSelected():
                 self.btn_aggressive.toggle_selected()
         elif mode == "Aggressive":
-            text = "Impact: High torque/speed. Faster response."
+            text = "Impacto: Alto torque/velocidad. Respuesta más rápida."
             if not self.btn_aggressive.isSelected():
                 self.btn_aggressive.toggle_selected()
                 rospy.set_param("/max_linear_velocity", 0.4)
@@ -192,7 +198,6 @@ class RobotVelocityController(QWidget):
                 self.btn_medium.toggle_selected()
             if self.btn_soft.isSelected():
                 self.btn_soft.toggle_selected()
-
 
         self.user_config_hanler.update_value("conduction_mode", mode)
 

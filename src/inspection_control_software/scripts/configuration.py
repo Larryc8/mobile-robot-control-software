@@ -16,6 +16,7 @@ from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QPixmap, QTransform
 from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -31,7 +32,6 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QFrame,
 )
 from pyqttoast import Toast, ToastPreset
 from robot_control_vel import (
@@ -488,14 +488,15 @@ class FriendlyConfig(QWidget):
             QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         )
 
-        a = RobotConfigForm()
-        b = RobotVelocityController()
+        config_form = RobotConfigForm()
+        navigation_settings = RobotVelocityController()
+
         title = QLabel("Detalles de robot")
         title.setStyleSheet(subtitle_label_style)
         self.layout.addWidget(title, 0, 0, 1, -1)
         # subtitle_label_style
-        self.layout.addWidget(a, 1, 0, 3, 1)
-        self.layout.addWidget(b, 4, 0)
+        self.layout.addWidget(config_form, 1, 0, 3, 1)
+        self.layout.addWidget(navigation_settings, 4, 0)
         self.layout.addWidget(
             Wrapper(
                 children=[
@@ -510,7 +511,7 @@ class FriendlyConfig(QWidget):
             1,
         )
         self.todo_widget = TodoWidget()
-        self.layout.addWidget(self.todo_widget, 3, 1, 4, 1) # Add it to column 1
+        # self.layout.addWidget(self.todo_widget, 3, 1, 4, 1) # Add it to column 1
         self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
         self.setLayout(self.layout)
 
@@ -611,9 +612,11 @@ class TodoItem(QWidget):
         self.header_layout.setContentsMargins(10, 5, 10, 5)
 
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #333;")
-        
-        self.expand_icon = QLabel("▼") # Dropdown indicator
+        self.title_label.setStyleSheet(
+            "font-weight: bold; font-size: 14px; color: #333;"
+        )
+
+        self.expand_icon = QLabel("▼")  # Dropdown indicator
         self.expand_icon.setStyleSheet("color: #666; font-size: 10px;")
 
         self.delete_btn = QPushButton()
@@ -632,7 +635,9 @@ class TodoItem(QWidget):
         self.details_layout = QVBoxLayout(self.details_widget)
         self.details_label = QLabel(details)
         self.details_label.setWordWrap(True)
-        self.details_label.setStyleSheet("color: #555; padding: 5px; font-style: italic;")
+        self.details_label.setStyleSheet(
+            "color: #555; padding: 5px; font-style: italic;"
+        )
         self.details_layout.addWidget(self.details_label)
         self.details_widget.setVisible(False)
 
@@ -676,39 +681,39 @@ class TodoWidget(QGroupBox):
                 padding-top: 15px;
             }
         """)
-        
+
         self.main_layout = QVBoxLayout()
-        
+
         # Input section
         input_container = QHBoxLayout()
         self.todo_input = QLineEdit()
         self.todo_input.setPlaceholderText("Nueva tarea...")
         self.todo_input.setStyleSheet(modern_line_edit_style)
-        
+
         self.add_btn = QPushButton("Añadir")
         self.add_btn.setStyleSheet(primary_button_style)
         self.add_btn.setFixedWidth(80)
         self.add_btn.clicked.connect(self.add_todo)
-        
+
         input_container.addWidget(self.todo_input)
         input_container.addWidget(self.add_btn)
-        
+
         # Details input (optional for better demo)
         self.details_input = QLineEdit()
         self.details_input.setPlaceholderText("Detalles (opcional)...")
         self.details_input.setStyleSheet(simple_line_edit_style)
-        
+
         self.main_layout.addLayout(input_container)
         self.main_layout.addWidget(self.details_input)
-        
+
         # List container
         self.list_layout = QVBoxLayout()
         self.list_layout.setAlignment(Qt.AlignTop)
         self.list_layout.setSpacing(5)
-        
+
         self.main_layout.addLayout(self.list_layout)
         self.main_layout.addStretch()
-        
+
         self.setLayout(self.main_layout)
 
     def add_todo(self):

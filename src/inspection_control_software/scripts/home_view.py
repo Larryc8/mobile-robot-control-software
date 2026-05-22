@@ -1831,12 +1831,6 @@ class Patrol(QGroupBox):
         # self.menu_button.setMaximumWidth(30)
 
         # from custom_tooltip import CustomToolTip
-        tooltip = CustomToolTip(self, delay=100)
-        tooltip.install(self.patrol_time_label, "Hora patrulla")
-        tooltip1 = CustomToolTip(self, delay=100)
-        tooltip1.install(self.patrol_name_label, "Dias patrulla")
-        tooltip2 = CustomToolTip(self, delay=100)
-        tooltip2.install(self.points_checked_label, "Puntos patrulla")
 
         self.checkbox.stateChanged.connect(self.select)
         self.layout.setSpacing(2)

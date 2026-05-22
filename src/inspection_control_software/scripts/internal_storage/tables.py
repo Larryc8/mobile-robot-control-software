@@ -183,8 +183,19 @@ class Calibration(Base):
 
 
 if __name__ == "__main__":
+    from sqlalchemy import MetaData
+
+    def drop_everything(engine):
+        metadata = MetaData()
+        # Reflect looks at the database and "discovers" all existing tables
+        metadata.reflect(bind=engine)
+
+        # Drop all discovered tables
+        metadata.drop_all(bind=engine)
+
     DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
     engine = create_engine(DATABASE_URL)
+    drop_everything(engine)
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)  # Create tables if they don't exist
     session = Session()
