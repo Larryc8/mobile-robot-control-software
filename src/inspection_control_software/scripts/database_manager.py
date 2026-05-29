@@ -10,24 +10,15 @@ from internal_storage.tables import (
     Alert,
     Calibration,
     Checkpoint,
-    CheckpointLink,
     Map,
-    MediaStorageFile,
-    MediaStorageImage,
     Patrol,
-    PatrolLink,
     Place,
+    patrols_checkpoints_association,
 )
 from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
 from sklearn.metrics import mean_squared_error
-from sqlalchemy import (
-    and_,
-    asc,
-    create_engine,
-    desc,
-    func,
-)
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy import and_, asc, create_engine, desc, func, insert
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
 # cursor.execute("SELECT version();")
@@ -52,6 +43,39 @@ class InternalStorageManager:
         self.db_password = "123"
         self.db_host = "localhost"
         self.db_port = "5432"
+
+    def track_inspection(self, data):
+        patrol_id = data.get("patrol_id")
+        point_id = data.get("point_id")
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        try:
+            # 2. Define the data you want to insert
+            new_associations = [
+                {
+                    "patrol_id": patrol_id,
+                    "checkpoint_id": point_id,
+                    "date": datetime.now().date(),
+                    "time": datetime.now().time(),
+                },
+            ]
+
+            # 3. Execute the insert statement
+            # .execute() automatically handles a list of dictionaries as a bulk insert
+            session.execute(insert(patrols_checkpoints_association), new_associations)
+
+            # 4. Commit the transaction to save changes
+            session.commit()
+            print("Successfully populated the association table!")
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred: {e}")
+
+        finally:
+            session.close()
 
     def save_places(self, places):
         engine = create_engine(DATABASE_URL)
@@ -116,21 +140,10 @@ class InternalStorageManager:
         session = Session()
         try:
             for id in ids:
-                # cursor.execute(
-                #     f"DELETE FROM patrol_link WHERE patrol_id = '{id}'"
-                # )
-                # connection.commit()  # Commit the transaction
-                deleted_rows = (
-                    session.query(PatrolLink)
-                    .filter(PatrolLink.patrol_id == id)
-                    .delete(synchronize_session=False)
+                session.query(Patrol).filter(Patrol.id == id).update(
+                    {Patrol.enabled: False}
                 )
                 session.commit()
-
-                # if deleted_rows > 0:
-                #     print(f"Successfully deleted {deleted_rows} row(s) for user '{username_to_delete}'.")
-                # else:
-                #     print(f"No rows deleted for user '{username_to_delete}'. User not found or already deleted.")
 
         except Exception as e:
             session.rollback()
@@ -163,13 +176,8 @@ class InternalStorageManager:
         session = Session()
         try:
             allpatrols = {}
-            # cursor.execute(
-            #     "SELECT patrol.id, patrol.time, patrol.days FROM  patrol INNER JOIN patrol_link ON patrol.id  = patrol_link.patrol_id;"
-            # )
-            rows = (
-                session.query(PatrolLink, Patrol).join(PatrolLink).all()
-            )  # cursor.fetchall()
-            for patrol_link, patrol in rows:
+            rows = session.query(Patrol).filter(Patrol.enabled == True)
+            for patrol in rows:
                 # print(row)
                 id, time, days = patrol.id, patrol.time, patrol.days
                 formated_time = time.strftime("%H%M")
@@ -242,13 +250,13 @@ class InternalStorageManager:
                 time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
                 days = ",".join(days)
 
-                patrol = Patrol(id=id, time=time, days=days)
+                patrol = Patrol(id=id, time=time, days=days, enabled=True)
 
                 session.add(patrol)
                 session.commit()
-                patrol_link = PatrolLink(patrol=patrol)
-                session.add(patrol_link)
-                session.commit()
+                # patrol_link = PatrolLink(patrol=patrol)
+                # session.add(patrol_link)
+                # session.commit()
                 print("Sample data added successfully!")
 
         except Exception as e:
@@ -258,59 +266,43 @@ class InternalStorageManager:
             session.close()
 
     ####### point
-    def save_points(self, points: dict):
+    def save_point(self, point: dict):
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
         try:
-            id1 = list(points.keys())[0]
-            mapfile = points.get(id1).get("mapfile")
+            for id, point_data in point.items():
+                mapfile = point_data.get("mapfile")
 
-            map_db = session.query(Map).filter_by(file_path=mapfile).first()
-            session.commit()
-
-            if map_db:
-                joint_rows = (
-                    session.query(CheckpointLink, Checkpoint)
-                    .join(Checkpoint)
-                    .filter(Checkpoint.map_id == map_db.id)
-                )
-                session.commit()
-                for checkpoint_link, checkpoint in joint_rows:
-                    print("points joint", checkpoint_link)
-                    session.delete(checkpoint_link)
-                    session.commit()
-            else:
-                map_db = Map(file_path=mapfile)
+                map_db = session.query(Map).filter_by(file_path=mapfile).first()
                 session.commit()
 
-            _points = []
-            for id, point in points.items():
-                x = point.get("x_meters")
-                y = point.get("y_meters")
-                mapfile = point.get("mapfile")
-                yaw = point.get("yaw")
-                gui_yaw = point.get("gui_yaw")
-
-                checkpoint_db = session.query(Checkpoint).filter_by(id=id).first()
-                if not checkpoint_db:
-                    checkpoint = Checkpoint(
-                        id=id,
-                        x_position=x,
-                        y_position=y,
-                        yaw=yaw,
-                        map=map_db,
-                        status=0,
-                        gui_yaw=gui_yaw,
+                if True:
+                    session.add(
+                        Checkpoint(
+                            id=id,
+                            map_id=1,
+                            x_position=point_data.get("x_meters"),
+                            y_position=point_data.get("y_meters"),
+                            yaw=point_data.get("yaw"),
+                        )
                     )
-                    session.add(checkpoint)
                     session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+            session.close()
+            return e
+        finally:
+            session.close()
 
-                    session.add(CheckpointLink(checkpoint=checkpoint))
-                    session.commit()
-                else:
-                    session.add(CheckpointLink(checkpoint=checkpoint_db))
-                    session.commit()
+    def update_point(self, id: str, point: dict):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            map_db = session.query(Checkpoint).filter(Checkpoint.id == id).update(point)
+            session.commit()
 
         except Exception as e:
             session.rollback()
@@ -835,9 +827,19 @@ class DataBase(QThread):
             self.internal_storage_manager.update_patrol(self.data)
             self.action_completed.emit("Success", {})
             return
-        if self.action == "save_points":
-            self.internal_storage_manager.save_points(self.data)
-            self.action_completed.emit("SuccessSavePoints", {})
+        if self.action == "save_point":
+            a = self.internal_storage_manager.save_point(self.data)
+            self.action_completed.emit("SuccessSavePoints", {"a": a})
+
+        if self.action == "track_inspection":
+            a = self.internal_storage_manager.track_inspection(self.data)
+            self.action_completed.emit("SuccessTrackInspection", {"a": a})
+
+        if self.action == "update_point":
+            for key, value in self.data.items():
+                self.internal_storage_manager.update_point(key, value)
+            self.action_completed.emit("SuccessUpdatePoint", {})
+            return
 
         if self.action == "add_points":
             self.internal_storage_manager.add_points(self.data, self.map_file)

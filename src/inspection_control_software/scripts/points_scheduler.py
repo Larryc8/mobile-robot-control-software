@@ -85,7 +85,8 @@ class PointsScheduler(QObject):
         self.current_yaw = None
         self.target_yaw = None
         self.current_point_calibration = None
-        self.database = None
+        self.__database = None
+        self.__database1 = None
         self.on_calibration = False
         self.current_patrolid = None
         self._goals = {}
@@ -169,16 +170,16 @@ class PointsScheduler(QObject):
         """Calculates cumulative Euclidean distance."""
 
         if self.current_acml_pose is None:
-            rospy.loginfo("current_acml_pose is None")
+            # rospy.loginfo("current_acml_pose is None")
             return
 
         if self.last_odom_pose is None:
-            rospy.loginfo("last_odom_pose is None")
+            # rospy.loginfo("last_odom_pose is None")
             self.last_odom_pose = msg.pose.pose.position
             return
 
         if self.__home_point is None:
-            rospy.loginfo("__home_point is None")
+            # rospy.loginfo("__home_point is None")
             return
 
         current_pose = msg.pose.pose.position
@@ -435,6 +436,7 @@ class PointsScheduler(QObject):
         # self.patrol_progress.emit(self.current_patrolid, len(self.goals), len(self._goals))
         rospy.loginfo("Finished in state %s %s", str(state), str(len(self.goals)))
         if state in [1, 0, 3]:
+            self.track_inspection()
             if not len(self.goals) == self.goals_count:
                 self.points_left = self.points_left - 1
                 self.subroutines_wrapper()
@@ -462,6 +464,21 @@ class PointsScheduler(QObject):
             return
 
         self.dispatch(str(self.current_patrolid))
+
+    def track_inspection(self):
+        rospy.loginfo("tracking inspection")
+        if self.__database1 is not None and self.__database1.isRunning():
+            return
+
+        self.__database1 = DataBase(
+            action="track_inspection",
+            data={"patrol_id": self.current_patrolid, "point_id": self.current_pointid},
+        )
+        self.__database1.action_completed.connect(self.database_task_finished)
+        self.__database1.start()
+
+    def _db_is_busy(self) -> bool:
+        return self.__database is not None and self.__database.isRunning()
 
     def active_cb(self):
         rospy.loginfo("Goal just went active")
@@ -491,7 +508,7 @@ class PointsScheduler(QObject):
 
     def update_points(self, points: list):
         self._goals = points.copy()
-        print("from points_scheduler POINTS UPDATE")
+        # print("from points_scheduler POINTS UPDATE")
 
     def image_callback(self, msg):
         try:
@@ -735,7 +752,7 @@ class PointsScheduler(QObject):
     def save_calibration(
         self, calibration_value: float, calibration_vector: list, map_filename: str, id
     ) -> None:
-        self.database = DataBase(
+        self.__database = DataBase(
             action="save_calibration",
             data={
                 "checkpoint_id": id,
@@ -743,22 +760,22 @@ class PointsScheduler(QObject):
                 "vector": calibration_vector,
             },
         )
-        self.database.action_completed.connect(self.database_task_finished)
-        self.database.start()
+        self.__database.action_completed.connect(self.database_task_finished)
+        self.__database.start()
 
     def get_calibration(self, current_calibration_vector, id):
-        self.database = DataBase(
+        self.__database = DataBase(
             action="get_calibration",
             data={
                 "pointid": id,
                 "current_calibration_vector": current_calibration_vector,
             },
         )
-        self.database.action_completed.connect(self.database_task_finished)
-        self.database.start()
+        self.__database.action_completed.connect(self.database_task_finished)
+        self.__database.start()
 
     def database_task_finished(self, msg, data):
-        print("datbase calibration Finished: ", msg)
+        print("datbase calibration Finished: ", msg, data)
 
         if msg == "SuccessGetCalibration":
             mean = data["mean_value"]
@@ -770,9 +787,14 @@ class PointsScheduler(QObject):
                 f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {ref}"
             )
 
-        self.database.quit()
-        self.database.wait()
-        self.database = None
+            self.__database.quit()
+            self.__database.wait()
+            self.__database = None
+            return
+
+        self.__database1.quit()
+        self.__database1.wait()
+        self.__database1 = None
 
 
 # Can do other work here
