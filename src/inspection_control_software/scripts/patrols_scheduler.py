@@ -531,6 +531,8 @@ class PatrolsEscheduler(QObject):
 
     def send_points_data(self, map_file):
         self.send_database_action(action="get_points", data={"map_file": map_file})
+
+        rospy.loginfo(map_file)
         # self.get_stored_database_points.emit()
 
     def handleWeekDayChanged(self, current_weekday):

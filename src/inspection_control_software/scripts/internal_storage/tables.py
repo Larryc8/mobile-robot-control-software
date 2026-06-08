@@ -25,8 +25,8 @@ Base = declarative_base()
 patrols_checkpoints_association = Table(
     "patrols_checkpoints",
     Base.metadata,
-    Column("patrol_id", ForeignKey("patrols.id"), primary_key=True),
-    Column("checkpoint_id", ForeignKey("checkpoints.id"), primary_key=True),
+    Column("patrol_id", ForeignKey("patrols.id")),
+    Column("checkpoint_id", ForeignKey("checkpoints.id")),
     Column("date", Date),
     Column("time", Time),
 )

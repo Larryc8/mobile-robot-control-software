@@ -122,11 +122,13 @@ class InternalStorageManager:
         session = Session()
         try:
             for id, patrol in patrols_data.items():
-                patrol_db = session.query(Patrol).filter_by(id=id).first()
                 days = list(patrol.get("days").keys())
                 days = ",".join(days)
                 time = list(patrol.get("time"))
                 time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                session.query(Patrol).filter_by(id=id).update(
+                    {Patrol.days: days, Patrol.time: time}
+                )
                 session.commit()
         except Exception as e:
             session.rollback()
@@ -270,18 +272,31 @@ class InternalStorageManager:
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
+
+        def get_image_bytes(file_path: str) -> bytes:
+            try:
+                with open(file_path, "rb") as image_file:
+                    return image_file.read()
+
+            except FileNotFoundError:
+                print(f"Warning: File not found at {file_path}. Saving without bytes.")
+                return b""
+
         try:
             for id, point_data in point.items():
                 mapfile = point_data.get("mapfile")
+                mapfile = mapfile.split(".")[0]
 
                 map_db = session.query(Map).filter_by(file_path=mapfile).first()
                 session.commit()
 
-                if True:
+                print("DB MAP query, real", mapfile, map_db)
+
+                if map_db:
                     session.add(
                         Checkpoint(
                             id=id,
-                            map_id=1,
+                            map=map_db,
                             x_position=point_data.get("x_meters"),
                             y_position=point_data.get("y_meters"),
                             yaw=point_data.get("yaw"),
@@ -291,8 +306,6 @@ class InternalStorageManager:
         except Exception as e:
             session.rollback()
             print(f"Error setting up data: {e}")
-            session.close()
-            return e
         finally:
             session.close()
 
@@ -318,7 +331,7 @@ class InternalStorageManager:
             map_db = Map(
                 file_path=mapfile
             )  # session.query(Map).filter_by(file_path=mapfile).first()
-            print(f"{__name__} {mapfile}")
+            # print(f"{__name__} {mapfile}")
             session.add(map_db)
             session.commit()
             print(f"{__name__} point number {len(points)}")
@@ -328,9 +341,9 @@ class InternalStorageManager:
                 y = point.get("y_meters")
                 mapfile = point.get("mapfile")
                 yaw = point.get("yaw")
-                gui_yaw = point.get("gui_yaw")
                 image = point.get("image")
-                aruco_pose = point.get("aruco_pose")
+                image_content = point.get("image_bytes")
+                # aruco_pose = point.get("aruco_pose")
 
                 checkpoint = Checkpoint(
                     id=id,
@@ -338,16 +351,10 @@ class InternalStorageManager:
                     y_position=y,
                     yaw=yaw,
                     map=map_db,
-                    status=0,
-                    gui_yaw=gui_yaw,
-                    image=image,
-                    aruco_pose_vector=aruco_pose,
+                    image_path=image,
+                    image_bytes=image_content,
                 )
                 session.add(checkpoint)
-                session.commit()
-
-                checkpoint_link = CheckpointLink(checkpoint=checkpoint)
-                session.add(checkpoint_link)
                 session.commit()
 
         except Exception as e:
@@ -371,40 +378,24 @@ class InternalStorageManager:
             session.commit()
             if map_db:
                 points = (
-                    session.query(Checkpoint, CheckpointLink)
-                    .join(CheckpointLink)
+                    session.query(Checkpoint)
                     .filter(Checkpoint.map_id == map_db.id)
                     .all()
                 )
                 session.commit()
 
-                for point, _ in points:
+                for point in points:
                     _points[point.id] = {
                         "id": point.id,
                         "x": point.x_position,
                         "y": point.y_position,
                         "map_file": mapfile,
                         "yaw": point.yaw,
-                        # 'gui_yaw': point.gui_yaw,
-                        "image": point.image,
-                        "aruco_pose_vector": point.aruco_pose_vector,
+                        "image": point.image_path,
                     }
 
-                    # id, x_meters, y_meters, map_file, yaw = point
-                    # _points.append(
-                    #     (
-                    #         point.id,
-                    #         point.x_position,
-                    #         point.y_position,
-                    #         mapfile,
-                    #         point.yaw,
-                    #         point.gui_yaw,
-                    #         point.image,
-                    #         point.aruco_pose_vector,
-                    #     )
-                    # )
-
             allpoints.update({"points": _points})
+
             return allpoints
 
         except Exception as e:
@@ -788,12 +779,12 @@ class InternalStorageManager:
 class DataBase(QThread):
     action_completed = pyqtSignal(str, dict)
 
-    def __init__(self, action: str, data: dict = {}, mapfile="", place="") -> None:
+    def __init__(self, action: str, data: dict = {}, map_file="", place="") -> None:
         super().__init__()
         self.action = action
         self.data = data
         self.place = place
-        self.map_file = mapfile
+        self.map_file = map_file
 
     def run(self):
         print("DATABASE RUNNING", self.action)

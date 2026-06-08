@@ -2,7 +2,7 @@ import sys
 
 import rospy
 from config_model import UserConfigFileManager
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSettings, Qt
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -30,10 +30,11 @@ class RobotVelocityController(QWidget):
         self.PATH_TOLERANCE = 0.10
         self.user_config_hanler = UserConfigFileManager()
         config = self.user_config_hanler.read_data()
+        self._settings = QSettings("MyCompany", "MyApp")
 
         self.init_ui()
 
-        self.update_mode(config["conduction_mode"])
+        self.update_mode(self._settings.value("conductionMode", "Soft"))
         self.init_tolerance(config["path_tolerance"] * 100)
         self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
 
@@ -47,14 +48,6 @@ class RobotVelocityController(QWidget):
         title_label.setStyleSheet("font-size: 16px; font-weight: bold; ")
         main_layout.addWidget(title_label)
 
-        # --- Linear Velocity Section ---
-
-        # main_layout.addLayout(linear_layout)
-        # main_layout.addSpacing(15)
-
-        # main_layout.addLayout(angular_layout)
-        # main_layout.addSpacing(15)
-
         # --- Conduction Mode Section ---
         mode_layout = QVBoxLayout()
         mode_title = QLabel("Modo de Conducción")
@@ -64,7 +57,6 @@ class RobotVelocityController(QWidget):
         # Buttons layout
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(40)
-        # buttons_layout.setContentsMargins(0, 0, 0, 0)
         buttons_layout.setAlignment(Qt.AlignLeft)
 
         self.btn_soft = CustomToolButtom(
@@ -199,7 +191,8 @@ class RobotVelocityController(QWidget):
             if self.btn_soft.isSelected():
                 self.btn_soft.toggle_selected()
 
-        self.user_config_hanler.update_value("conduction_mode", mode)
+        # self.user_config_hanler.update_value("conduction_mode", mode)
+        self._settings.setValue("conductionMode", mode)
 
         self.mode_description.setText(text)
         print(f"Mode changed to: {mode}")

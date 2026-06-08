@@ -10,9 +10,9 @@
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test3.yaml",
         "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml"
     ],
-    "conduction_mode": "Aggressive",
-    "stuck_timeout_index": 2,
-    "path_tolerance": 0.45,
+    "conduction_mode": "Soft",
+    "stuck_timeout_index": 1,
+    "path_tolerance": 0.27,
     "robot": "turtlebot3",
     "robots": {
         "turtlebot3": {

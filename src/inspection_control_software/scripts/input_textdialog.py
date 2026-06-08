@@ -68,8 +68,8 @@ class InputDialog(QDialog):
         layout.addWidget(a)
 
         # Text input field
-        self.text_input = QLineEdit()
-        layout.addWidget(self.text_input)
+        self.file_name_input = QLineEdit()
+        layout.addWidget(self.file_name_input)
 
         # Submit button
         self.discard_btn = QPushButton("Descartar")
@@ -92,11 +92,11 @@ class InputDialog(QDialog):
         self.setLayout(layout)
 
     def on_submit(self):
-        input_text = self.text_input.text()
-        if self.child.directory_path:
+        input_text = self.file_name_input.text()
+        if not self.child.directory_path:
             return
 
-        if input_text :
+        if input_text:
             self.filename = self.check_filename(input_text)
             self.filename = f"{self.child.directory_path}/{self.filename}"
             self.accept()

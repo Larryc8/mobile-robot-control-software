@@ -12,6 +12,7 @@ from interactive_markers.menu_handler import MenuHandler
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from std_msgs.msg import ColorRGBA
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from utils.checkpoints import CheckpointOperation
 from utils.patrol import MarkerActionTriggered, userOperation
 from visualization_msgs.msg import (
     InteractiveMarker,
@@ -21,9 +22,6 @@ from visualization_msgs.msg import (
 )
 
 
-# =====================================================================
-# 1. SINGLE RESPONSIBILITY: Marker Component Factory
-# =====================================================================
 class MarkerFactory:
     """Responsible solely for building ROS Visualization Markers and Controls."""
 
@@ -60,6 +58,9 @@ class MarkerFactory:
         control = InteractiveMarkerControl()
         control.always_visible = True
         control.interaction_mode = InteractiveMarkerControl.BUTTON
+
+        if not img:
+            img = ""
 
         control.markers.append(cls.create_arrow_mesh(img))
         control.markers.append(cls.create_text_label(description))
@@ -130,6 +131,7 @@ class InteractiveMarkerDemo(QObject):
         self.__is_updated = False
         self.__database = None
         self.__user_operation = None
+        self._map_file = ""
 
         self._initialize_menu()
         self._initialize_subscribers()
@@ -171,6 +173,11 @@ class InteractiveMarkerDemo(QObject):
             self.__is_updated = True
 
     def bulk_create_markers(self, points: dict):
+        print("DB INTMARK:", points)
+
+        if not points:
+            return
+
         for point in points.values():
             quat_tuple = quaternion_from_euler(0, 0, point["yaw"])
             pose = Pose(
@@ -265,22 +272,28 @@ class InteractiveMarkerDemo(QObject):
     def _db_is_busy(self) -> bool:
         return self.__database is not None and self.__database.isRunning()
 
-    def _execute_db_transaction(self, action: str, data: dict, callback=None):
+    def _execute_db_transaction(
+        self, action: str, data: dict, callback=None, skip: bool = False
+    ):
         if self._db_is_busy():
             return
         callback = callback or self.db_operation_finished
+        if skip:
+            data = {}
+
         self.__database = DataBase(action=action, data=data)
         self.__database.action_completed.connect(callback)
         self.__database.start()
 
     def send_database_action(self, map_file: str):
+        self._map_file = map_file
         self._execute_db_transaction(
             "get_points", {"map_file": map_file}, self.load_markers_from_database
         )
 
     def load_markers_from_database(self, msg, data: dict):
         self._cleanup_db_thread()
-        self.bulk_create_markers(data.get("points", {}))
+        self.bulk_create_markers(data.get("points"))
 
     def db_operation_finished(self, action, data):
         self._cleanup_db_thread()
@@ -295,14 +308,19 @@ class InteractiveMarkerDemo(QObject):
 
     def external_goal_callback(self, msg: PoseStamped):
         rospy.loginfo(
-            f"Received external goal at ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f})."
+            f"Received external goal at ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f}, {msg.pose.position.z:.2f}, {msg.pose.position.z == 0})."
         )
+        # CheckpointOperation.SAVE
+
         generated_name = f"demo_marker_{random.random()}"
         int_marker = self.register_new_marker(generated_name, "Marker", msg.pose)
 
         formatted_data = self.format_marker_payload(
             generated_name, {"is_home": False, "owner": int_marker}
         )
+
+        condition = msg.pose.position.z < 0
+
         self._execute_db_transaction("save_point", formatted_data)
 
     # =====================================================================
@@ -334,7 +352,7 @@ class InteractiveMarkerDemo(QObject):
                 "x_meters": p.pose.position.x,
                 "y_meters": p.pose.position.y,
                 "yaw": yaw,
-                "mapfile": "NA",
+                "mapfile": self._map_file,
                 "image_path": p.controls[0].markers[0].mesh_resource,
                 "enabled": True,
                 "is_home": marker_data["is_home"],

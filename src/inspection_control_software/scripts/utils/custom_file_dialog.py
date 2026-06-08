@@ -1,19 +1,33 @@
 import sys
-from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout,
-                             QListWidget, QPushButton, QLabel, QFileDialog)
-from PyQt5.QtCore import QSettings
-from PyQt5.QtCore import Qt # Add this import at the top
+
+from PyQt5.QtCore import (
+    QSettings,
+    Qt,  # Add this import at the top
+)
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QPushButton,
+    QVBoxLayout,
+)
+from styles.buttons import primary_button_style, secondary_button_style
 
 # ... inside init_ui ...
 # self.list_widget = QListWidget()
 # This ensures text is cut off with "..." in the middle or end
 
+
 class CustomFileDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Open File - Recent Items")
-        self.resize(600, 400)
+        self.setWindowTitle("Abrir archivos - mapas usados reciente")
+        self._MAX_FILES = 3
+        self.resize(800, 300)
 
         # Initialize Settings (to remember files across sessions)
         self.settings = QSettings("MyCompany", "MyApp")
@@ -26,14 +40,14 @@ class CustomFileDialog(QDialog):
         layout = QVBoxLayout()
 
         # 1. Recent Files Section
-        layout.addWidget(QLabel("<b>Recent Files:</b>"))
+        layout.addWidget(QLabel("<b>Archivos recientes:</b>"))
         self.list_widget = QListWidget()
         self.list_widget.setTextElideMode(Qt.ElideMiddle)
         # Optional: Ensure the list doesn't create a horizontal scrollbar
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         font = QFont()
-        font.setPointSize(12)  # Set font size to 12 points
-        font.setBold(True)     # Optional: make it bold
+        font.setPointSize(11)  # Set font size to 12 points
+        font.setBold(True)  # Optional: make it bold
         self.list_widget.setFont(font)
         self.list_widget.addItems(self.recent_files)
         self.list_widget.itemDoubleClicked.connect(self.open_recent)
@@ -42,10 +56,12 @@ class CustomFileDialog(QDialog):
         # 2. Buttons
         btn_layout = QHBoxLayout()
 
-        self.btn_browse = QPushButton("Browse All Files...")
+        self.btn_browse = QPushButton("Mostrar todos...")
+        self.btn_browse.setStyleSheet(primary_button_style)
         self.btn_browse.clicked.connect(self.browse_files)
 
-        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel = QPushButton("Cancelar")
+        self.btn_cancel.setStyleSheet(secondary_button_style)
         self.btn_cancel.clicked.connect(self.reject)
 
         btn_layout.addWidget(self.btn_browse)
@@ -57,10 +73,11 @@ class CustomFileDialog(QDialog):
 
     def browse_files(self):
         # Open the standard system dialog
-        file_path, _ = QFileDialog.getOpenFileName(self,
-                "Abrir archivo de configuración de mapa",
-                "",
-                "Archivo de configuración (*.yaml)",
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir archivo de configuración de mapa",
+            "",
+            "Archivo de configuración (*.yaml)",
         )
         if file_path:
             self.save_and_close(file_path)
@@ -82,6 +99,7 @@ class CustomFileDialog(QDialog):
         # Save to disk
         self.settings.setValue("recentFiles", self.recent_files)
         self.accept()
+
 
 # --- Usage Example ---
 if __name__ == "__main__":

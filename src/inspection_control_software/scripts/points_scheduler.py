@@ -12,14 +12,13 @@ from typing import Any, Callable, NamedTuple
 
 import actionlib
 import cv2 as cv
-
-# if __name__ != "__main__":
 import ImageSimilarity.image_similarity2 as imgsim
 import numpy as np
 import robot_actions_logger
 import rospy
 import tf
 from actionlib_msgs.msg import GoalStatus
+from alert_generator import AlertGenerator
 from config_model import UserConfigFileManager
 from cv_bridge import CvBridge
 from database_manager import AlertStatus, DataBase
@@ -36,6 +35,7 @@ from pose_controller import DifferentialDriveController
 from PyQt5.QtCore import (  # , pyqtSlot
     QObject,
     QRect,
+    QSettings,
     QSize,
     QThread,
     QTimer,
@@ -103,6 +103,8 @@ class PointsScheduler(QObject):
         self.current_pointid = None
         self.init_pose = Pose(0, 0)
         self.battery_state = 100
+        self._settings = QSettings("MyCompany", "MyApp")
+        self.alert = AlertGenerator()
 
         self.current_position_x = 0
         self.current_position_y = 0
@@ -113,7 +115,7 @@ class PointsScheduler(QObject):
         self.track = [0]
         self.user_config = UserConfigFileManager()
         self.navigation_checker = RobotNavigationChecker(self.track)
-        self.stuck_detector = StuckDetector()
+        # self.stuck_detector = StuckDetector()
 
         self.battery_state_sub = rospy.Subscriber(
             "/battery_state", BatteryState, self.update_battery
@@ -140,8 +142,6 @@ class PointsScheduler(QObject):
     def handle_prediction(self, e1, e2, dx, target_dist):
         """
         Predicts battery level at a target distance.
-        Note: The SetBool request.data is used as the distance input.
-        In a production environment, a custom .srv would be better than SetBool.
         """
         if dx == 0:
             return None
@@ -153,12 +153,12 @@ class PointsScheduler(QObject):
         prediction = e1 + slope * (target_dist + dx)
         prediction = max(0, min(100, prediction))  # Clamp between 0-100
 
-        rospy.loginfo(
-            f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
-        )
-        robot_actions_logger.logger.log(
-            f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
-        )
+        # rospy.loginfo(
+        #     f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
+        # )
+        # robot_actions_logger.logger.log(
+        #     f"Predicted battery at {target_dist:.2f}m: {prediction:.2f}% , slope: {slope:.2f}"
+        # )
 
         return prediction
 
@@ -550,8 +550,8 @@ class PointsScheduler(QObject):
         ]
         # self.scan_angles = [yaw_degrees]
         # self.get_image_similarity()
-        print("cuurent yaw: ", yaw_degrees)
-        print(self.scan_angles)
+        # print("cuurent yaw: ", yaw_degrees)
+        # print(self.scan_angles)
         robot_actions_logger.logger.log(f"Comenzando scaneo....")
 
         rate: float = self.get_image_similarity()
@@ -675,7 +675,6 @@ class PointsScheduler(QObject):
         theta_rad = radians(theta_degrees)
 
         quaternion = tf.transformations.quaternion_from_euler(0, 0, theta_rad)
-
         goal.pose.orientation.x = quaternion[0]
         goal.pose.orientation.y = quaternion[1]
         goal.pose.orientation.z = quaternion[2]
@@ -724,9 +723,12 @@ class PointsScheduler(QObject):
                 # reference = self.edit_image(self.current_reference_image_path)
                 camera = self.camera_image_filepath
                 # self.edit_image(self.camara_image_filepath)
-                config = self.user_config.read_data()
-                img_width, img_height = 160, 120
-                crop_width, crop_height = config["roi"]
+                # config = self.user_config.read_data()
+
+                # img_width, img_height = 160, 120
+                img_width, img_height = self.current_image.size()
+                # crop_width, crop_height = config["roi"]
+                crop_width, crop_height = self._settings.value("roi", [60, 60])
 
                 # Calculate the coordinates
                 left = (img_width - crop_width) / 2
@@ -740,7 +742,6 @@ class PointsScheduler(QObject):
 
                 # for p in (source, target):
                 #     self.remove_image(p)
-
                 if self.on_calibration:
                     pass
                 return r
@@ -775,26 +776,38 @@ class PointsScheduler(QObject):
         self.__database.start()
 
     def database_task_finished(self, msg, data):
-        print("datbase calibration Finished: ", msg, data)
+        # print("datbase calibration Finished: ", msg, data)
 
         if msg == "SuccessGetCalibration":
             mean = data["mean_value"]
             std = data["std_dev_value"]
             loss_func = self.current_rate  # self.get_image_similarity()
-            ref = loss_func > (mean - std * 1.5)
+            ref = loss_func > (mean - std * 3)
 
             robot_actions_logger.logger.log(
                 f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {ref}"
             )
+
+            if not ref:
+                self.alert.throw_alert(
+                    "Desague Tapado",
+                    AlertStatus.ERROR.value,
+                    self.current_patrolid,
+                    self.current_pointid,
+                )
 
             self.__database.quit()
             self.__database.wait()
             self.__database = None
             return
 
-        self.__database1.quit()
-        self.__database1.wait()
-        self.__database1 = None
+        if msg == "SuccessTrackInspection":
+            if not self.__database1:
+                return
+
+            self.__database1.quit()
+            self.__database1.wait()
+            self.__database1 = None
 
 
 # Can do other work here

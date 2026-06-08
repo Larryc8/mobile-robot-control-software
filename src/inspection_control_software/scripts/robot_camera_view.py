@@ -9,7 +9,14 @@ import tf
 from config_model import NodesManager, UserConfigFileManager
 from cv_bridge import CvBridge
 from database_manager import DataBase
-from geometry_msgs.msg import Pose2D, TransformStamped, Twist
+from geometry_msgs.msg import (
+    Pose,
+    Pose2D,
+    PoseStamped,
+    Quaternion,
+    TransformStamped,
+    Twist,
+)
 from input_textdialog import CustomDialog
 from nav_msgs.msg import Odometry
 from notification import Notification
@@ -44,12 +51,8 @@ from styles.buttons import (
     tertiary_button_style,
 )
 from styles.labels import inactive_label_style, title_label_style
-from tf.transformations import euler_from_quaternion
-from tf.transformations import quaternion_from_euler
-from geometry_msgs.msg import Quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from tf2_msgs.msg import TFMessage
-from geometry_msgs.msg import Pose
-from geometry_msgs.msg import PoseStamped
 
 groupbox_style = """
             QWidget {
@@ -143,7 +146,9 @@ class RobotCamera(QWidget):
 
         self.current_aruco_pose = Pose2D()
 
-        self.buffered_data_pub = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=2)
+        self.buffered_data_pub = rospy.Publisher(
+            "/move_base_simple/goal", PoseStamped, queue_size=2
+        )
         self.nodes_manager = NodesManager()
         self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.get_transforms)
         self.aruco_odom_sub = rospy.Subscriber(
@@ -233,27 +238,24 @@ class RobotCamera(QWidget):
                 x, y, yaw = data[2]
                 image_filepath = data[1]
                 cv.imwrite(data[1], data[0])
-                aruco_pose = data[3]
-                _x, _y = math.cos(yaw), math.sin(yaw)
-                gui_yaw = math.atan2(_y, -_x)
+
+                with open(image_filepath, "rb") as f:
+                    image_content = f.read()
+
                 points.update(
                     {
                         str(id): {
                             "x_meters": x,  # * self.resolution,
                             "y_meters": y,  # * self.resolution,
-                            "yaw_degrees": 0,
                             "yaw": yaw,
-                            "checked": False,
                             "mapfile": mapfile,
-                            "type": 1,
-                            "gui_yaw": gui_yaw,
                             "image": image_filepath,
-                            "aruco_pose": aruco_pose,
+                            "image_bytes": image_content,
                         }
                     }
                 )
-            print(f"{__name__} number of _points: {len(points)} {points}")
-            self.database = DataBase(action="add_points", data=points, mapfile=mapfile)
+            # print(f"{__name__} number of _points: {len(points)} {points}")
+            self.database = DataBase(action="add_points", data=points, map_file=mapfile)
             self.database.action_completed.connect(self.database_task_completed)
             self.database.start()
 
@@ -324,7 +326,7 @@ class RobotCamera(QWidget):
             quat_tuple = quaternion_from_euler(0, 0, yaw)
             data = PoseStamped()
             data.header.stamp = rospy.Time.now()
-            data.header.frame_id = "map"
+            data.header.frame_id = "map1"
             data.pose.position.x = pose[0]
             data.pose.position.y = pose[1]
             data.pose.position.z = 0

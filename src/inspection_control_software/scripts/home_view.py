@@ -770,19 +770,14 @@ class VisualizationPanel(QWidget):
             file_path = file  # God, please help me!
 
             if not file:
-                # file_path, _ = QFileDialog.getOpenFileName(
-                #     self,
-                #     "Abrir archivo de configuración de mapa",
-                #     "",
-                #     "Archivo de configuración (*.yaml)",
-                # )
-                # self.add_recent_file(file_path)
                 dialog = CustomFileDialog()
                 if dialog.exec_():
                     file_path = dialog.selected_file
-                    file_path = dialog.selected_file
+                    print("MAP FILE LOADED", file_path)
 
-            print("MAP FILE LOADED", file_path)
+            if not file_path:
+                return
+
             self.map_loaded.emit(file_path)
 
             # self.rviz.setUp('globalframe', 'odom')
