@@ -246,9 +246,7 @@ class VisualizationPanel(QWidget):
         self.map_recent_files = []
         self._stack_policy = 0
 
-        self.visualization_panel_static_message = QLabel(
-            "MENSAJE: Mientras Calibracinon activa, los patrullajes estaran desactivas "
-        )
+        self.visualization_panel_static_message = QLabel()
         self.visualization_panel_static_message.hide()
 
         self.rviz = MyViz(configfile="./config/config_navigation.rviz")
@@ -504,11 +502,12 @@ class VisualizationPanel(QWidget):
         self.timer.start(2000)
 
     def on_battery_alert(self, message):
-        if message:
-            self.visualization_panel_static_message.setText(message)
-            self.visualization_panel_static_message.show()
-        else:
-            self.visualization_panel_static_message.hide()
+        pass
+        # if message:
+        #     self.visualization_panel_static_message.setText(message)
+        #     self.visualization_panel_static_message.show()
+        # else:
+        #     self.visualization_panel_static_message.hide()
 
     def on_mount(self):
 
@@ -549,9 +548,11 @@ class VisualizationPanel(QWidget):
     def enable_components(self, enable):
         if not enable:
             self.visualization_panel_static_message.show()
-            return
-
-        self.visualization_panel_static_message.hide()
+            self.visualization_panel_static_message.setText(
+                "Calibración activa. El menú de patrullajes estará desactivado"
+            )
+        else:
+            self.visualization_panel_static_message.hide()
 
     def handleMarkerActionTriggered(self, action, marker):
         if action == MarkerActionTriggered.HELLO:
@@ -1264,7 +1265,7 @@ class PatrolsPanel(QGroupBox):
         rotated_pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
         # self.right_btn.setIcon(QIcon(rotated_pixmap))
 
-        self.delete_btn.setStyleSheet(border_button_style_danger)
+        self.delete_btn.setStyleSheet(border_button_style)
         self.create_btn.setStyleSheet(colored_button_style)
         self.start_patrols_btn.setStyleSheet(border_button_style)
         self.stop_patrols_btn.setStyleSheet(border_button_style)
@@ -1287,10 +1288,12 @@ class PatrolsPanel(QGroupBox):
 
     def enable_components(self, enable) -> None:
         self.start_patrols_btn.setEnabled(enable)
+        self.delete_btn.setEnabled(enable)
         self.create_btn.setEnabled(enable)
         self.right_btn.setEnabled(enable)
         self.left_btn.setEnabled(enable)
         self.patrols_container.setEnabled(enable)
+        print("patrols calibration", enable)
 
     def handleLoadStoredPoints(self, data):
         self.set_stored_database_points.emit(data)

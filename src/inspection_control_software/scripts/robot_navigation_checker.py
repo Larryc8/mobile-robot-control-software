@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import logging
 import math
-import sys
 import time
 
 import numpy as np
@@ -12,7 +10,7 @@ from database_manager import AlertStatus
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry, Path
 from nav_msgs.srv import GetPlan, GetPlanRequest, GetPlanResponse
-from PyQt5.QtCore import QObject, QSettings, QThread, pyqtSignal
+from PyQt5.QtCore import QObject, QSettings, QThread, QTimer, pyqtSignal
 from sensor_msgs.msg import Imu
 from sklearn.utils.extmath import squared_norm
 from std_msgs.msg import Bool
@@ -44,12 +42,22 @@ def quadratic_median_error(data1, data2, tolerance=0.06):
     squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > tolerance]
     squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > tolerance]
 
-    squared_meanx = np.mean([(ax[i] - bx[i]) ** 2 for i, e in enumerate(ax)])
-    squared_meany = np.mean([(ay[i] - by[i]) ** 2 for i, e in enumerate(ay)])
+    m = [
+        math.sqrt(
+            (a.pose.position.x - b.pose.position.x) ** 2
+            + (a.pose.position.y - a.pose.position.y) ** 2
+        )
+        for a, b in zip(data1, data2)
+    ]
 
-    squared_mean = squared_meanx + squared_meany
+    return max(m)
 
-    return max(len(squared_diffy), len(squared_diffx))
+    # squared_meanx = np.mean([(ax[i] - bx[i]) ** 2 for i, e in enumerate(ax)])
+    # squared_meany = np.mean([(ay[i] - by[i]) ** 2 for i, e in enumerate(ay)])
+
+    # squared_mean = squared_meanx + squared_meany
+
+    # return max(len(squared_diffy), len(squared_diffx))
 
 
 class RobotNavigationChecker(QObject):
@@ -78,7 +86,7 @@ class RobotNavigationChecker(QObject):
         self.num = id
 
     def callback_globalplan(self, data):
-        tolerance: float = self._settings.value("pathTolerance", self.TOLERANCE)
+        tolerance: float = self._settings.value("pathChangeTolerance", self.TOLERANCE)
 
         if not self.old_plan:
             self.old_plan = data.poses
@@ -95,22 +103,23 @@ class RobotNavigationChecker(QObject):
                 min_len = min(current_path_len, initial_path_len)
                 current_path = current_path[current_path_len - min_len :]
                 initial_path = initial_path[initial_path_len - min_len :]
-                error = quadratic_median_error(current_path, initial_path)
+                error = quadratic_median_error(
+                    current_path, initial_path, tolerance=tolerance
+                )
             self.old_plan = data.poses
 
             likehood = 100 - error * 100 / current_path_len
 
-            if likehood < 80 and self._checkpoint_id:
+            if error > self.TOLERANCE and self._checkpoint_id:
                 self.alert.throw_alert(
                     "obstacle",
                     AlertStatus.ERROR.value,
                     self._patrol_id,
                     self._checkpoint_id,
-                    self.map,
                 )
                 self.alert_generated.emit("Se detecto un obtaculo!!", AlertStatus.ERROR)
 
-            print(f"dont match, {likehood} {self.track}")
+            print(f"Match, {error} {self.track}, tol: {tolerance}")
             # logger.error(f"dont match, {likehood}, {self.track}")
 
     def start_checker(self, patrol_id, checkpoint_id, map):
@@ -128,8 +137,9 @@ class RobotNavigationChecker(QObject):
         )
 
 
-class StuckDetector:
+class StuckDetector(QObject):
     def __init__(self):
+        super().__init__()
         # rospy.init_node("stuck_detector_node", anonymous=True)
 
         # --- Thresholds & Parameters ---
@@ -149,6 +159,7 @@ class StuckDetector:
         self.is_actually_moving = False
         self.stuck_start_time = None
         self.is_stuck = False
+        self._settings = QSettings("MyCompany", "MyApp")
 
         # --- Publishers & Subscribers ---
         self.cmd_sub = rospy.Subscriber("/cmd_vel", Twist, self.cmd_callback)
@@ -157,7 +168,10 @@ class StuckDetector:
 
         # --- Timer ---
         # Checks the status at 10Hz
-        self.timer = rospy.Timer(rospy.Duration(0.1), self.check_stuck_status)
+        # self.timer = rospy.Timer(rospy.Duration(0.1), self.check_stuck_status)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_stuck_status)
+        self.timer.start(100)
 
         rospy.loginfo("Stuck Detector Node Initialized.")
 
@@ -188,14 +202,15 @@ class StuckDetector:
         else:
             self.is_actually_moving = False
 
-    def check_stuck_status(self, event):
+    def check_stuck_status(self):
+        self.stuck_timeout = self._settings.value("stuckTimeout", 0.5)
         # Condition for being stuck: Command sent, but no physical movement
         if self.is_commanding_movement and not self.is_actually_moving:
             if self.stuck_start_time is None:
                 self.stuck_start_time = rospy.Time.now()
             else:
                 elapsed_time = (rospy.Time.now() - self.stuck_start_time).to_sec()
-                if elapsed_time >= self.stuck_timeout:
+                if elapsed_time >= float(self.stuck_timeout):
                     if not self.is_stuck:
                         self.is_stuck = True
                         rospy.logwarn(

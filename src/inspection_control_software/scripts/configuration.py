@@ -500,7 +500,7 @@ class FriendlyConfig(QWidget):
         self.layout.addWidget(
             Wrapper(
                 children=[
-                    QLabel("Test Patrols"),
+                    QLabel("Patrullajes de calibración"),
                     self.start_calibrations_btn,
                     self.h_slider,
                     self.text,
@@ -522,7 +522,7 @@ class FriendlyConfig(QWidget):
             self.calibration_periods * points_count
         )  # POrfa Revisalo , hay dos iguales!
         self.text.setText(
-            f"La calibracion se jcecutara drante {self.calibration_periods} periodo"
+            f"La calibración se ejecutará durante {self.calibration_periods} periodos"
         )
 
     def advance_config_callack(self, x):
@@ -547,7 +547,7 @@ class FriendlyConfig(QWidget):
         self.calibration_started.emit(False)
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
         self.start_calibrations_btn.setIcon(icon_stop)
-        self.start_calibrations_btn.setText("Parar calibraciones")
+        self.start_calibrations_btn.setText("Detener calibraciones")
         self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
         self.patrols_scheduler.start_patrols(on_calibration=True)
         points_count = len(self.patrols_scheduler.points_scheduler._goals)

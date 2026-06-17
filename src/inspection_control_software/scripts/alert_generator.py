@@ -44,7 +44,6 @@ class AlertGenerator:
             "message": message,
             "x_position": self.current_pose.position.x,
             "y_position": self.current_pose.position.y,
-            # "yaw": 0,
             "status": status,
             "date": date.today(),
             "time": time(hour=now.hour, minute=now.minute, second=now.second),

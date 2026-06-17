@@ -1,94 +1,83 @@
 import sys
-import matplotlib
 from collections import namedtuple
+
+import matplotlib
 import numpy as np
 
 matplotlib.use("Qt5Agg")
+import random
+
+import rospy
+from better_image_display import ImageViewer
+from database_manager import AlertStatus, DataBase, InternalStorageManager
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
+from heatmap_generator import HeatmapGenerator
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg,
+)
+from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
 from matplotlib.figure import Figure
-
-from geometry_msgs.msg import PoseWithCovarianceStamped
-from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Imu
-
-import rospy
-
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
-
-from PyQt5.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QGraphicsView,
-    QGraphicsScene,
-    QStackedLayout,
-    QFileDialog,
-    QVBoxLayout,
-    QWidget,
-    QPushButton,
-    QGraphicsItem,
-    QHBoxLayout,
-    QStyle,
-    QLabel,
-    QGroupBox,
-    QCheckBox,
-    QGridLayout,
-    QComboBox,
-    QProgressBar,
-    QSlider,
-    QStackedLayout,
+from PyQt5.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    Qt,
+    QThread,
+    QTimer,
+    pyqtSignal,
 )
 from PyQt5.QtGui import (
-    QPixmap,
+    QBrush,
+    QColor,
+    QFont,
     QImage,
     QPainter,
     QPainterPath,
     QPen,
-    QBrush,
-    QColor,
-    QFont,
+    QPixmap,
 )
-
-from PyQt5.QtCore import (
-    Qt,
-    QPropertyAnimation,
-    QEasingCurve,
-    QTimer,
-    QThread,
-    pyqtSignal,
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QGraphicsItem,
+    QGraphicsScene,
+    QGraphicsView,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QProgressBar,
+    QPushButton,
+    QSlider,
+    QStackedLayout,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtGui import QPixmap
-import random
-
 from rview import MyViz
-from better_image_display import ImageViewer
-from heatmap_generator import HeatmapGenerator
-from database_manager import DataBase, InternalStorageManager, AlertStatus
-
-from styles.labels import (
-    error_label_style,
-    warning_label_style,
-    info_label_style,
-    title_label_style,
-    normal_label_style,
-    muted_label_style,
-    succes_label_style,
-    muted_mini_label_style,
-    section_header_label_style,
-)
-
+from sensor_msgs.msg import Imu, LaserScan
 from styles.buttons import (
-    tag_button_style,
-    tag_selected_button_style,
-    tag_selected_button_style,
+    border_button_style,
     colored_button_style,
     primary_button_style,
-    border_button_style,
     secondary_button_style,
+    tag_button_style,
+    tag_selected_button_style,
+)
+from styles.labels import (
+    error_label_style,
+    info_label_style,
+    muted_label_style,
+    muted_mini_label_style,
+    normal_label_style,
+    section_header_label_style,
+    succes_label_style,
+    title_label_style,
+    warning_label_style,
 )
 
 
@@ -648,9 +637,10 @@ class TaskWorkerFilterByTypeAlerts(QThread):
 class LogPanel(QWidget):
     def __init__(self, node_manager=None, parent=None):
         super().__init__()
+        self._database = None
+
         self.layout = QGridLayout(self)
         self.main_layout = QHBoxLayout()
-        self.setup_filter_buttons()
         self.setup_alert_list()
         self.info_panel = InfoPanel(parent=parent)
         self.layout.addLayout(self.main_layout, 2, 0)
@@ -667,81 +657,47 @@ class LogPanel(QWidget):
         self.stacked_layout = QStackedLayout()
         self.main_layout.addLayout(self.stacked_layout)
 
-        # self.getAlerts()
-        # rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.poseMonitor)
-        # rospy.Subscriber('/scan', LaserScan,  self.obstacleMonitor)
-        # rospy.Subscriber('/imu', Imu,  self.imuMonitor)
+        self.input_layout = QVBoxLayout()
+
+        btn = QPushButton("Cargar mapa")
+        self.input_layout.addWidget(btn)
+
+        self.layout.addLayout(self.input_layout, 1, 0, 1, 3)
 
         self.layout.addWidget(self.info_panel, 2, 1, 2, 2)
-        info_label = QLabel("Filtras alertas por:")
-        info_label.setStyleSheet(normal_label_style)
-        self.layout.addWidget(info_label, 0, 0)
+        self.maps_selection = QComboBox()
+        self.get_maps()
+        self.layout.addWidget(self.maps_selection, 0, 0)
 
         self.info_panel.map_loaded.connect(self.set_map)
 
-    def poseMonitor(self, msg):
-        pass
+    def get_maps(self):
+        if self._database and self._database.isRunning():
+            return
 
-    def obstacleMonitor(self, msg):
-        pass
+        self._database = DataBase(action="get_available_maps", data={})
+        self._database.action_completed.connect(self.get_maps_finished)
+        self._database.start()
 
-    def imuMonitor(self, msg):
-        pass
+    def get_maps_finished(self, msg, data):
+        maps = data.get("maps")
+        for map in maps:
+            file_path = map["file_path"]
+            self.maps_selection.addItem(file_path)
 
-    def setup_filter_buttons(self):
-        input_layout = QHBoxLayout()
-
-        self.filter_bydate_button = QPushButton("⬆ Ascendente")
-        self.filter_bytAll_button = QPushButton("Todos")
-        self.filter_byErrors_button = QPushButton("✗ Errores")
-        self.filter_byWarnings_button = QPushButton("☢ Advertencia")
-        self.filter_byInfos_button = QPushButton("✔ Informativas")
-
-        self.filter_bytAll_button.setStyleSheet(tag_selected_button_style)
-        self.filter_byErrors_button.setStyleSheet(tag_button_style)
-        self.filter_byInfos_button.setStyleSheet(tag_button_style)
-        self.filter_byWarnings_button.setStyleSheet(tag_button_style)
-        self.filter_bydate_button.setStyleSheet(secondary_button_style)
-
-        self.filter_bydate_button.clicked.connect(self.toggleAscendantDescendant)
-        self.filter_byWarnings_button.clicked.connect(self.filterAlertsWarning)
-        self.filter_byInfos_button.clicked.connect(self.filterAlertsInfo)
-        self.filter_byErrors_button.clicked.connect(self.filterAlertsError)
-        self.filter_bytAll_button.clicked.connect(self.filterAlertsAll)
-
-        input_layout.addWidget(self.filter_bytAll_button)
-        input_layout.addWidget(self.filter_byErrors_button)
-        input_layout.addWidget(self.filter_byWarnings_button)
-        input_layout.addWidget(self.filter_byInfos_button)
-        order_label = QLabel("Ordenar alertas de forma:")
-        order_label.setStyleSheet(muted_mini_label_style)
-        input_layout.addWidget(order_label)
-        input_layout.addWidget(self.filter_bydate_button)
-
-        self.info_label = QLabel(
-            "Carge un mapa desde Estadisticas de alertas.\n  Para ver las alertas generadas en el mapa"
-        )
-        self.layout.addWidget(self.info_label, 2, 0, alignment=Qt.AlignCenter)
-        self.info_label.setStyleSheet(muted_label_style)
-
-        self.layout.addLayout(input_layout, 1, 0, 1, 3)
+        self._database.quit()
+        self._database.wait()
+        self._database = None
 
     def setup_alert_list(self):
         self.alerts_container = QWidget()
         self.alerts_layout = QVBoxLayout(self.alerts_container)
         self.alerts_layout.setSpacing(5)
         self.alerts_layout.addStretch()
-        # self.info_label = QLabel('Carge un mapa desde Estadisticas de alertas')
-        # self.alerts_layout.addWidget(self.info_label, alignment=Qt.AlignCenter)
-        self.showmore_button = QPushButton("Mostrar mas")
-
-        self.showmore_button.setStyleSheet(primary_button_style)
-        self.showmore_button.clicked.connect(self.handleShowMoreAlerts)
-        self.scroll_slider = QSlider(Qt.Vertical)
 
         self.main_layout.addWidget(self.alerts_container)
-        self.main_layout.addWidget(self.scroll_slider)
-        self.layout.addWidget(self.showmore_button, 3, 0)
+        # self.main_layout.addWidget(self.scroll_slider)
+        # self.layout.addWidget(self.showmore_button, 3, 0)
 
     def add_alerts(self, alerts=[]):
         for alert in alerts:

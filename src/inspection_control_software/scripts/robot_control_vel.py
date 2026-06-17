@@ -2,7 +2,7 @@ import sys
 
 import rospy
 from config_model import UserConfigFileManager
-from PyQt5.QtCore import QSettings, Qt
+from PyQt5.QtCore import QSettings, Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -27,16 +27,19 @@ class RobotVelocityController(QWidget):
         # Initialize variables
         self.linear_vel = 0.0
         self.angular_vel = 0.0
-        self.PATH_TOLERANCE = 0.10
-        self.user_config_hanler = UserConfigFileManager()
-        config = self.user_config_hanler.read_data()
+        self.PATH_TOLERANCE = 0.06
+        # self.user_config_hanler = UserConfigFileManager()
+        # config = self.user_config_hanler.read_data()
         self._settings = QSettings("MyCompany", "MyApp")
-
         self.init_ui()
 
-        self.update_mode(self._settings.value("conductionMode", "Soft"))
-        self.init_tolerance(config["path_tolerance"] * 100)
-        self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
+        mode = self._settings.value("conductionMode", "Soft")
+        tol = self._settings.value("pathChangeTolerance", self.PATH_TOLERANCE)
+        # stuck_timeout = self._settings.value("stuckTimeout", 5)
+
+        self.update_mode(mode)
+        self.init_tolerance(tol)
+        # self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
 
     def init_ui(self):
         # Main Layout
@@ -98,23 +101,29 @@ class RobotVelocityController(QWidget):
         nav_layout.addWidget(nav_title)
 
         self.timeout_items = [
-            ("5 segundos", 5),
-            ("10 segundos", 10),
-            ("20 segundos", 20),
-            ("30 segundos", 30),
-            ("60 segundos", 60),
+            ("5", 5),
+            ("10", 10),
+            ("20", 20),
+            ("30", 30),
+            ("60", 60),
         ]
 
         # Stuck Timeout Dropdown
         timeout_layout = QHBoxLayout()
         timeout_label = QLabel("Tiempo límite de bloqueo:")
         self.timeout_combo = QComboBox()
-        # self.timeout_combo.setStyleSheet(dropdown_style)
 
         for text, code in self.timeout_items:
             self.timeout_combo.addItem(text)
 
-        self.timeout_combo.setCurrentIndex(1)  # Default to 10s
+        # self.timeout_combo.setStyleSheet(dropdown_style)
+        key = self._settings.value("stuckTimeout", 10)
+        self.timeout_combo.setCurrentText(str(key))
+        # self._settings.setCurrentText(key)
+        index = self.timeout_combo.findText(str(key))
+        # self.timeout_combo.setCurrentIndex(index)
+        print("INDEX STUCKTIME index", index, key)
+
         self.timeout_combo.currentTextChanged.connect(self.update_timeout)
 
         timeout_layout.addWidget(timeout_label)
@@ -199,22 +208,23 @@ class RobotVelocityController(QWidget):
 
     def update_timeout(self, text):
         print(f"Stuck Timeout updated to: {text}")
-        index = self.timeout_combo.findText(text)
-        self.user_config_hanler.update_value("stuck_timeout_index", index)
+        self._settings.setValue("stuckTimeout", int(text))
 
         # Add logic here to update the robot's navigation parameter
 
     def update_tolerance(self, value):
-        self.PATH_TOLERANCE = value / 100.0
+        self.PATH_TOLERANCE = value / 100
         self.lcd_tolerance.display(self.PATH_TOLERANCE)
         print(f"Path Tolerance updated to: {self.PATH_TOLERANCE} m")
         rospy.set_param("/path_tolerance", self.PATH_TOLERANCE)
-        self.user_config_hanler.update_value("path_tolerance", self.PATH_TOLERANCE)
+        self._settings.setValue("pathChangeTolerance", self.PATH_TOLERANCE)
+        # self.user_config_hanler.update_value("path_tolerance", self.PATH_TOLERANCE)
         # Add logic here to update the robot's navigation parameter
 
     def init_tolerance(self, value):
-        self.slider_tolerance.setValue(value)
-        self.update_tolerance(value)
+        num = int(float(value) * 100)
+        self.slider_tolerance.setValue(num)
+        self.update_tolerance(num)
 
     def stop_robot(self):
         self.slider_linear.setValue(0)

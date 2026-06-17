@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import psycopg2
@@ -18,7 +19,7 @@ from internal_storage.tables import (
 from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
 from sklearn.metrics import mean_squared_error
 from sqlalchemy import and_, asc, create_engine, desc, func, insert
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 Base = declarative_base()
 # cursor.execute("SELECT version();")
@@ -565,11 +566,6 @@ class InternalStorageManager:
         session = Session()
 
         try:
-            map_filepath = alerts[0].get("map")
-            map_filepath = map_filepath.split("/")[-1]
-            map_filepath = map_filepath.split(".")[0]
-            map = session.query(Map).filter_by(file_path=map_filepath).first()
-
             session.commit()
 
             data = [
@@ -579,13 +575,9 @@ class InternalStorageManager:
                     message=alert.get("message"),
                     x_position=alert.get("x_position"),
                     y_position=alert.get("x_position"),
-                    yaw=alert.get("yaw"),
-                    camera_data=alert.get("camera_data"),
-                    lidar_data=alert.get("lidar_data"),
                     status=alert.get("status"),
                     date=alert.get("date"),
                     time=alert.get("time"),
-                    map=map,
                 )
                 for alert in alerts
             ]
@@ -594,7 +586,7 @@ class InternalStorageManager:
             session.commit()
         except Exception as e:
             session.rollback()
-            print(f"Error setting up data: {e}")
+            print(f"Error setting up data -- alerts: {e}")
         finally:
             session.close()
 
@@ -768,12 +760,187 @@ class InternalStorageManager:
         session.commit()
         print(f"Stored {name} and {yaml_path} successfully.")
 
+    def get_available_maps(self) -> List[dict]:
+        """Retrieve all available maps stored in the database.
+
+        Returns:
+            A list of dictionaries with map information (id, file_path, place_id).
+            Returns an empty list if no maps are found or an error occurs.
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            maps = session.query(Map).all()
+            available_maps = [
+                {
+                    "id": map_record.id,
+                    "file_path": map_record.file_path,
+                    "place_id": map_record.place_id,
+                }
+                for map_record in maps
+            ]
+            return available_maps
+        except Exception as e:
+            session.rollback()
+            print(f"Error retrieving available maps: {e}")
+            return []
+        finally:
+            session.close()
+
+    def ensure_map_file_exists(self, file_path: str) -> str:
+        """Check if file_path corresponds to a file stored in the internal path.
+
+        If the file does not exist on disk, it will be created (along with any
+        necessary parent directories). Also ensures that a corresponding Map
+        entry exists in the database.
+
+        Args:
+            file_path: The path to the map file to check/create.
+
+        Returns:
+            The absolute path of the ensured file, or an empty string on error.
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            # Resolve to absolute path
+            abs_path = os.path.abspath(file_path)
+
+            # Create the file on disk if it does not exist
+            if not os.path.exists(abs_path):
+                parent_dir = os.path.dirname(abs_path)
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir, exist_ok=True)
+                    print(f"Created directory: {parent_dir}")
+
+                with open(abs_path, "w") as f:
+                    f.write("")
+                print(f"Created map file: {abs_path}")
+            else:
+                print(f"Map file already exists: {abs_path}")
+
+            # Ensure the map entry exists in the database
+            map_key = os.path.splitext(os.path.basename(file_path))[0]
+            map_db = session.query(Map).filter_by(file_path=map_key).first()
+
+            if not map_db:
+                map_db = Map(file_path=map_key)
+                session.add(map_db)
+                session.commit()
+                print(f"Created database entry for map: {map_key}")
+            else:
+                print(f"Database entry already exists for map: {map_key}")
+
+            return abs_path
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error ensuring map file exists: {e}")
+            return ""
+        finally:
+            session.close()
+
     def loss_func(self, x, y):
         # x = np.array(x).reshape(-1, 1)
         # y = np.array(y).reshape(-1, 1)
         # [loss] = mutual_info_regression(x, y)
         loss = mean_squared_error(x, y)
         return loss
+
+    # Assuming Map is imported from your models file
+    # from your_models import Map
+
+    def export_map_assets(map_record, output_base_dir: Union[str, Path] = ".") -> None:
+        """
+        Extracts and saves image bytes and metadata JSON as local files
+        from a Map model instance if they do not already exist.
+        """
+        if not map_record:
+            print("Error: No Map record provided.")
+            return
+
+        # 1. Resolve paths
+        base_dir = Path(output_base_dir)
+
+        # Fallback name if file_path is somehow null or empty
+        target_file_path = (
+            map_record.file_path if map_record.file_path else f"map_{map_record.id}.png"
+        )
+
+        image_path = base_dir / target_file_path
+        yaml_path = image_path.with_suffix(".yaml")  # Changes .png/.jpg to .yaml
+
+        # Ensure parent directories exist
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 2. Process Image Bytes
+        if map_record.image_bytes:
+            if not image_path.exists():
+                with open(image_path, "wb") as img_file:
+                    img_file.write(map_record.image_bytes)
+                print(f" [SUCCESS] Image created: {image_path}")
+            else:
+                print(f" [SKIPPED] Image already exists: {image_path}")
+        else:
+            print(" [WARNING] No image bytes found for this record.")
+
+        # 3. Process Metadata JSON -> YAML
+        if map_record.metadata_json is not None:
+            if not yaml_path.exists():
+                with open(yaml_path, "w", encoding="utf-8") as yaml_file:
+                    # default_flow_style=False ensures a clean, block-styled YAML output
+                    yaml.dump(
+                        map_record.metadata_json,
+                        yaml_file,
+                        default_flow_style=False,
+                        allow_unicode=True,
+                    )
+                print(f" [SUCCESS] Metadata YAML created: {yaml_path}")
+            else:
+                print(f" [SKIPPED] YAML file already exists: {yaml_path}")
+        else:
+            print(" [WARNING] No metadata JSON found for this record.")
+
+    def get_paginated_users_cursor(
+        self, db: Session, last_id: int = None, page_size: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Returns data following the 'last_id' cursor.
+        """
+        if page_size < 1:
+            page_size = 10
+
+        # Base query ordered by a unique indexed column
+        stmt = select(User).order_by(User.id)
+
+        # If a cursor is provided, fetch items strictly greater than the cursor
+        if last_id is not None:
+            stmt = stmt.where(User.id > last_id)
+
+        # Fetch one extra item to easily determine if there is a 'next page'
+        stmt = stmt.limit(page_size + 1)
+        results = db.scalars(stmt).all()
+
+        # Check if there is a next page
+        has_more = len(results) > page_size
+
+        # If we have an extra item, pop it off so we return exactly the page_size
+        if has_more:
+            results = results[:page_size]
+
+        # The new cursor is the ID of the very last item in our current slice
+        next_cursor = results[-1].id if results else None
+
+        return {
+            "items": results,
+            "metadata": {
+                "page_size": page_size,
+                "next_cursor": next_cursor if has_more else None,
+                "has_more": has_more,
+            },
+        }
 
 
 class DataBase(QThread):
@@ -856,6 +1023,10 @@ class DataBase(QThread):
                 self.data.get("pointid"), self.data.get("current_calibration_vector")
             )
             self.action_completed.emit("SuccessGetCalibration", data)
+
+        if self.action == "get_available_maps":
+            data = self.internal_storage_manager.get_available_maps()
+            self.action_completed.emit("SuccessGetAvailableMaps", {"maps": data})
 
 
 if __name__ == "__main__":

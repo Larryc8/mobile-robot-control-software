@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import logging
 import math
 import os
 import queue
@@ -273,7 +272,7 @@ class PointsScheduler(QObject):
             new_goals = {
                 id: new_goals.get(id)
                 for id in new_goals.keys()
-                if new_goals.get(id).get("image")
+                if new_goals.get(id).get("image_path")
             }
         # else:
         #     new_goals = points
@@ -782,13 +781,13 @@ class PointsScheduler(QObject):
             mean = data["mean_value"]
             std = data["std_dev_value"]
             loss_func = self.current_rate  # self.get_image_similarity()
-            ref = loss_func > (mean - std * 3)
+            condition = loss_func < (mean - std * 3)
 
             robot_actions_logger.logger.log(
-                f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {ref}"
+                f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {condition}"
             )
 
-            if not ref:
+            if condition:
                 self.alert.throw_alert(
                     "Desague Tapado",
                     AlertStatus.ERROR.value,
