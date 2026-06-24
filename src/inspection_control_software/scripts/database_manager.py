@@ -425,222 +425,141 @@ class InternalStorageManager:
         except psycopg2.Error as e:
             print(f"Database error: {e}")
 
-    def get_filtered_alerts(
-        self, status=None, ascendant=True, page_size=11, page_number=0, map=""
-    ):
-        engine = create_engine(DATABASE_URL)
-        Session = sessionmaker(bind=engine)
-        session = Session()
-
-        try:
-            if not map:
-                map = ""
-
-            map = map.split("/")[-1]
-            map = map.split(".")[0]
-            print(f"{__name__} map: {map}")
-
-            if status is not None:
-                if ascendant:
-                    rows = (
-                        session.query(Alert, Map)
-                        .join(Map)
-                        .filter(Map.file_path == map)
-                        .order_by(asc(Alert.date))
-                        .offset(page_size * page_number)
-                        .limit(page_size)
-                        .all()
-                    )
-                    session.commit()
-                else:
-                    rows = (
-                        session.query(Alert, Map)
-                        .join(Map)
-                        .filter(and_(Map.file_path == map, Alert.status == status))
-                        .order_by(desc(Alert.date))
-                        .offset(page_size * page_number)
-                        .limit(page_size)
-                        .all()
-                    )
-                    session.commit()
-
-            else:
-                if ascendant:
-                    rows = (
-                        session.query(Alert, Map)
-                        .join(Map)
-                        .filter(Map.file_path == map)
-                        .order_by(asc(Alert.date))
-                        .offset(page_size * page_number)
-                        .limit(page_size)
-                        .all()
-                    )
-                    session.commit()
-
-                else:
-                    rows = (
-                        session.query(Alert, Map)
-                        .join(Map)
-                        .filter(Map.file_path == map)
-                        .order_by(asc(Alert.date))
-                        .offset(page_size * page_number)
-                        .limit(page_size)
-                        .all()
-                    )
-            rows = [
-                (
-                    alert.x_position,
-                    alert.y_position,
-                    alert.status,
-                    alert.date,
-                    alert.time,
-                    alert.message,
-                )
-                for alert, map in rows
-            ]
-
-            return rows
-        except Exception as e:
-            session.rollback()
-            print(f"Error setting up data: {e}")
-        finally:
-            session.close()
-
-    def get_alerts_months_stats(self):
-        try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-                            SELECT     EXTRACT(MONTH FROM date) AS month,
-                            COUNT(*) AS total_count FROM   alert
-                            WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100
-                            GROUP BY     month ORDER BY     month;
+        def get_alerts_months_stats(self):
+            try:
+                with psycopg2.connect(
+                    database=self.db_name,
+                    user=self.db_user,
+                    password=self.db_password,
+                    host=self.db_host,
+                    port=self.db_port,
+                ) as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
                             """
-                    )
-                    # return in the format  month | total_count
-                    rows = cursor.fetchall()
-                    connection.commit()  # Commit the transaction
+                                SELECT     EXTRACT(MONTH FROM date) AS month,
+                                COUNT(*) AS total_count FROM   alert
+                                WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100
+                                GROUP BY     month ORDER BY     month;
+                                """
+                        )
+                        # return in the format  month | total_count
+                        rows = cursor.fetchall()
+                        connection.commit()  # Commit the transaction
 
-            return rows
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+                return rows
+            except psycopg2.Error as e:
+                print(f"Database error: {e}")
 
-    def get_alerts_weeks_stats(self):
-        try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-
-                        SELECT     EXTRACT(YEAR FROM date) AS year,
-                        EXTRACT(MONTH FROM date) AS month,
-                        EXTRACT(WEEK FROM date) - EXTRACT(WEEK FROM DATE_TRUNC('month', date)) + 1 AS week_of_month,
-                        COUNT(*) AS element_count FROM  alert
-                        GROUP BY     year, month, week_of_month ORDER BY     year, month, week_of_month;
+        def get_alerts_weeks_stats(self):
+            try:
+                with psycopg2.connect(
+                    database=self.db_name,
+                    user=self.db_user,
+                    password=self.db_password,
+                    host=self.db_host,
+                    port=self.db_port,
+                ) as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
                             """
+
+                            SELECT     EXTRACT(YEAR FROM date) AS year,
+                            EXTRACT(MONTH FROM date) AS month,
+                            EXTRACT(WEEK FROM date) - EXTRACT(WEEK FROM DATE_TRUNC('month', date)) + 1 AS week_of_month,
+                            COUNT(*) AS element_count FROM  alert
+                            GROUP BY     year, month, week_of_month ORDER BY     year, month, week_of_month;
+                                """
+                        )
+                        rows = cursor.fetchall()
+                        connection.commit()  # Commit the transaction
+                        # retrun in the format  year | month | week_of_month | element_count
+
+                return rows
+            except psycopg2.Error as e:
+                print(f"Database error: {e}")
+
+        def save_alerts(self, alerts: list):
+            engine = create_engine(DATABASE_URL)
+            Session = sessionmaker(bind=engine)
+            session = Session()
+
+            try:
+                session.commit()
+
+                data = [
+                    Alert(
+                        checkpoint_id=alert.get("heckpoint_id"),
+                        patrol_id=alert.get("patrol_id"),
+                        message=alert.get("message"),
+                        x_position=alert.get("x_position"),
+                        y_position=alert.get("x_position"),
+                        status=alert.get("status"),
+                        date=alert.get("date"),
+                        time=alert.get("time"),
                     )
-                    rows = cursor.fetchall()
-                    connection.commit()  # Commit the transaction
-                    # retrun in the format  year | month | week_of_month | element_count
+                    for alert in alerts
+                ]
 
-            return rows
-        except psycopg2.Error as e:
-            print(f"Database error: {e}")
+                session.add_all(data)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                print(f"Error setting up data -- alerts: {e}")
+            finally:
+                session.close()
 
-    def save_alerts(self, alerts: list):
-        engine = create_engine(DATABASE_URL)
-        Session = sessionmaker(bind=engine)
-        session = Session()
+        def save_calibration(self, calibration_data: dict):
+            """'
+            Save Save Calibrations
 
-        try:
-            session.commit()
+            parameter:
+            Calibration_data -->
+            """
+            engine = create_engine(DATABASE_URL)
+            Session = sessionmaker(bind=engine)
+            # Base.metadata.create_all(engine) # Create tables if they don't exist
+            session = Session()
+            try:
+                calibration_value = calibration_data.get("value")
+                checkpoint_id = calibration_data.get("checkpoint_id")
+                calibration_vector = None  # calibration_data.get("vector")
 
-            data = [
-                Alert(
-                    checkpoint_id=alert.get("heckpoint_id"),
-                    patrol_id=alert.get("patrol_id"),
-                    message=alert.get("message"),
-                    x_position=alert.get("x_position"),
-                    y_position=alert.get("x_position"),
-                    status=alert.get("status"),
-                    date=alert.get("date"),
-                    time=alert.get("time"),
+                # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
+                # last_element = (
+                #     session.query(Calibration)
+                #     .filter_by(checkpoint_id=checkpoint_id)
+                #     .order_by(func.random())
+                #     .first()
+                # )
+
+                # print(
+                #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
+                # )
+                # calibration_value = None
+
+                # if last_element:
+                #     calibration_value = self.loss_func(
+                #         calibration_vector, last_element.calibration_vector
+                #     )
+
+                calibration = Calibration(
+                    checkpoint_id=checkpoint_id,
+                    calibration_value=calibration_value,
+                    calibration_vector=calibration_vector,
                 )
-                for alert in alerts
-            ]
 
-            session.add_all(data)
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            print(f"Error setting up data -- alerts: {e}")
-        finally:
-            session.close()
+                session.add(calibration)
+                session.commit()
 
-    def save_calibration(self, calibration_data: dict):
-        """'
-        Save Save Calibrations
+                print("Sample data added successfully!")
 
-        parameter:
-        Calibration_data -->
-        """
-        engine = create_engine(DATABASE_URL)
-        Session = sessionmaker(bind=engine)
-        # Base.metadata.create_all(engine) # Create tables if they don't exist
-        session = Session()
-        try:
-            calibration_value = calibration_data.get("value")
-            checkpoint_id = calibration_data.get("checkpoint_id")
-            calibration_vector = None  # calibration_data.get("vector")
-
-            # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
-            # last_element = (
-            #     session.query(Calibration)
-            #     .filter_by(checkpoint_id=checkpoint_id)
-            #     .order_by(func.random())
-            #     .first()
-            # )
-
-            # print(
-            #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
-            # )
-            # calibration_value = None
-
-            # if last_element:
-            #     calibration_value = self.loss_func(
-            #         calibration_vector, last_element.calibration_vector
-            #     )
-
-            calibration = Calibration(
-                checkpoint_id=checkpoint_id,
-                calibration_value=calibration_value,
-                calibration_vector=calibration_vector,
-            )
-
-            session.add(calibration)
-            session.commit()
-
-            print("Sample data added successfully!")
-
-            session.close()
-        except Exception as e:
-            session.rollback()
-            print(f"Error setting up data: {e}")
-        finally:
-            session.close()
+                session.close()
+            except Exception as e:
+                session.rollback()
+                print(f"Error setting up data: {e}")
+            finally:
+                session.close()
 
     def get_calibration(self, pointid: str, current_calibration_vector: list) -> dict:
         engine = create_engine(DATABASE_URL)
@@ -688,77 +607,77 @@ class InternalStorageManager:
             # return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
             return {"std_dev_value": -1, "mean_value": -1}
 
-    def save_ondisk_backup_files(
-        self, record_id, output_image_name: str = "", output_yaml_name: str = ""
-    ):
-        engine = create_engine(DATABASE_URL)
-        Session = sessionmaker(bind=engine)
-        # Base.metadata.create_all(engine) # Create tables if they don't exist
-        session = Session()
-        # 1. Fetch the record by ID
-        record = session.query(MediaStorageFiles).filter_by(id=record_id).first()
+        def save_ondisk_backup_files(
+            self, record_id, output_image_name: str = "", output_yaml_name: str = ""
+        ):
+            engine = create_engine(DATABASE_URL)
+            Session = sessionmaker(bind=engine)
+            # Base.metadata.create_all(engine) # Create tables if they don't exist
+            session = Session()
+            # 1. Fetch the record by ID
+            record = session.query(MediaStorageFiles).filter_by(id=record_id).first()
 
-        if not record:
-            print(f"No record found with ID: {record_id}")
-            return
+            if not record:
+                print(f"No record found with ID: {record_id}")
+                return
 
-        # 2. Save the Image (PGM, PNG, etc.)
-        # Since we stored it as LargeBinary, we write 'wb' (write binary)
-        if output_image_name:
-            with open(output_image_name, "wb") as img_file:
-                img_file.write(record.image_bytes)
+            # 2. Save the Image (PGM, PNG, etc.)
+            # Since we stored it as LargeBinary, we write 'wb' (write binary)
+            if output_image_name:
+                with open(output_image_name, "wb") as img_file:
+                    img_file.write(record.image_bytes)
 
-        # 3. Save the YAML
-        # We retrieve the JSONB as a Python dict, then dump it to YAML format
-        if output_yaml_name:
-            with open(output_yaml_name, "w") as yml_file:
-                yaml.dump(record.metadata_json, yml_file, default_flow_style=False)
+            # 3. Save the YAML
+            # We retrieve the JSONB as a Python dict, then dump it to YAML format
+            if output_yaml_name:
+                with open(output_yaml_name, "w") as yml_file:
+                    yaml.dump(record.metadata_json, yml_file, default_flow_style=False)
 
-        print(
-            f"Success! Saved image to '{output_image_name}' and YAML to '{output_yaml_name}'."
-        )
-
-        # Example Usage:
-        # save_from_db_to_disk(1, 'restored_image.pgm', 'restored_config.yaml')
-
-    def backup_file(self, image_path: str = "", yaml_path: str = ""):
-
-        # Extract file info
-        name = os.path.basename(image_path)
-        ext = os.path.splitext(image_path)[1].lower()
-        new_file = None
-        yaml_data = None
-        binary_data = None
-
-        # 1. Read Image (Works for PGM, PNG, JPG, etc.)
-        if image_path:
-            with open(image_path, "rb") as f:
-                binary_data = f.read()
-
-        # 2. Read YAML
-        if yaml_path:
-            with open(yaml_path, "r") as f:
-                yaml_data = yaml.safe_load(f)
-
-        if yaml_data and binary_data:
-            new_file = MediaStorageFile(
-                filename=name,
-                extension=ext,
-                image_bytes=binary_data,
-                metadata_json=yaml_data,
-            )
-        else:
-            new_file = MediaStorageImage(
-                filename=name,
-                extension=ext,
-                image_bytes=binary_data,
+            print(
+                f"Success! Saved image to '{output_image_name}' and YAML to '{output_yaml_name}'."
             )
 
-        # 3. Store in Database
+            # Example Usage:
+            # save_from_db_to_disk(1, 'restored_image.pgm', 'restored_config.yaml')
 
-        session.add(new_file)
-        session.commit()
-        print(f"Stored {name} and {yaml_path} successfully.")
+        def backup_file(self, image_path: str = "", yaml_path: str = ""):
+
+            # Extract file info
+            name = os.path.basename(image_path)
+            ext = os.path.splitext(image_path)[1].lower()
+            new_file = None
+            yaml_data = None
+            binary_data = None
+
+            # 1. Read Image (Works for PGM, PNG, JPG, etc.)
+            if image_path:
+                with open(image_path, "rb") as f:
+                    binary_data = f.read()
+
+            # 2. Read YAML
+            if yaml_path:
+                with open(yaml_path, "r") as f:
+                    yaml_data = yaml.safe_load(f)
+
+            if yaml_data and binary_data:
+                new_file = MediaStorageFile(
+                    filename=name,
+                    extension=ext,
+                    image_bytes=binary_data,
+                    metadata_json=yaml_data,
+                )
+            else:
+                new_file = MediaStorageImage(
+                    filename=name,
+                    extension=ext,
+                    image_bytes=binary_data,
+                )
+
+            # 3. Store in Database
+
+            session.add(new_file)
+            session.commit()
+            print(f"Stored {name} and {yaml_path} successfully.")
 
     def get_available_maps(self) -> List[dict]:
         """Retrieve all available maps stored in the database.
@@ -903,43 +822,73 @@ class InternalStorageManager:
         else:
             print(" [WARNING] No metadata JSON found for this record.")
 
-    def get_paginated_users_cursor(
-        self, db: Session, last_id: int = None, page_size: int = 10
-    ) -> Dict[str, Any]:
+    def get_filtered_alerts(
+        self,
+        page_number: int,
+        page_size: int,
+        status: int = None,
+        ascendant: bool = False,
+        map_file: str = None,
+    ) -> dict:
         """
-        Returns data following the 'last_id' cursor.
+        Fetches a paginated, sorted, and filtered list of alerts from the database.
+
+        Parameters:
+            session (Session): The active SQLAlchemy database session.
+            page_number (int): The current page index (starting at 0).
+            page_size (int): Maximum number of records to return per page.
+            status (int, optional): Filter by AlertStatus value. If None, fetches all.
+            ascendant (bool): True for oldest first, False for newest first.
+
+        Returns:
+            list of tuples: Contains rows formatted exactly for UI unpacking:
+                        (x_position, y_position, status, date, time, message)
         """
-        if page_size < 1:
-            page_size = 10
+        # 1. Target the exact columns in the order your UI unpacks them
 
-        # Base query ordered by a unique indexed column
-        stmt = select(User).order_by(User.id)
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
-        # If a cursor is provided, fetch items strictly greater than the cursor
-        if last_id is not None:
-            stmt = stmt.where(User.id > last_id)
+        query = session.query(
+            Alert.x_position,
+            Alert.y_position,
+            Alert.status,
+            Alert.date,
+            Alert.time,
+            Alert.message,
+        )
 
-        # Fetch one extra item to easily determine if there is a 'next page'
-        stmt = stmt.limit(page_size + 1)
-        results = db.scalars(stmt).all()
+        # 2. Apply conditional status filtering
+        if status is not None:
+            query = query.filter(Alert.status == status)
 
+        # 2. Apply map file filtering
+        if map_file is not None:
+            # query = query.filter(Alert.map_file == map_file)
+            query = query.join(Map, Alert.map_id == Map.id).filter(
+                Map.file_path == map_file
+            )
+
+        # 3. Apply chronological sorting (Primary: Date, Secondary: Time)
+        if ascendant:
+            query = query.order_by(asc(Alert.date), asc(Alert.time))
+        else:
+            query = query.order_by(desc(Alert.date), desc(Alert.time))
+
+        # 4. Calculate pagination offsets
+        # Page 0 -> offset 0; Page 1 -> offset 12, etc.
+        offset_value = page_number * page_size
+
+        query = query.offset(offset_value).limit(page_size)
+        results = query.all()
         # Check if there is a next page
-        has_more = len(results) > page_size
+        has_more = len(results) == page_size
 
-        # If we have an extra item, pop it off so we return exactly the page_size
-        if has_more:
-            results = results[:page_size]
-
-        # The new cursor is the ID of the very last item in our current slice
-        next_cursor = results[-1].id if results else None
-
+        # 5. Execute query and return rows
         return {
-            "items": results,
-            "metadata": {
-                "page_size": page_size,
-                "next_cursor": next_cursor if has_more else None,
-                "has_more": has_more,
-            },
+            "alerts": results,
+            "has_more": has_more,
         }
 
 
@@ -1027,6 +976,15 @@ class DataBase(QThread):
         if self.action == "get_available_maps":
             data = self.internal_storage_manager.get_available_maps()
             self.action_completed.emit("SuccessGetAvailableMaps", {"maps": data})
+
+        if self.action == "get_filtered_alerts":
+            data = self.internal_storage_manager.get_filtered_alerts(
+                # status=self.data.get("status"),
+                page_size=self.data.get("page_size"),
+                page_number=self.data.get("page_number"),
+                map_file=self.data.get("map_file"),
+            )
+            self.action_completed.emit("SuccessGetFilteredAlerts", data)
 
 
 if __name__ == "__main__":

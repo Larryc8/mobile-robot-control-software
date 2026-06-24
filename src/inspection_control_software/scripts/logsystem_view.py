@@ -638,75 +638,93 @@ class LogPanel(QWidget):
     def __init__(self, node_manager=None, parent=None):
         super().__init__()
         self._database = None
+        self._database1 = None
 
         self.layout = QGridLayout(self)
         self.main_layout = QHBoxLayout()
-        self.setup_alert_list()
+
+        # Core Pagination Variables
+        self.page_number = 0
+        self.PAGE_SIZE = 12  # Fixed typo from PAGE_ZISE
+        self.status = None
+        self.ascendant = False
+        self.map = None
+        self.alerts_items = []
+        self._database = None
+
+        # Setup the dynamic pagination UI component
+
         self.info_panel = InfoPanel(parent=parent)
         self.layout.addLayout(self.main_layout, 2, 0)
         self.toggle = True
         self.node_manager = node_manager
-        self.alerts_items = []
-        self.alerts = []
-        self.page_number = 0
-        self.filter_bytype_task = None
-        self.status = None
-        self.ascendant = False
-        self.PAGE_ZISE = 12
-        self.map = None
+
         self.stacked_layout = QStackedLayout()
         self.main_layout.addLayout(self.stacked_layout)
 
         self.input_layout = QVBoxLayout()
-
         btn = QPushButton("Cargar mapa")
         self.input_layout.addWidget(btn)
 
-        self.layout.addLayout(self.input_layout, 1, 0, 1, 3)
+        self.layout.addLayout(self.input_layout, 1, 0)
+        self.layout.addWidget(self.info_panel, 2, 1)
 
-        self.layout.addWidget(self.info_panel, 2, 1, 2, 2)
         self.maps_selection = QComboBox()
         self.get_maps()
+        self.maps_selection.currentIndexChanged.connect(self.handleMapSelection)
         self.layout.addWidget(self.maps_selection, 0, 0)
 
         self.info_panel.map_loaded.connect(self.set_map)
 
-    def get_maps(self):
-        if self._database and self._database.isRunning():
-            return
-
-        self._database = DataBase(action="get_available_maps", data={})
-        self._database.action_completed.connect(self.get_maps_finished)
-        self._database.start()
-
-    def get_maps_finished(self, msg, data):
-        maps = data.get("maps")
-        for map in maps:
-            file_path = map["file_path"]
-            self.maps_selection.addItem(file_path)
-
-        self._database.quit()
-        self._database.wait()
-        self._database = None
+    def handleMapSelection(self, index):
+        self.getAlerts()
 
     def setup_alert_list(self):
+        """Creates a dedicated UI container for alerts along with pagination controls."""
+        # Main layout container for the alert module section
+        self.alert_section_layout = QVBoxLayout()
+
+        # Container specifically holding alert item cards
         self.alerts_container = QWidget()
         self.alerts_layout = QVBoxLayout(self.alerts_container)
         self.alerts_layout.setSpacing(5)
         self.alerts_layout.addStretch()
 
-        self.main_layout.addWidget(self.alerts_container)
-        # self.main_layout.addWidget(self.scroll_slider)
-        # self.layout.addWidget(self.showmore_button, 3, 0)
+        # Pagination Control Layout
+        self.pagination_layout = QHBoxLayout()
+
+        self.prev_button = QPushButton("Anterior")
+        self.next_button = QPushButton("Siguiente")
+        self.page_label = QLabel("Página 1")
+
+        # Apply styling rules matching your design tokens
+        self.prev_button.setStyleSheet(secondary_button_style)
+        self.next_button.setStyleSheet(secondary_button_style)
+        self.page_label.setStyleSheet(muted_label_style)
+        self.page_label.setAlignment(Qt.AlignCenter)
+
+        # Pagination Action Connections
+        self.prev_button.clicked.connect(self.goToPrevPage)
+        self.next_button.clicked.connect(self.goToNextPage)
+
+        # Assemble Pagination Control Bar
+        self.pagination_layout.addWidget(self.prev_button)
+        self.pagination_layout.addWidget(self.page_label, 1)
+        self.pagination_layout.addWidget(self.next_button)
+
+        # Combine items view and controls into the main section
+        self.alert_section_layout.addWidget(self.alerts_container, 1)
+        self.alert_section_layout.addLayout(self.pagination_layout)
+
+        # Inject into the primary window layout hierarchy
+        self.main_layout.addLayout(self.alert_section_layout, 2)
+        self.getAlerts()
 
     def add_alerts(self, alerts=[]):
         for alert in alerts:
             x_position, y_position, status, date, time, message = alert
             text = f"{message} {date} {time}"
             if text:
-                # style = random.choice(
-                #     [error_label_style, warning_label_style, info_label_style]
-                # )
                 if status == AlertStatus.ERROR.value:
                     style = error_label_style
                 elif status == AlertStatus.WARNING.value:
@@ -727,109 +745,137 @@ class LogPanel(QWidget):
             item.deleteLater()
         self.alerts_items = []
 
-    def handleShowMoreAlerts(self, u):
-        # self.remove_todo_item()
-        # self.add_todo()
-        if not self.map:
+    # --- Database Driven Pagination Controls ---
+
+    def goToPrevPage(self):
+        """Triggers a database reload for the previous page window."""
+        if self.page_number > 0:
+            self.page_number -= 1
+            self.getAlerts()
+
+    def goToNextPage(self):
+        """Triggers a database reload for the next page window."""
+        self.page_number += 1
+        print(f"next page: {self.page_number}")
+        self.getAlerts()
+
+    def getAlerts(self):
+        """Dispatches an asynchronous thread task fetching specific page limits."""
+        if self._database and self._database.isRunning():
             return
 
-        self.showmore_button.setText("Mostrar mas")
+        self._database = DataBase(
+            action="get_filtered_alerts",
+            data={
+                "status": None,
+                "ascendant": self.ascendant,
+                "page_size": self.PAGE_SIZE,
+                "page_number": self.page_number,
+                "map_file": self.maps_selection.currentText(),
+            },
+        )
+        self._database.action_completed.connect(self.handleTaskFinish)
+        self._database.start()
 
-        self.page_number = self.page_number + 1
-        self.getAlerts()
+    def handleTaskFinish(self, msg, data):
+        """Processes async data return and enforces edge-case pagination states."""
+        if self._database:
+            self._database.quit()
+            self._database.wait()
+            self._database = None
+
+        # UI Refresh
+        results = data.get("alerts")
+        has_more = data.get("has_more", False)
+        self.remove_alert_item()
+        self.add_alerts(results)
+
+        self.page_label.setText(f"Página {self.page_number + 1}")
+
+        # # Edge Case 1: Disable previous button if we are back on page 0
+        self.prev_button.setEnabled(self.page_number > 0)
+
+        # # Edge Case 2: Disable next button if returned rows are less than a full PAGE_SIZE payload
+        self.next_button.setEnabled(has_more)
 
     def filterAlertsAll(self, filter):
         if not self.map:
             return
-
         self.status = None
+        self.page_number = 0  # Always reset viewport to initial page on filter changes
         self.getAlerts()
         self.filter_bytAll_button.setStyleSheet(tag_selected_button_style)
         self.filter_byErrors_button.setStyleSheet(tag_button_style)
         self.filter_byInfos_button.setStyleSheet(tag_button_style)
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
-        # self.filter_bydate_button.setStyleSheet(tag_button_style)
 
     def filterAlertsError(self):
         if not self.map:
             return
         self.status = AlertStatus.ERROR.value
+        self.page_number = 0  # Always reset viewport to initial page on filter changes
         self.getAlerts()
         self.filter_bytAll_button.setStyleSheet(tag_button_style)
         self.filter_byErrors_button.setStyleSheet(tag_selected_button_style)
         self.filter_byInfos_button.setStyleSheet(tag_button_style)
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
-        # self.filter_bydate_button.setStyleSheet(tag_button_style)
 
     def filterAlertsWarning(self):
         if not self.map:
             return
         self.status = AlertStatus.WARNING.value
+        self.page_number = 0  # Always reset viewport to initial page on filter changes
         self.getAlerts()
         self.filter_bytAll_button.setStyleSheet(tag_button_style)
         self.filter_byErrors_button.setStyleSheet(tag_button_style)
         self.filter_byInfos_button.setStyleSheet(tag_button_style)
         self.filter_byWarnings_button.setStyleSheet(tag_selected_button_style)
-        # self.filter_bydate_button.setStyleSheet(tag_button_style)
 
     def filterAlertsInfo(self):
         if not self.map:
             return
         self.status = AlertStatus.INFO.value
+        self.page_number = 0  # Always reset viewport to initial page on filter changes
         self.getAlerts()
         self.filter_bytAll_button.setStyleSheet(tag_button_style)
         self.filter_byErrors_button.setStyleSheet(tag_button_style)
         self.filter_byInfos_button.setStyleSheet(tag_selected_button_style)
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
-        # self.filter_bydate_button.setStyleSheet(tag_button_style)
-
-    def handleTaskFinish(self, data):
-        self.filter_bytype_task.quit()
-        self.filter_bytype_task.wait()
-        self.filter_bytype_task = None
-        self.remove_alert_item()
-        self.add_alerts(data)
-
-        if self.ascendant:
-            self.filter_bydate_button.setText("⬆ Ascendente")
-        else:
-            self.filter_bydate_button.setText("⬇ Descendente")
-
-        if len(data) == 0:
-            self.page_number = 0
-            self.showmore_button.setText("Volver al principio")
-
-    def getAlerts(self):
-        if self.filter_bytype_task and self.filter_bytype_task.isRunning():
-            return
-
-        self.filter_bytype_task = TaskWorkerFilterByTypeAlerts(
-            status=self.status,
-            ascendant=self.ascendant,
-            page_number=self.page_number,
-            page_size=self.PAGE_ZISE,
-            map=self.map,
-        )
-
-        self.filter_bytype_task.filter_bytype_finished.connect(self.handleTaskFinish)
-        self.filter_bytype_task.start()
 
     def toggleAscendantDescendant(self):
         if not self.map:
             return
-
-        if self.ascendant:
-            self.ascendant = False
-            self.getAlerts()
-        else:
-            self.ascendant = True
-            self.getAlerts()
+        self.ascendant = not self.ascendant
+        self.page_number = 0  # Reset pagination context window upon re-sorting
+        self.getAlerts()
 
     def set_map(self, map_filepath):
-        self.info_label.hide()
+        # Prevent runtime AttributeError if info_label isn't declared
+        if hasattr(self, "info_label"):
+            self.info_label.hide()
         self.map = map_filepath
-        print("Log system set map ")
+        self.page_number = 0  # Clean slate pagination window context
+        print("Log system set map")
         self.getAlerts()
+
+    def get_maps(self):
+        if self._database1 and self._database1.isRunning():
+            return
+
+        self._database1 = DataBase(action="get_available_maps", data={})
+        self._database1.action_completed.connect(self.get_maps_finished)
+        self._database1.start()
+
+    def get_maps_finished(self, msg, data):
+        maps = data.get("maps")
+        for map in maps:
+            file_path = map["file_path"]
+            self.maps_selection.addItem(file_path)
+
+        self.setup_alert_list()
+        self._database1.quit()
+        self._database1.wait()
+        self._database1 = None
 
 
 if __name__ == "__main__":
