@@ -479,35 +479,35 @@ class InternalStorageManager:
             except psycopg2.Error as e:
                 print(f"Database error: {e}")
 
-        def save_alerts(self, alerts: list):
-            engine = create_engine(DATABASE_URL)
-            Session = sessionmaker(bind=engine)
-            session = Session()
+    def save_alerts(self, alerts: list):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
-            try:
-                session.commit()
+        try:
+            session.commit()
 
-                data = [
-                    Alert(
-                        checkpoint_id=alert.get("heckpoint_id"),
-                        patrol_id=alert.get("patrol_id"),
-                        message=alert.get("message"),
-                        x_position=alert.get("x_position"),
-                        y_position=alert.get("x_position"),
-                        status=alert.get("status"),
-                        date=alert.get("date"),
-                        time=alert.get("time"),
-                    )
-                    for alert in alerts
-                ]
+            data = [
+                Alert(
+                    checkpoint_id=alert.get("heckpoint_id"),
+                    patrol_id=alert.get("patrol_id"),
+                    message=alert.get("message"),
+                    x_position=alert.get("x_position"),
+                    y_position=alert.get("x_position"),
+                    status=alert.get("status"),
+                    date=alert.get("date"),
+                    time=alert.get("time"),
+                )
+                for alert in alerts
+            ]
 
-                session.add_all(data)
-                session.commit()
-            except Exception as e:
-                session.rollback()
-                print(f"Error setting up data -- alerts: {e}")
-            finally:
-                session.close()
+            session.add_all(data)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data -- alerts: {e}")
+        finally:
+            session.close()
 
         def save_calibration(self, calibration_data: dict):
             """'
@@ -829,6 +829,8 @@ class InternalStorageManager:
         status: int = None,
         ascendant: bool = False,
         map_file: str = None,
+        start_date: str = None,
+        end_date: str = None,
     ) -> dict:
         """
         Fetches a paginated, sorted, and filtered list of alerts from the database.
@@ -857,7 +859,8 @@ class InternalStorageManager:
             Alert.date,
             Alert.time,
             Alert.message,
-        )
+            Checkpoint.image_bytes,
+        ).outerjoin(Checkpoint, Alert.checkpoint_id == Checkpoint.id)
 
         # 2. Apply conditional status filtering
         if status is not None:
@@ -869,6 +872,12 @@ class InternalStorageManager:
             query = query.join(Map, Alert.map_id == Map.id).filter(
                 Map.file_path == map_file
             )
+
+        if start_date is not None:
+            query = query.filter(Alert.date >= start_date)
+
+        if end_date is not None:
+            query = query.filter(Alert.date <= end_date)
 
         # 3. Apply chronological sorting (Primary: Date, Secondary: Time)
         if ascendant:
@@ -979,10 +988,13 @@ class DataBase(QThread):
 
         if self.action == "get_filtered_alerts":
             data = self.internal_storage_manager.get_filtered_alerts(
-                # status=self.data.get("status"),
+                status=self.data.get("status"),
                 page_size=self.data.get("page_size"),
                 page_number=self.data.get("page_number"),
                 map_file=self.data.get("map_file"),
+                start_date=self.data.get("start_date"),
+                end_date=self.data.get("end_date"),
+                ascendant=self.data.get("ascendant", False),
             )
             self.action_completed.emit("SuccessGetFilteredAlerts", data)
 

@@ -20,6 +20,7 @@ from matplotlib.backends.backend_qt5agg import (
 )
 from matplotlib.figure import Figure
 from PyQt5.QtCore import (
+    QDate,
     QEasingCurve,
     QPropertyAnimation,
     Qt,
@@ -41,6 +42,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDateEdit,
     QFileDialog,
     QGraphicsItem,
     QGraphicsScene,
@@ -328,10 +330,11 @@ class Example(QGraphicsView):
 class AlertItem(QWidget):
     show_details = pyqtSignal(dict)
 
-    def __init__(self, text, parent=None, style=None):
+    def __init__(self, text, alert_data, parent=None, style=None):
         super().__init__(parent)
         self.parent = parent
         self.text = text
+        self.alert_data = alert_data
 
         self.label = QLabel(text)
 
@@ -342,13 +345,18 @@ class AlertItem(QWidget):
         self.setLayout(layout)
 
     def mousePressEvent(self, event):
-        print("CLicked")
-        text = self.text.split(" ")
-        message = text[0]
-        date = text[1]
-        time = text[2]
-
-        self.show_details.emit({"message": message, "date": date, "time": time})
+        x_position, y_position, status, date, time, message, image_bytes = (
+            self.alert_data
+        )
+        self.show_details.emit(
+            {
+                "message": message,
+                "date": str(date),
+                "time": str(time),
+                "status": status,
+                "image_bytes": image_bytes,
+            }
+        )
 
 
 class InfoPanel(QGroupBox):
@@ -419,6 +427,7 @@ class InfoPanel(QGroupBox):
         self.main_layout.setCurrentIndex(1)
 
     def handleShowAlertInfo(self, info_data):
+        self.alert_details.set_data(info_data)
         self.main_layout.setCurrentIndex(1)
 
     def get_checkpoints_stats(self, map_filepath):
@@ -485,20 +494,69 @@ class InfoPanel(QGroupBox):
 class AlertDetails(QGroupBox):
     def __init__(self) -> None:
         super().__init__()
-        self.layout = QGridLayout()
-        self.title_label = QLabel("ERROR: EL epepe etete")
-        self.datetime_label = QLabel("1234-23-24")
-        self.back2stats_button = QPushButton("Volver a Estadisticas")
-        self.playdata_button = QPushButton("Play recorded data")
+        self.layout = QVBoxLayout()
+
+        self.image_label = QLabel("No Image")
+        self.image_label.setFixedSize(700, 500)
+        self.image_label.setScaledContents(True)
+        self.image_label.setStyleSheet(
+            "border: 1px solid #ddd; background-color: #f0f0f0;"
+        )
+
+        self.title_label = QLabel("ERROR: --")
+        self.datetime_label = QLabel("----/--/-- --:--:--")
+        self.message_label = QLabel("Message details...")
 
         self.title_label.setStyleSheet(title_label_style)
         self.datetime_label.setStyleSheet(section_header_label_style)
+        self.message_label.setStyleSheet(normal_label_style)
+        self.message_label.setWordWrap(True)
 
-        self.layout.addWidget(self.title_label, 0, 2)
-        self.layout.addWidget(self.datetime_label, 1, 2)
-        self.layout.addWidget(self.back2stats_button, 4, 0, 1, 3)
-        self.layout.addWidget(self.playdata_button, 3, 2)
+        self.back2stats_button = QPushButton("Volver a Estadisticas")
+        self.playdata_button = QPushButton("Play recorded data")
+        self.back2stats_button.setStyleSheet(secondary_button_style)
+        self.playdata_button.setStyleSheet(primary_button_style)
+
+        self.layout.addWidget(self.image_label, alignment=Qt.AlignCenter)
+        self.layout.addWidget(self.title_label)
+        self.layout.addWidget(self.datetime_label)
+        self.layout.addWidget(self.message_label)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.back2stats_button)
+        buttons_layout.addWidget(self.playdata_button)
+        self.layout.addLayout(buttons_layout)
+
         self.setLayout(self.layout)
+
+    def set_data(self, data):
+        message = data.get("message", "N/A")
+        date = data.get("date", "N/A")
+        time = data.get("time", "N/A")
+        status = data.get("status", 0)
+        image_bytes = data.get("image_bytes")
+
+        status_text = "INFO"
+        if status == AlertStatus.ERROR.value:
+            status_text = "ERROR"
+        elif status == AlertStatus.WARNING.value:
+            status_text = "WARNING"
+
+        self.title_label.setText(f"{status_text}: {message}")
+        self.datetime_label.setText(f"{date} {time}")
+        self.message_label.setText(
+            f"Detalles de la alerta registrada en el punto de control."
+        )
+
+        if image_bytes:
+            pixmap = QPixmap()
+            pixmap.loadFromData(image_bytes)
+            if not pixmap.isNull():
+                self.image_label.setPixmap(pixmap)
+            else:
+                self.image_label.setText("Invalid Image Data")
+        else:
+            self.image_label.setText("No Image Available")
 
 
 class StatContainer(QGroupBox):
@@ -625,7 +683,7 @@ class TaskWorkerFilterByTypeAlerts(QThread):
             ascendant=self.ascendant,
             page_size=self.page_size,
             page_number=self.page_number,
-            map=self.map,
+            map_file=self.map,
         )
         if data:
             self.filter_bytype_finished.emit(data)
@@ -662,12 +720,14 @@ class LogPanel(QWidget):
         self.stacked_layout = QStackedLayout()
         self.main_layout.addLayout(self.stacked_layout)
 
+        self.start_date_edit = QDateEdit(QDate.currentDate().addDays(-30))
+        self.end_date_edit = QDateEdit(QDate.currentDate())
         self.input_layout = QVBoxLayout()
         btn = QPushButton("Cargar mapa")
         self.input_layout.addWidget(btn)
 
         self.layout.addLayout(self.input_layout, 1, 0)
-        self.layout.addWidget(self.info_panel, 2, 1)
+        self.layout.addWidget(self.info_panel, 0, 1, 3, 1)
 
         self.maps_selection = QComboBox()
         self.get_maps()
@@ -698,8 +758,8 @@ class LogPanel(QWidget):
         self.page_label = QLabel("Página 1")
 
         # Apply styling rules matching your design tokens
-        self.prev_button.setStyleSheet(secondary_button_style)
-        self.next_button.setStyleSheet(secondary_button_style)
+        # self.prev_button.setStyleSheet(secondary_button_style)
+        # self.next_button.setStyleSheet(secondary_button_style)
         self.page_label.setStyleSheet(muted_label_style)
         self.page_label.setAlignment(Qt.AlignCenter)
 
@@ -712,7 +772,26 @@ class LogPanel(QWidget):
         self.pagination_layout.addWidget(self.page_label, 1)
         self.pagination_layout.addWidget(self.next_button)
 
+        # Date Filtering UI
+        self.filter_layout = QHBoxLayout()
+        self.start_date_edit.setCalendarPopup(True)
+        self.end_date_edit.setCalendarPopup(True)
+
+        self.start_date_edit.dateChanged.connect(lambda: self.getAlerts())
+        self.end_date_edit.dateChanged.connect(lambda: self.getAlerts())
+
+        start_label = QLabel("Desde:")
+        start_label.setStyleSheet(muted_label_style)
+        end_label = QLabel("Hasta:")
+        end_label.setStyleSheet(muted_label_style)
+
+        self.filter_layout.addWidget(start_label)
+        self.filter_layout.addWidget(self.start_date_edit)
+        self.filter_layout.addWidget(end_label)
+        self.filter_layout.addWidget(self.end_date_edit)
+
         # Combine items view and controls into the main section
+        self.alert_section_layout.addLayout(self.filter_layout)
         self.alert_section_layout.addWidget(self.alerts_container, 1)
         self.alert_section_layout.addLayout(self.pagination_layout)
 
@@ -722,7 +801,7 @@ class LogPanel(QWidget):
 
     def add_alerts(self, alerts=[]):
         for alert in alerts:
-            x_position, y_position, status, date, time, message = alert
+            x_position, y_position, status, date, time, message, image_bytes = alert
             text = f"{message} {date} {time}"
             if text:
                 if status == AlertStatus.ERROR.value:
@@ -732,7 +811,7 @@ class LogPanel(QWidget):
                 else:
                     style = info_label_style
 
-                alert_item = AlertItem(text, self, style=style)
+                alert_item = AlertItem(text, alert, self, style=style)
                 self.alerts_layout.insertWidget(
                     self.alerts_layout.count() - 1, alert_item
                 )
@@ -767,11 +846,13 @@ class LogPanel(QWidget):
         self._database = DataBase(
             action="get_filtered_alerts",
             data={
-                "status": None,
+                "status": self.status,
                 "ascendant": self.ascendant,
                 "page_size": self.PAGE_SIZE,
                 "page_number": self.page_number,
                 "map_file": self.maps_selection.currentText(),
+                "start_date": self.start_date_edit.date().toPyDate(),
+                "end_date": self.end_date_edit.date().toPyDate(),
             },
         )
         self._database.action_completed.connect(self.handleTaskFinish)
