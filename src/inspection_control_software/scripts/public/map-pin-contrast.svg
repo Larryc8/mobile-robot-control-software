@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="800px" height="800px" viewBox="0 0 1024 1024" class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Map base light panel -->
+  <path d="M640 213.333333L384 128 128 213.333333v682.666667l256-85.333333 256 85.333333 256-85.333333V128z"
+        fill="#FFECB3" stroke="#C8860A" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Map center darker panel -->
+  <path d="M384 128v682.666667l256 85.333333V213.333333z"
+        fill="#FFE082" stroke="#C8860A" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Location pin drop shape -->
+  <path d="M640 320c-82.496 0-149.333333 70.250667-149.333333 156.821333S640 768 640 768s149.333333-204.629333 149.333333-291.178667S722.496 320 640 320z"
+        fill="#F44336" stroke="#B71C1C" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Pin inner circle -->
+  <path d="M640 469.333333m-64 0a64 64 0 1 0 128 0 64 64 0 1 0-128 0Z"
+        fill="#FFEBEE" stroke="#EF9A9A" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+
+</svg>

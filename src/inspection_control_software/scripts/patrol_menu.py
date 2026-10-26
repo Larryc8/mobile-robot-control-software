@@ -1,0 +1,280 @@
+"""Popup form for creating/editing a scheduled patrol's days and time."""
+from input_textdialog import CustomDialog
+from PyQt5.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QRect,
+    Qt,
+    QTime,
+    pyqtSignal,
+    pyqtSlot,
+)
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QGraphicsOpacityEffect,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QMainWindow,
+    QMenu,
+    QPushButton,
+    QScrollArea,
+    QSlider,
+    QStackedLayout,
+    QStyle,
+    QTabWidget,
+    QTimeEdit,
+    QVBoxLayout,
+    QWidget,
+)
+from styles.buttons import primary_button_style, secondary_button_style
+from styles.labels import (
+    border_label_style,
+    error_label_style,
+    inactive_label_style,
+    muted_mini_label_style,
+)
+
+
+class PatrolsMenu(QMainWindow):
+    """Frameless popup to pick a patrol's weekdays and time and save it.
+
+    Emits ``update_date`` with ``{patrolid: {days, time, state,
+    current_weekday}}`` on save.
+    """
+
+    update_date = pyqtSignal(dict)
+
+    def __init__(
+        self,
+        parent,
+        selected_days,
+        patrolid,
+        time="0000",
+        state=None,
+        current_weekday=None,
+    ) -> None:
+        super().__init__()
+        # self.update_date = pyqtSignal(dict)
+        # print(parent)
+        # self.setFixedSize(300, 150)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.setStyleSheet("""
+            QMainWindow {
+                border: 2px solid lightgray;
+                border-radius: 5px;
+                background-color: white;
+            }
+        """)
+
+        self.setGeometry(0, 0, 380, 275)
+        self.patrolid = patrolid
+        self.state = state
+        self.parent = parent
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        self.days_labels = DaySelect(selected_days=selected_days)
+        self.time = TimeSelect()
+        self.time.setTime(time)
+        self.current_weekday = current_weekday
+
+        buttons_layout = QHBoxLayout()
+        close_btn = QPushButton(" Cerrar")
+        save_btn = QPushButton(" Guardar")
+        buttons_layout.addWidget(close_btn, 1)
+        buttons_layout.addWidget(save_btn, 2)
+        save_btn.setStyleSheet(primary_button_style)
+        close_btn.setStyleSheet(secondary_button_style)
+
+        icon_save = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
+        save_btn.setIcon(icon_save)
+
+        self.empty_days_alert = QLabel("✘ ERROR: Seleccione almenos un dia!")
+        self.empty_days_alert.setStyleSheet(error_label_style)
+        self.empty_days_alert.hide()
+        layout = QVBoxLayout()
+        layout.addWidget(self.time, alignment=Qt.AlignTop)
+        layout.addWidget(self.days_labels, alignment=Qt.AlignTop)
+        layout.addWidget(self.empty_days_alert, alignment=Qt.AlignTop)
+
+        layout.addLayout(buttons_layout)
+        save_btn.clicked.connect(self.save)
+        close_btn.clicked.connect(self.close)
+        self.central_widget.setLayout(layout)
+
+    def show_popup(self):
+        """Position the popup near the parent window and show it."""
+        # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
+        # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
+        popup_x = self.parent.x() + (self.parent.width() - self.width() - 60)
+        popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
+        # print("popup", popup_x, popup_y)
+        self.move(popup_x, popup_y)
+        self.show()
+
+    def close_popup(self):
+        """Hide the popup."""
+        self.hide()
+
+    def save(self):
+        """Validate at least one day is selected, then emit ``update_date``."""
+        time = self.time.getTime()
+        days = self.days_labels.get_selected_days()
+        # print('patrol menu', days)
+        x = {
+            f"{name}": {
+                "day": f"{name}",
+                "time": time,
+                "finished": False,
+                "patrolid": str(self.patrolid),
+            }
+            for name in days
+            if name
+        }
+        if len(x) == 0:
+            self.empty_days_alert.show()
+            return
+
+        a = {
+            "days": x,
+            "time": time,
+            "state": self.state,
+            "current_weekday": self.current_weekday,
+        }
+        print("A MA, FUNCIONA patrool menu", x)
+        self.update_date.emit({str(self.patrolid): a})
+        self.hide()
+
+
+class TimeSelect(QGroupBox):
+    """Hour/minute pickers (24h format) for a patrol's scheduled time."""
+
+    def __init__(self) -> None:
+        super().__init__("Seleccione la hora de los patrullas (Formato 24 horas)")
+        self.hours = QTimeEdit(self)
+        self.minutes = QTimeEdit(self)
+        self.ap = QTimeEdit()
+        # self.hours.setStyleSheet(f"font-size: {fontsize}px;")
+        # self.minutes.setStyleSheet(f"font-size: {fontsize}px;")
+        self.hours.setDisplayFormat("HH")
+        self.minutes.setDisplayFormat("mm")
+        self.ap.setDisplayFormat("AP")
+
+        self.layout = QGridLayout()
+        self.hours_label = QLabel("Horas")
+        self.minutes_label = QLabel("Minutes")
+        self.layout.addWidget(self.hours_label, 0, 0)
+        self.layout.addWidget(self.minutes_label, 0, 1)
+        self.layout.addWidget(self.hours, 1, 0)
+        self.layout.addWidget(self.minutes, 1, 1)
+        self.layout.addWidget(self.ap, 1, 2)
+        self.setLayout(self.layout)
+
+        style = """
+            QTimeEdit {
+                border: 2px solid #3498db;
+                padding: 2px 10px;
+                background: white;
+                font-size: 25px;
+            }
+
+            QTimeEdit:hover {
+                border-color: #2980b9;
+            }
+
+            QTimeEdit::up-button, QTimeEdit::down-button {
+                background-color: #3498db;
+                border: none;
+                width: 40px;
+            }
+
+            QTimeEdit::up-button:hover, QTimeEdit::down-button:hover {
+                background-color: blue;
+            }
+        """
+        self.hours.setStyleSheet(style)
+        self.minutes.setStyleSheet(style)
+        self.ap.setStyleSheet(style)
+        self.hours_label.setStyleSheet(muted_mini_label_style)
+        self.minutes_label.setStyleSheet(muted_mini_label_style)
+
+    def setTime(self, time: str):
+        """Set the pickers from an ``HHMM`` string."""
+        x = [digit for digit in time]
+        hours_value = "".join(x[:2])
+        minutes_value = "".join(x[2:])
+        self.hours.setTime(QTime.fromString(hours_value, "HH"))
+        self.minutes.setTime(QTime.fromString(minutes_value, "mm"))
+
+    def getTime(self):
+        """Return the current selection as an ``HHMM`` string."""
+        hours = self.hours.time()
+        minutes = self.minutes.time()
+        time_str = f"{hours.toString('HH')}{minutes.toString('mm')}"
+        return time_str
+
+
+class DaySelect(QGroupBox):
+    """Row of toggleable :class:`DayLabel` weekday chips."""
+
+    days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+
+    def __init__(self, selected_days) -> None:
+        super().__init__("Seleccione los dias para hacer el patrullaje")
+        self.setMinimumHeight(80)
+        self.setMaximumHeight(80)
+        self.layout = QHBoxLayout()
+        self.days_labels = [DayLabel(day) for day in self.days_shortname]
+
+        for text, label in zip(self.days_shortname, self.days_labels):
+            if text in selected_days:
+                label.setStyleSheet(border_label_style)
+                label.isSelected = False
+                label.state = True
+            else:
+                label.setStyleSheet(inactive_label_style)
+                label.isSelected = True
+                label.state = False
+
+            self.layout.addWidget(label)
+        self.setLayout(self.layout)
+
+    def get_selected_days(self):
+        """Return the short names of the currently selected days (``None`` filtered out by callers)."""
+        return [label.value() for label in self.days_labels]
+
+
+class DayLabel(QLabel):
+    """Single clickable weekday chip; toggles its selected style on click."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        self.isSelected = True
+        self.state = True
+        self.value1 = None
+        self.text = text
+
+    def mousePressEvent(self, event):
+        """Toggle this day's selected state and restyle."""
+        if event.button() == Qt.LeftButton:
+            if self.isSelected:
+                self.setStyleSheet(border_label_style)
+                # self.setStyleSheet("background-color: red; font-size: 20px;")
+            else:
+                # self.value1 = None
+                self.setStyleSheet(inactive_label_style)
+
+            self.isSelected = not self.isSelected
+            self.state = not self.state
+            super().mousePressEvent(event)
+
+    def value(self):
+        """Return this day's short name if selected, else ``None``."""
+        if self.state:
+            return self.text
+        else:
+            return None

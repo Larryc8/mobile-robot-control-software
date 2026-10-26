@@ -1,0 +1,9 @@
+<library path="lib/libinspection_control_software">
+  <class name="inspection_control_software/PlantFlag"
+    type="rviz_plugin_tutorials::PlantFlagTool"
+    base_class_type="rviz::Tool">
+    <description>
+      !Porque se me da la gana!
+    </description>
+  </class>
+</library>

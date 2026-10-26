@@ -1,0 +1,819 @@
+"""Configuration tab UI: advanced ROS-parameter editor and the "friendly" setup screen.
+
+``ConfigPanel`` is the widget mounted as the app's "Configuracion" tab. It
+flips between two views via a ``QStackedLayout``:
+
+- ``FriendlyConfig``: simplified robot/navigation setup plus a calibration
+  patrol runner and a scratch to-do list.
+- The advanced view: one ``Panel`` of ``ConfigInput`` sliders per
+  ``ConfigModel`` (mapping/localization/planning ROS params), with a text
+  filter and save/apply buttons that persist values and restart the
+  affected ROS nodes.
+"""
+import os
+import sys
+import time
+from fileinput import isstdin
+from typing import List
+
+import numpy as np
+import rospy
+from config_model import ConfigModel, NodesManager, StaticParamsConfigLoader
+from input_textdialog import CustomDialog
+from patrols_scheduler import PatrolsEscheduler
+from place_form import PlaceForm
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QPixmap, QTransform
+from PyQt5.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QLineEdit,
+    QMainWindow,
+    QProgressBar,
+    QPushButton,
+    QSlider,
+    QStackedLayout,
+    QStyle,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+from pyqttoast import Toast, ToastPreset
+from robot_control_vel import (
+    RobotVelocityController,
+)
+from robot_form import RobotConfigForm
+from styles.buttons import (
+    border_button_style,
+    border_button_style_danger,
+    colored_button_style,
+    error_simple_line_edit_style,
+    minimal_button_style,
+    modern_line_edit_style,
+    patrol_checkbox_style,
+    primary_button_style,
+    secondary_button_style,
+    simple_line_edit_style,
+    simple_slider_leftright_style,
+    simple_slider_rightleft_style,
+    tertiary_button_style,
+    toggle_button_style,
+)
+from styles.labels import (
+    inactive_label_style,
+    minimal_label_style,
+    subtitle_label_style,
+)
+
+# Usage example
+# if __name__ == "__main__":
+#     # Initialize the JSON manager
+#     manager = JSONFileManager('config.json')
+#
+#     # Update nested values
+#     manager.update_value('app.theme', 'dark')
+#     manager.update_value('app.language', 'en')
+#     manager.update_value('user.preferences.font_size', 14)
+#
+#     # Add items to arrays
+#     manager.add_to_array('user.favorites', 'python')
+#     manager.add_to_array('user.favorites', 'json')
+#     manager.add_to_array('app.recent_files', 'document1.txt')
+#
+#     # Display the final configuration
+#     final_data = manager.read_data()
+#     print("Final configuration:")
+#     print(json.dumps(final_data, indent=2))
+
+
+class ConfigPanel(QWidget):
+    """Advanced + friendly configuration screen for the robot's ROS stack.
+
+    Owns three :class:`~config_model.ConfigModel` instances (mapping,
+    localization, DWA planner) rendered as tabs of :class:`Panel` sliders,
+    and a :class:`FriendlyConfig` simplified view. ``query_param`` carries
+    the live text-filter query to each tab's parameter list.
+    """
+
+    query_param = pyqtSignal(str)
+
+    def __init__(self, nodes_manager, parent=None, patrols_scheduler=None) -> None:
+        super().__init__()
+        self.stacklayout = QStackedLayout()
+        self.parent = parent
+        self.config_mapping = ConfigModel(workspace="/turtlebot3_slam_gmapping/")
+        self.config_dwa_planner = ConfigModel(
+            param_file="./config/navigation_dwaplanner_params.yml",
+            workspace="/move_base/DWAPlannerROS/",
+        )
+        self.config_acml = ConfigModel(
+            param_file="./config/navigation_acml_params.yml", workspace="/acml/"
+        )
+        self.configs = {
+            "Mapeo": self.config_mapping,
+            "Localizacion": self.config_acml,
+            "Planeacion": self.config_dwa_planner,
+        }
+
+        _ = StaticParamsConfigLoader(
+            "./config/navigation_move_base_static_params.yml", "/move_base/"
+        )
+
+        self.nodes_manager = nodes_manager
+        self.nodes = [
+            {
+                "package": "gmapping",
+                "exec": "slam_gmapping",
+                "name": "turtlebot3_slam_gmapping",
+            }
+        ]
+
+        self.layout = QVBoxLayout()
+        self.buttons_layout = QHBoxLayout()
+        self.tabs = QTabWidget()
+        self.filter_text = QLineEdit()
+        self.filter_text.setPlaceholderText("Busca los parametros por nombre")
+        self.filter_text.returnPressed.connect(self.handleLineEditEnter)
+        self.filter_text.setStyleSheet(simple_line_edit_style)
+
+        self.panels = [
+            {
+                "Mapeo": Panel(
+                    self.config_mapping.get_params(), self.config_mapping.get_ranges()
+                )
+            },
+            {
+                "Localizacion": Panel(
+                    self.config_acml.get_params(), self.config_acml.get_ranges()
+                )
+            },
+            {
+                "Planeacion": Panel(
+                    self.config_dwa_planner.get_params(),
+                    self.config_dwa_planner.get_ranges(),
+                )
+            },
+        ]
+
+        for panel in self.panels:
+            [(name, tab)] = panel.items()
+            self.tabs.addTab(tab, name)
+            self.query_param.connect(tab.update_panel)
+
+        self.tabs.setStyleSheet("""
+
+            QTabBar::tab {
+                background: #F5F5F5;
+                padding: 8px;
+                color: #555;
+            }
+
+            QTabBar::tab:selected {
+                color: #333;
+                border-bottom: 4px solid #2196F3;
+            }
+        """)
+        # self.tabs.setTabPosition(QTabWidget.West)  # Set tabs to left side
+        # self.tabs.setTabPosition(QTabWidget.West)
+
+        self.save_config_button = QPushButton("Guardar Configuracion")
+        self.save_config_button.setMaximumWidth(300)
+        self.apply_config_button = QPushButton("Aplicar Cambios")
+        self.reset_config_btn = QPushButton("Restaurar valores")
+        self.back_btn = QPushButton("↤ Atras")
+        self.back_btn.setFixedWidth(100)
+
+        self.buttons_layout.addWidget(self.save_config_button, 2)
+        # self.buttons_layout.addWidget(self.reset_config_btn, 1 )
+        self.buttons_layout.addWidget(self.apply_config_button, 1)
+
+        self.apply_config_button.hide()
+
+        self.save_config_button.clicked.connect(self.saveClickHandler)
+        self.apply_config_button.clicked.connect(self.applyClickHandler)
+        self.back_btn.clicked.connect(self.set_friendly_config)
+
+        self.save_config_button.setStyleSheet(colored_button_style)
+        self.apply_config_button.setStyleSheet(primary_button_style)
+        self.back_btn.setStyleSheet(primary_button_style)
+        # self.reset_config_btn.setStyleSheet(secondary_button_style)
+        # self.start_nodes_button.clicked.connect(self.startNodesClickHandler)
+        # btn.setIcon(QApplication.style().standardIcon()) SP_BrowserReload
+
+        icon = QApplication.style().standardIcon(QStyle.SP_DialogSaveButton)
+        self.save_config_button.setIcon(icon)
+        icon = QApplication.style().standardIcon(QStyle.SP_DialogApplyButton)
+        self.apply_config_button.setIcon(icon)
+        icon = QApplication.style().standardIcon(QStyle.SP_BrowserReload)
+        self.reset_config_btn.setIcon(icon)
+
+        self.layout.addWidget(self.back_btn)
+        self.layout.addWidget(self.filter_text)
+        self.layout.addWidget(self.tabs)
+        # self.layout.addWidget(self.reset_config_btn)
+        self.layout.addLayout(self.buttons_layout)
+        # self.stacklayout.addLayout(self.layout)
+        self.advance_config_wrapper = QWidget()
+        self.basic_config_wrapper = FriendlyConfig(patrols_scheduler=patrols_scheduler)
+        self.advance_config_wrapper.setLayout(self.layout)
+        self.stacklayout.addWidget(self.basic_config_wrapper)
+        self.stacklayout.addWidget(self.advance_config_wrapper)
+
+        self.basic_config_wrapper.config_type_change.connect(
+            self.handleConfigTypeChange
+        )
+
+        self.upper_layout = QVBoxLayout()
+        # self.upper_layout.addWidget(QPushButton('Advence'))
+        self.upper_layout.addLayout(self.stacklayout)
+
+        # self.setLayout(self.layout)
+        self.setLayout(self.upper_layout)
+
+    def handleConfigTypeChange(self, x):
+        """Switch the stacked layout to page ``x`` (0=friendly, 1=advanced)."""
+        self.stacklayout.setCurrentIndex(x)
+
+    def set_friendly_config(self, x):
+        """Go back to the friendly (simplified) configuration view."""
+        self.stacklayout.setCurrentIndex(0)
+
+    @pyqtSlot()
+    def saveClickHandler(self) -> None:
+        """Persist every panel's current values and prompt the user to
+        apply (restart the affected nodes) or defer."""
+        self.apply_config_button.hide()
+        for panel in self.panels:
+            [(name, tab)] = panel.items()
+            self.configs.get(name).set_params(tab.getInputsValue())
+        # self.apply_config_button.show()
+        dialog = CustomDialog(
+            parent=self.parent,
+            title="Applicar configuracion",
+            message="los cambios han sido guardados, quiere aplicar la nueva configuracion?",
+            positive_response="Aplicar",
+            negative_response="Ahora no",
+        )
+        dialog.exec_()
+
+        if dialog.response == "Positive":
+            toast = Toast(self)
+            toast.setDuration(5000)  # Hide after 5 seconds
+            toast.setTitle("Reiniciando Nodos...")
+            toast.setText("Los cambios han sido aplicados con exito")
+            toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+            Toast.setPositionRelativeToWidget(self.parent)
+            toast.show()
+
+            self.applyClickHandler()
+
+    @pyqtSlot()
+    def applyClickHandler(self) -> None:
+        """Restart the ROS nodes so the newly saved parameters take effect."""
+        # self.nodes_manager.stopNodes(["turtlebot3_slam_gmapping"])
+        # self.nodes_manager.bringUpStop()
+        self.nodes_manager.restartNodes()
+        # time.sleep(2)
+        print("RE-START NODES")
+        # self.nodes_manager.bringUpStart()
+        # self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
+
+    @pyqtSlot()
+    def startNodesClickHandler(self) -> None:
+        """Bring up the robot driver stack and start the configured nodes."""
+        self.nodes_manager.bringUpStart()
+        self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
+
+    @pyqtSlot()
+    def handleLineEditEnter(self):
+        """Emit the filter text typed into the search box to all tabs."""
+        text = self.filter_text.text()
+        self.query_param.emit(text)
+
+    @pyqtSlot(int)
+    def update_query_state(self):
+        """Toggle the filter field's error style when the query is empty."""
+        text = ""
+        if text:
+            self.filter_text.setStyleSheet(simple_line_edit_style)
+        else:
+            self.filter_text.setStyleSheet(error_simple_line_edit_style)
+
+
+class Panel(QWidget):
+    """Grid of :class:`ConfigInput` sliders, one per numeric ROS parameter.
+
+    Built from a ``{name: value}`` config dict and a matching ``{name:
+    range}`` dict; supports re-filtering its inputs by name via
+    :meth:`update_panel`.
+    """
+
+    query_result = pyqtSignal(int)
+
+    def __init__(self, configs: dict, ranges: dict = {}) -> None:
+        super().__init__()
+        self.MAX_ELEMENT_BY_COLUMN = 6
+        self.BLACK_LIST = ["map_frame"]
+        self.layout = QGridLayout()
+        self.input_values = configs.copy()
+        self.filter_text = QLineEdit()
+        self.ranges = ranges
+
+        self.generateConfigInputs()
+
+        for index, input in enumerate(self.config_inputs):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            self.layout.addWidget(input, row, column, alignment=Qt.AlignTop)
+
+        self.setLayout(self.layout)
+
+    def generateConfigInputs(self):
+        """Rebuild ``config_inputs`` with one :class:`ConfigInput` per
+        numeric, non-boolean, non-zero value in ``input_values``."""
+        self.config_inputs = []
+        for name, value in self.input_values.items():
+            if (
+                not isinstance(value, str)
+                and not isinstance(value, bool)
+                and value != 0
+            ):
+                slider_range = self.ranges.get(name)
+                self.config_inputs.append(
+                    ConfigInput(
+                        name,
+                        default_value=value,
+                        _range=[
+                            slider_range - slider_range,
+                            slider_range + slider_range,
+                        ],
+                    )
+                )
+
+    def getInputs(self) -> list:
+        """Return the current list of :class:`ConfigInput` widgets."""
+        return self.config_inputs
+
+    def getInputsValue(self) -> dict:
+        """Return the full config dict updated with each input's live value."""
+        for input in self.config_inputs:
+            self.input_values.update(input.value())
+        return self.input_values
+
+    def update_panel(self, text):
+        """Rebuild the grid showing only inputs whose name contains ``text``."""
+        # if text:
+        print("filter from panel", text)
+        for index in range(len(self.config_inputs)):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            item = self.layout.itemAtPosition(row, column)
+            if item:
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+
+        self.generateConfigInputs()
+
+        widget_array = [item for item in self.config_inputs if text in item.title()]
+
+        for index, input in enumerate(widget_array):
+            row = index % self.MAX_ELEMENT_BY_COLUMN
+            column = index // self.MAX_ELEMENT_BY_COLUMN
+            self.layout.addWidget(
+                input, row, column, alignment=(Qt.AlignTop | Qt.AlignLeft)
+            )
+        self.query_result.emit(len(widget_array))
+
+
+class ConfigInput(QGroupBox):
+    """Labelled slider + line edit for a single numeric ROS parameter.
+
+    Maps the parameter's ``_range`` onto 100 slider steps so the slider and
+    the free-text line edit can be kept in sync in both directions.
+    """
+
+    def __init__(
+        self, label_text: str, default_value: int = 0, _range: List[float] = [1, 2]
+    ) -> None:
+        super().__init__(label_text)
+        self.setFixedHeight(105)
+        self.setFixedWidth(300)
+        # self.setStyleSheet("background-color: navy;")
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 14px;
+            }
+
+
+            """)
+        self.range = _range
+        self.name = label_text
+
+        step = (max(self.range) - min(self.range)) / 100
+        if min(self.range) < 0:
+            slider_range = range(100, 0, -1)
+            step = -step
+            style = simple_slider_rightleft_style
+        else:
+            slider_range = range(0, 100, 1)
+            style = simple_slider_leftright_style
+        self.param_values_range = [round(value * step, 5) for value in slider_range]
+
+        self.layout = QVBoxLayout()
+        self.label = QLabel()
+        self.label.setText(self.name)
+        self.value_lebel = QLabel()
+        self.line_edit = QLineEdit()
+        self.current_value = {0: 2.34}
+
+        self.value_lebel.setText(str(default_value))
+        self.line_edit.setText(str(default_value))
+
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setValue(self.mapValueToRange(default_value))
+        self.slider.setTickInterval(20)
+        self.slider.setTickPosition(QSlider.TicksBothSides)
+        # self.slider.setRange(min(range), max(range))
+        self.slider.setStyleSheet(style)
+        self.line_edit.setStyleSheet(modern_line_edit_style)
+
+        self.slider.valueChanged.connect(self.changeEventHandler)
+        self.line_edit.returnPressed.connect(self.handleLineEditChange)
+
+        [self.layout.addWidget(element) for element in (self.line_edit, self.slider)]
+        self.setLayout(self.layout)
+
+    @pyqtSlot(int)
+    def changeEventHandler(self, slider_value):
+        """Reflect a slider move in the value label and the line edit."""
+        # range_index = [value * step for value in _range]
+        value = self.mapRangeToValue(slider_value)
+        self.value_lebel.setText(str(value))
+        self.line_edit.setText(str(value))
+
+    def mapRangeToValue(self, index: int) -> float:
+        """Convert a slider step index into the corresponding param value."""
+        return self.param_values_range[index]
+
+    def mapValueToRange(self, value) -> int:
+        """Convert a param value into its slider step index (-1 if not found)."""
+        try:
+            index = self.param_values_range.index(value)
+            print(f"Found at index {index}")
+        except ValueError:
+            index = -1
+            print("Not found")
+        return index
+
+    def value(self) -> dict:
+        """Return ``{param_name: current_slider_value}``."""
+        return {self.label.text(): self.mapRangeToValue(self.slider.value())}
+
+    def handleLineEditChange(self):
+        """Parse the typed value and move the slider to the closest step."""
+        try:
+            x = self.line_edit.text()
+            value = float(x)
+            range_values_float = self.param_values_range.copy()
+            range_values_float.pop()
+            range_values_float.append(value)
+            range_values_float.sort()
+            index = range_values_float.index(value)
+            # index = self.mapValueToRange(float(x))
+            self.slider.setValue(index)
+        except ValueError as e:
+            print("config Panel-Input", e)
+        # print(x, index)
+        # if index > 0:
+
+
+class FriendlyConfig(QWidget):
+    """Simplified configuration screen: robot/velocity settings, a
+    calibration-patrol runner with progress tracking, and a scratch to-do
+    list. ``calibration_started`` is emitted (False=starting, True=stopped)
+    so other panels can disable/enable themselves accordingly.
+    """
+
+    config_type_change = pyqtSignal(int)
+    calibration_started = pyqtSignal(bool)
+
+    def __init__(self, patrols_scheduler: PatrolsEscheduler) -> None:
+        super().__init__()
+        self.patrols_scheduler: PatrolsEscheduler = patrols_scheduler
+        self.layout = QGridLayout()
+        # self.patrols_scheduler = PatrolsEscheduler(parent=None, load_user_patrols=False)
+        self.advance_config_btn = QPushButton("Configuracion avanzada")
+        self.advance_config_btn.setIcon(QIcon("./public/setting.svg"))
+        self.advance_config_btn.setMaximumWidth(300)
+
+        self.advance_config_btn.clicked.connect(self.advance_config_callack)
+        self.isStart = True
+        self.calibration_periods = 1
+        self.start_calibrations_btn = QPushButton("Comenzar calibraciones")
+        self.start_calibrations_btn.setMaximumWidth(300)
+        self.debug = QLabel("debug")
+
+        self.text = QLabel("Se ejecutaran periodos de calibración")
+        self.text.setFixedHeight(30)
+
+        self.h_slider = QSlider(Qt.Horizontal)
+        self.h_slider.setTickPosition(QSlider.TicksBelow)
+        self.h_slider.setTickInterval(1)
+        self.h_slider.setMaximum(20)
+        self.h_slider.valueChanged.connect(self.update_all)
+
+        self.calibrations_progress: QProgressBar = QProgressBar()
+        self.calibrations_progress.setMinimum(0)
+
+        self.start_calibrations_btn.clicked.connect(self.test)
+        self.patrols_scheduler.points_scheduler.check_done.connect(self.update_progress)
+        self.patrols_scheduler.patrol_finished.connect(self.stop_calibrations)
+
+        self.start_calibrations_btn.setStyleSheet(border_button_style)
+        self.advance_config_btn.setStyleSheet(secondary_button_style)
+
+        self.start_calibrations_btn.setIcon(
+            QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+        )
+
+        config_form = RobotConfigForm()
+        navigation_settings = RobotVelocityController()
+
+        title = QLabel("Detalles de robot")
+        title.setStyleSheet(subtitle_label_style)
+        self.layout.addWidget(title, 0, 0, 1, -1)
+        # subtitle_label_style
+        self.layout.addWidget(config_form, 1, 0, 3, 1)
+        self.layout.addWidget(navigation_settings, 4, 0)
+        label_title =QLabel("Patrullajes de calibración")
+        label_title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        self.layout.addWidget(
+            Wrapper(
+                children=[
+                    label_title,
+                    self.start_calibrations_btn,
+                    self.h_slider,
+                    self.text,
+                    self.calibrations_progress,
+                ]
+            ),
+            1,
+            1,
+        )
+        self.todo_widget = TodoWidget()
+        # self.layout.addWidget(self.todo_widget, 3, 1, 4, 1) # Add it to column 1
+        self.layout.addWidget(self.advance_config_btn, 7, 0, 1, 2)
+        self.setLayout(self.layout)
+
+    def update_all(self, value):
+        """Update the calibration period count and the progress bar's max."""
+        self.calibration_periods = int(value)
+        points_count = len(self.patrols_scheduler.points_scheduler._goals)
+        self.calibrations_progress.setMaximum(
+            self.calibration_periods * points_count
+        )  # POrfa Revisalo , hay dos iguales!
+        self.text.setText(
+            f"La calibración se ejecutará durante {self.calibration_periods} periodos"
+        )
+
+    def advance_config_callack(self, x):
+        """Switch the parent stacked layout to the advanced config view."""
+        self.config_type_change.emit(1)
+
+    def test(self, x):
+        """Toggle the calibration run on/off (despite the name, the main
+        start/stop handler for the calibration button)."""
+        if self.isStart:
+            self.calibrations_progress.setValue(0)
+            self.start_calibrations()
+            self.isStart = False
+            return
+
+        self.stop_calibrations()
+        self.isStart = True
+
+    def update_progress(self, x) -> None:
+        """Advance the calibration progress bar by one checkpoint reached."""
+        if not self.isStart:
+            self.calibrations_progress.setValue(self.calibrations_progress.value() + 1)
+            self.debug.setText(f"debug {self.calibrations_progress.value()}")
+
+    def start_calibrations(self):
+        """Load and start the calibration patrol set, resetting the progress bar."""
+        self.calibration_started.emit(False)
+        icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
+        self.start_calibrations_btn.setIcon(icon_stop)
+        self.start_calibrations_btn.setText("Detener calibraciones")
+        self.patrols_scheduler.load_test_patrols(patrols_count=self.calibration_periods)
+        self.patrols_scheduler.start_patrols(on_calibration=True)
+        points_count = len(self.patrols_scheduler.points_scheduler._goals)
+        self.calibrations_progress.setMaximum(self.calibration_periods * points_count)
+        pass
+
+    def stop_calibrations(self) -> None:
+        """Cancel the running calibration patrol and reset the button state."""
+        self.calibration_started.emit(True)
+        self.patrols_scheduler.cancel_task()
+        icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
+        self.start_calibrations_btn.setIcon(icon_start)
+        self.start_calibrations_btn.setText("Comenzar calibraciones")
+
+
+class Wrapper(QGroupBox):
+    """Generic vertical container that stacks arbitrary ``children`` widgets
+    inside a titled group box."""
+
+    def __init__(self, title="Estatdiaticas", children: list = []) -> None:
+        super().__init__()
+        self.layout = QVBoxLayout()
+        for w in children:
+            self.layout.addWidget(w)
+        self.layout.addStretch(4)
+        self.setLayout(self.layout)
+        # self.setStyleSheet("background-color: red")
+
+
+class DataSetConfigContainer(QGroupBox):
+    """Group box with a single button to pick a dataset file (unused elsewhere)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__()
+        self.main_layout = QVBoxLayout()
+        self.load_dataset_btn = QPushButton("Cargar Dataset")
+        self.load_dataset_btn.clicked.connect(self.open_file_dialog)
+        self.parent = parent
+
+        self.main_layout.addWidget(self.load_dataset_btn)
+        self.setLayout(self.main_layout)
+
+    def open_file_dialog(self):
+        """Open a file picker (selected file is currently discarded)."""
+        options = QFileDialog.Options()
+        options |= QFileDialog.ShowDirsOnly
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select a File",
+            "",
+            "All Files (*);;Text Files (*.txt);;Python Files (*.py)",
+            options=options,
+        )
+
+
+class TodoItem(QWidget):
+    """Collapsible to-do entry: a header (title + expand/delete) and a
+    details panel toggled by clicking the header."""
+
+    deleted = pyqtSignal(object)
+
+    def __init__(self, title, details="No details provided"):
+        super().__init__()
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        # Header section
+        self.header = QFrame()
+        self.header.setObjectName("todo_header")
+        self.header_layout = QHBoxLayout(self.header)
+        self.header_layout.setContentsMargins(10, 5, 10, 5)
+
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(
+            "font-weight: bold; font-size: 14px; color: #333;"
+        )
+
+        self.expand_icon = QLabel("▼")  # Dropdown indicator
+        self.expand_icon.setStyleSheet("color: #666; font-size: 10px;")
+
+        self.delete_btn = QPushButton()
+        self.delete_btn.setIcon(QApplication.style().standardIcon(QStyle.SP_TrashIcon))
+        self.delete_btn.setFixedSize(24, 24)
+        self.delete_btn.setStyleSheet(border_button_style_danger)
+        self.delete_btn.clicked.connect(lambda: self.deleted.emit(self))
+
+        self.header_layout.addWidget(self.title_label)
+        self.header_layout.addStretch()
+        self.header_layout.addWidget(self.expand_icon)
+        self.header_layout.addWidget(self.delete_btn)
+
+        # Details section (hidden by default)
+        self.details_widget = QWidget()
+        self.details_layout = QVBoxLayout(self.details_widget)
+        self.details_label = QLabel(details)
+        self.details_label.setWordWrap(True)
+        self.details_label.setStyleSheet(
+            "color: #555; padding: 5px; font-style: italic;"
+        )
+        self.details_layout.addWidget(self.details_label)
+        self.details_widget.setVisible(False)
+
+        self.layout.addWidget(self.header)
+        self.layout.addWidget(self.details_widget)
+        self.setLayout(self.layout)
+
+        # Styling
+        self.header.setStyleSheet("""
+            QFrame#todo_header {
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            QFrame#todo_header:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+
+    def mousePressEvent(self, event):
+        """Toggle the details panel on left click."""
+        if event.button() == Qt.LeftButton:
+            self.toggle_details()
+        super().mousePressEvent(event)
+
+    def toggle_details(self):
+        """Flip the visibility of the details panel and the expand arrow."""
+        is_visible = self.details_widget.isVisible()
+        self.details_widget.setVisible(not is_visible)
+        self.expand_icon.setText("▲" if not is_visible else "▼")
+
+
+class TodoWidget(QGroupBox):
+    """Simple scratch to-do list: add/remove :class:`TodoItem` entries from
+    a text input (not persisted anywhere)."""
+
+    def __init__(self, title="ToDos / Tareas"):
+        super().__init__(title)
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+        """)
+
+        self.main_layout = QVBoxLayout()
+
+        # Input section
+        input_container = QHBoxLayout()
+        self.todo_input = QLineEdit()
+        self.todo_input.setPlaceholderText("Nueva tarea...")
+        self.todo_input.setStyleSheet(modern_line_edit_style)
+
+        self.add_btn = QPushButton("Añadir")
+        self.add_btn.setStyleSheet(primary_button_style)
+        self.add_btn.setFixedWidth(80)
+        self.add_btn.clicked.connect(self.add_todo)
+
+        input_container.addWidget(self.todo_input)
+        input_container.addWidget(self.add_btn)
+
+        # Details input (optional for better demo)
+        self.details_input = QLineEdit()
+        self.details_input.setPlaceholderText("Detalles (opcional)...")
+        self.details_input.setStyleSheet(simple_line_edit_style)
+
+        self.main_layout.addLayout(input_container)
+        self.main_layout.addWidget(self.details_input)
+
+        # List container
+        self.list_layout = QVBoxLayout()
+        self.list_layout.setAlignment(Qt.AlignTop)
+        self.list_layout.setSpacing(5)
+
+        self.main_layout.addLayout(self.list_layout)
+        self.main_layout.addStretch()
+
+        self.setLayout(self.main_layout)
+
+    def add_todo(self):
+        """Create a :class:`TodoItem` from the input fields and clear them."""
+        text = self.todo_input.text().strip()
+        details = self.details_input.text().strip() or "Sin descripción detallada."
+        if text:
+            item = TodoItem(text, details)
+            item.deleted.connect(self.remove_todo)
+            self.list_layout.addWidget(item)
+            self.todo_input.clear()
+            self.details_input.clear()
+
+    def remove_todo(self, item):
+        """Remove a to-do entry from the list and schedule it for deletion."""
+        self.list_layout.removeWidget(item)
+        item.deleteLater()
+
+
+if __name__ == "__main__":
+    app = QApplication([])
+    ex = ConfigPanel()
+    ex.show()
+    app.exec()

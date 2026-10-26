@@ -1,0 +1,1142 @@
+"""PostgreSQL persistence layer for patrols, checkpoints, alerts and calibration data.
+
+:class:`InternalStorageManager` holds all the SQLAlchemy-based CRUD methods
+used by the rest of the app (patrols, points/checkpoints, alerts, map assets,
+calibration stats). :class:`DataBase` wraps it in a ``QThread`` so the GUI
+can dispatch a named ``action`` (e.g. ``"save_patrol"``, ``"get_points"``)
+without blocking, and emits ``action_completed`` with the result.
+"""
+import os
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import cv2
+import numpy as np
+import psycopg2
+import yaml
+from internal_storage.tables import (
+    Alert,
+    Calibration,
+    Checkpoint,
+    Map,
+    Patrol,
+    Place,
+    patrols_checkpoints_association,
+)
+from PyQt5.QtCore import QObject, QThread, pyqtSignal  # , pyqtSlot
+from sklearn.metrics import mean_squared_error
+from sqlalchemy import and_, asc, create_engine, desc, func, insert
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
+Base = declarative_base()
+# cursor.execute("SELECT version();")
+# db_version = cursor.fetchone()
+# print(f"Database version: {db_version[0]}")
+
+
+class AlertStatus(Enum):
+    """Severity levels used for the ``Alert.status`` column."""
+
+    ERROR = -100
+    WARNING = -50
+    INFO = 0
+
+
+DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
+
+
+class InternalStorageManager:
+    """Opens a fresh SQLAlchemy/psycopg2 session per call and performs CRUD
+    operations against the ``postgres`` database for patrols, checkpoints,
+    maps, alerts and calibration records (see ``internal_storage.tables``)."""
+
+    def __init__(self) -> None:
+        # Database credentials
+        self.db_name = "postgres"
+        self.db_user = "postgres"
+        self.db_password = "123"
+        self.db_host = "localhost"
+        self.db_port = "5432"
+
+    def track_inspection(self, data):
+        """Insert a patrol/checkpoint visit row into the association table."""
+        patrol_id = data.get("patrol_id")
+        point_id = data.get("point_id")
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        try:
+            # 2. Define the data you want to insert
+            new_associations = [
+                {
+                    "patrol_id": patrol_id,
+                    "checkpoint_id": point_id,
+                    "date": datetime.now().date(),
+                    "time": datetime.now().time(),
+                },
+            ]
+
+            # 3. Execute the insert statement
+            # .execute() automatically handles a list of dictionaries as a bulk insert
+            session.execute(insert(patrols_checkpoints_association), new_associations)
+
+            # 4. Commit the transaction to save changes
+            session.commit()
+            print("Successfully populated the association table!")
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred: {e}")
+
+        finally:
+            session.close()
+
+    def save_places(self, places):
+        """Insert a batch of ``(name, email, username, institution, phone,
+        address)`` tuples as ``Place`` rows."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for place in places:
+                name, email, username, institution, phone, address = place
+                place = Place(
+                    name=name,
+                    email=email,
+                    username=username,
+                    institution=institution,
+                    phone=phone,
+                    address=address,
+                )
+                session.add(place)
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
+        finally:
+            session.close()  # Always close the session
+
+    def get_places(self):
+        """Return the names of all patrols (note: queries ``Patrol``, not ``Place``)."""
+        pass
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            places = session.query(Patrol).all()
+            session.commit()
+            places = [place.name for place in places]
+            return places
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
+        finally:
+            session.close()  # Always close the session
+
+    def update_patrol(self, patrols_data: dict):
+        """Update days/time for each ``{patrol_id: {days, time}}`` entry."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for id, patrol in patrols_data.items():
+                days = list(patrol.get("days").keys())
+                days = ",".join(days)
+                time = list(patrol.get("time"))
+                time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                session.query(Patrol).filter_by(id=id).update(
+                    {Patrol.days: days, Patrol.time: time}
+                )
+                session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Database error: {e}")
+        finally:
+            session.close()  # Always close the session
+
+    def delete_user_patrols(self, ids: List[str]):
+        """Soft-delete patrols by setting ``enabled=False`` for each id."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for id in ids:
+                session.query(Patrol).filter(Patrol.id == id).update(
+                    {Patrol.enabled: False}
+                )
+                session.commit()
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
+
+    def delete_patrols(self, ids: List[str]):
+        """Hard-delete ``Patrol`` rows by id."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            for id in ids:
+                deleted_rows = (
+                    session.query(Patrol)
+                    .filter(Patrol.id == id)
+                    .delete(synchronize_session=False)
+                )
+                session.commit()
+
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
+
+    def get_user_patrols(self):
+        """Return enabled patrols only, keyed by id, in the UI's nested
+        ``{id: {days: {...}, time}}`` shape."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            allpatrols = {}
+            rows = session.query(Patrol).filter(Patrol.enabled == True)
+            for patrol in rows:
+                # print(row)
+                id, time, days = patrol.id, patrol.time, patrol.days
+                formated_time = time.strftime("%H%M")
+                _patrol = {
+                    str(id): {
+                        "days": {
+                            day: {
+                                "day": day,
+                                "time": formated_time,
+                                "finished": False,
+                                "patrolid": str(id),
+                            }
+                            for day in days.split(",")
+                        },
+                        "time": formated_time,
+                    }
+                }
+                allpatrols.update(_patrol)
+                # print(a)
+            session.commit()  # Commit the transaction
+            return allpatrols
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
+
+    def get_patrols(self):
+        """Return all patrols (enabled or not), in the same nested shape as
+        :meth:`get_user_patrols`."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            allpatrols = {}
+            rows = session.query(Patrol).all()  # cursor.fetchall()
+            for patrol in rows:
+                id, time, days = patrol.id, patrol.time, patrol.days
+                formated_time = time.strftime("%H%M")
+                _patrol = {
+                    str(id): {
+                        "days": {
+                            day: {
+                                "day": day,
+                                "time": formated_time,
+                                "finished": False,
+                                "patrolid": str(id),
+                            }
+                            for day in days.split(",")
+                        },
+                        "time": formated_time,
+                    }
+                }
+                allpatrols.update(_patrol)
+            session.commit()  # Commit the transaction
+            return allpatrols
+        except Exception as e:
+            session.rollback()
+            print(f"An error occurred during direct delete: {e}")
+        finally:
+            session.close()
+
+    def save_patrol(self, patrol_data: dict):
+        """Create new ``Patrol`` rows from ``{id: {days, time}}`` entries."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            for id, patrol in patrol_data.items():
+                days = list(patrol.get("days").keys())
+                time = list(patrol.get("time"))
+                time = f"{''.join(time[:2])}:{''.join(time[2:])}:00"
+                days = ",".join(days)
+
+                patrol = Patrol(id=id, time=time, days=days, enabled=True)
+
+                session.add(patrol)
+                session.commit()
+                # patrol_link = PatrolLink(patrol=patrol)
+                # session.add(patrol_link)
+                # session.commit()
+                print("Sample data added successfully!")
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    ####### point
+    def save_point(self, point: dict):
+        """Create ``Checkpoint`` rows for ``{id: point_data}`` entries,
+        linking each one to the ``Map`` matching ``point_data['mapfile']``."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        def get_image_bytes(file_path: str) -> bytes:
+            """Read a file's bytes, or return empty bytes if it's missing."""
+            try:
+                with open(file_path, "rb") as image_file:
+                    return image_file.read()
+
+            except FileNotFoundError:
+                print(f"Warning: File not found at {file_path}. Saving without bytes.")
+                return b""
+
+        try:
+            for id, point_data in point.items():
+                mapfile = point_data.get("mapfile")
+                mapfile = mapfile.split(".")[0]
+
+                map_db = session.query(Map).filter_by(file_path=mapfile).first()
+                session.commit()
+
+                print("DB MAP query, real", mapfile, map_db)
+
+                if map_db:
+                    session.add(
+                        Checkpoint(
+                            id=id,
+                            map=map_db,
+                            x_position=point_data.get("x_meters"),
+                            y_position=point_data.get("y_meters"),
+                            yaw=point_data.get("yaw"),
+                        )
+                    )
+                    session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def update_point(self, id: str, point: dict):
+        """Update the ``Checkpoint`` row ``id`` with the fields in ``point``."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            map_db = session.query(Checkpoint).filter(Checkpoint.id == id).update(point)
+            session.commit()
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def add_points(self, points, mapfile):
+        """Create a new ``Map`` row for ``mapfile`` and attach a ``Checkpoint``
+        for each entry in ``points``."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            map_db = Map(
+                file_path=mapfile
+            )  # session.query(Map).filter_by(file_path=mapfile).first()
+            # print(f"{__name__} {mapfile}")
+            session.add(map_db)
+            session.commit()
+            print(f"{__name__} point number {len(points)}")
+
+            for id, point in points.items():
+                x = point.get("x_meters")
+                y = point.get("y_meters")
+                mapfile = point.get("mapfile")
+                yaw = point.get("yaw")
+                image = point.get("image")
+                image_content = point.get("image_bytes")
+                # aruco_pose = point.get("aruco_pose")
+
+                checkpoint = Checkpoint(
+                    id=id,
+                    x_position=x,
+                    y_position=y,
+                    yaw=yaw,
+                    map=map_db,
+                    image_path=image,
+                    image_bytes=image_content,
+                )
+                session.add(checkpoint)
+                session.commit()
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def get_points(self, mapfile: str):
+        """Return ``{"points": {id: {...}}}`` for all checkpoints belonging
+        to ``mapfile``."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            allpoints = {}
+            _points = {}
+            # _points = []
+            # mapfile = mapfile.split("/")[-1]
+            mapfile = mapfile.split(".")[0]
+            print(f"{__name__} map {mapfile}")
+            map_db = session.query(Map).filter_by(file_path=mapfile).first()
+            session.commit()
+            if map_db:
+                points = (
+                    session.query(Checkpoint)
+                    .filter(Checkpoint.map_id == map_db.id)
+                    .all()
+                )
+                session.commit()
+
+                for point in points:
+                    _points[point.id] = {
+                        "id": point.id,
+                        "x": point.x_position,
+                        "y": point.y_position,
+                        "map_file": mapfile,
+                        "yaw": point.yaw,
+                        "image": point.image_path,
+                    }
+
+            allpoints.update({"points": _points})
+
+            return allpoints
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def get_alerts_error(self, map_file = None):
+        """Return ``(x, y, status)`` rows for every alert, optionally
+        filtered to a single map file."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        try:
+            query = session.query(
+                Alert.x_position,
+                Alert.y_position,
+                Alert.status,
+            ).outerjoin(Checkpoint, Alert.checkpoint_id == Checkpoint.id)
+
+            # 2. Apply map file filtering
+            print(f"get alert error {map_file}")
+            if map_file is not None:
+                query = query.join(Map, Alert.map_id == Map.id).filter(
+                    Map.file_path == map_file.split('.')[0]
+                )
+
+            results = query.all()
+            return results
+
+        except psycopg2.Error as e:
+            print(f"Database error: {e}")
+
+        def get_alerts_months_stats(self):
+            """Return 2025 error-alert counts grouped by month (raw ``psycopg2`` query)."""
+            try:
+                with psycopg2.connect(
+                    database=self.db_name,
+                    user=self.db_user,
+                    password=self.db_password,
+                    host=self.db_host,
+                    port=self.db_port,
+                ) as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+                                SELECT     EXTRACT(MONTH FROM date) AS month,
+                                COUNT(*) AS total_count FROM   alert
+                                WHERE     EXTRACT(YEAR FROM date) = 2025  AND status = -100
+                                GROUP BY     month ORDER BY     month;
+                                """
+                        )
+                        # return in the format  month | total_count
+                        rows = cursor.fetchall()
+                        connection.commit()  # Commit the transaction
+
+                return rows
+            except psycopg2.Error as e:
+                print(f"Database error: {e}")
+
+        def get_alerts_weeks_stats(self):
+            """Return alert counts grouped by year/month/week-of-month (raw ``psycopg2`` query)."""
+            try:
+                with psycopg2.connect(
+                    database=self.db_name,
+                    user=self.db_user,
+                    password=self.db_password,
+                    host=self.db_host,
+                    port=self.db_port,
+                ) as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            """
+
+                            SELECT     EXTRACT(YEAR FROM date) AS year,
+                            EXTRACT(MONTH FROM date) AS month,
+                            EXTRACT(WEEK FROM date) - EXTRACT(WEEK FROM DATE_TRUNC('month', date)) + 1 AS week_of_month,
+                            COUNT(*) AS element_count FROM  alert
+                            GROUP BY     year, month, week_of_month ORDER BY     year, month, week_of_month;
+                                """
+                        )
+                        rows = cursor.fetchall()
+                        connection.commit()  # Commit the transaction
+                        # retrun in the format  year | month | week_of_month | element_count
+
+                return rows
+            except psycopg2.Error as e:
+                print(f"Database error: {e}")
+
+    def save_alerts(self, alerts: list):
+        """Encode each alert's image as PNG and insert the batch as ``Alert``
+        rows, linked to the ``Map`` named in the first alert's filepath."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        try:
+            map = (
+                session.query(Map)
+                .filter_by(file_path=alerts[0].get("map_filepath"))
+                .first()
+            )
+            session.commit()
+            data = []
+
+            for alert in alerts:
+                success, encoded_image = cv2.imencode(".png", alert.get("image"))
+                # if not success:
+                #     rospy.logerr("Failed to encode image to PNG format")
+                #     return
+
+                # Convert the numpy array stream into raw bytes
+                binary_data = encoded_image.tobytes()
+                new = Alert(
+                    checkpoint_id=alert.get("heckpoint_id"),
+                    patrol_id=alert.get("patrol_id"),
+                    message=alert.get("message"),
+                    x_position=alert.get("x_position"),
+                    y_position=alert.get("y_position"),
+                    status=alert.get("status"),
+                    date=alert.get("date"),
+                    time=alert.get("time"),
+                    image_filepath=alert.get("image_filepath"),
+                    image_bytes=binary_data,
+                    map_id=map.id if map else None,
+                )
+                data.append(new)
+
+            session.add_all(data)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data -- alerts: {e}")
+        finally:
+            session.close()
+
+    def save_calibration(self, calibration_data: dict):
+        """'
+        Save Save Calibrations
+
+        parameter:
+        Calibration_data -->
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            calibration_value = calibration_data.get("value")
+            checkpoint_id = calibration_data.get("checkpoint_id")
+            calibration_vector = None  # calibration_data.get("vector")
+
+            # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
+            # last_element = (
+            #     session.query(Calibration)
+            #     .filter_by(checkpoint_id=checkpoint_id)
+            #     .order_by(func.random())
+            #     .first()
+            # )
+
+            # print(
+            #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
+            # )
+            # calibration_value = None
+
+            # if last_element:
+            #     calibration_value = self.loss_func(
+            #         calibration_vector, last_element.calibration_vector
+            #     )
+
+            calibration = Calibration(
+                checkpoint_id=checkpoint_id,
+                calibration_value=calibration_value,
+            )
+
+            session.add(calibration)
+            session.commit()
+
+            print("Sample data added successfully!")
+
+            session.close()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def get_alert_histogram_data(
+        self, granularity: str, map_file: str = None
+    ) -> List[tuple]:
+        """
+        Fetches alert counts grouped by month or year.
+
+        Args:
+            granularity: 'monthly' or 'yearly'
+            map_file: Optional map file path for filtering
+
+        Returns:
+            List of tuples (label, count)
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            if granularity == "hourly":
+                # Group by hour of day (00:00 - 23:00)
+                label_expr = func.to_char(Alert.time, "HH24:00")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+            elif granularity == "monthly":
+                # Group by Month-Year for the last 12 months (simplified to Month for now per request)
+                label_expr = func.to_char(Alert.date, "YYYY-MM")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+            else:  # yearly
+                label_expr = func.to_char(Alert.date, "YYYY")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+
+            if map_file:
+                query = query.join(Map, Alert.map_id == Map.id).filter(
+                    Map.file_path == map_file
+                )
+
+            results = query.group_by("label").order_by(asc("label")).all()
+            return results
+        except Exception as e:
+            print(f"Error fetching histogram data: {e}")
+            return []
+        finally:
+            session.close()
+
+    def get_calibration(self, pointid: str, current_calibration_vector: list) -> dict:
+        """Return the mean and standard deviation of calibration values
+        recorded for checkpoint ``pointid``."""
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            print("--- Running Calculation Query ---")
+
+            # Use sqlalchemy.func to call SQL functions like AVG and STDDEV
+            # We query for the average (mean) and standard deviation of the column.
+            calculation_query = session.query(
+                func.avg(Calibration.calibration_value).label("mean_value"),
+                func.stddev(Calibration.calibration_value).label("std_dev_value"),
+            ).filter_by(checkpoint_id=pointid)
+
+            # Execute the query and get the single result row
+            results = calculation_query.one()
+
+            # random_vector = -1
+            # random_row = (
+            #     session.query(Calibration)
+            #     .order_by(func.random())
+            #     .filter_by(checkpoint_id=pointid)
+            #     .first()
+            # )
+            # if random_row:
+            #     random_vector = random_row.calibration_vector
+
+            # 6. Display the Results
+            mean_val = results.mean_value
+            std_dev_val = results.std_dev_value
+
+            print("📊 Statistics for 'calibratio_value':")
+            print(f" -> Mean: {mean_val:.4f}")
+            print(f" -> Standard Deviation: {std_dev_val:.4f}")
+            session.close()
+            # return {"std_dev_value": std_dev_val, "mean_value": mean_val, "loss_func": self.loss_func(current_calibration_vector, random_vector)}
+            return {"std_dev_value": std_dev_val, "mean_value": mean_val}
+
+        except Exception as e:
+            session.rollback()
+            session.close()
+            print(f"Error setting up data: {e}")
+            # return {"std_dev_value": -1, "mean_value": -1, "loss_func": -1}
+            return {"std_dev_value": -1, "mean_value": -1}
+
+        def save_ondisk_backup_files(
+            self, record_id, output_image_name: str = "", output_yaml_name: str = ""
+        ):
+            engine = create_engine(DATABASE_URL)
+            Session = sessionmaker(bind=engine)
+            # Base.metadata.create_all(engine) # Create tables if they don't exist
+            session = Session()
+            # 1. Fetch the record by ID
+            record = session.query(MediaStorageFiles).filter_by(id=record_id).first()
+
+            if not record:
+                print(f"No record found with ID: {record_id}")
+                return
+
+            # 2. Save the Image (PGM, PNG, etc.)
+            # Since we stored it as LargeBinary, we write 'wb' (write binary)
+            if output_image_name:
+                with open(output_image_name, "wb") as img_file:
+                    img_file.write(record.image_bytes)
+
+            # 3. Save the YAML
+            # We retrieve the JSONB as a Python dict, then dump it to YAML format
+            if output_yaml_name:
+                with open(output_yaml_name, "w") as yml_file:
+                    yaml.dump(record.metadata_json, yml_file, default_flow_style=False)
+
+            print(
+                f"Success! Saved image to '{output_image_name}' and YAML to '{output_yaml_name}'."
+            )
+
+            # Example Usage:
+            # save_from_db_to_disk(1, 'restored_image.pgm', 'restored_config.yaml')
+
+        def backup_file(self, image_path: str = "", yaml_path: str = ""):
+
+            # Extract file info
+            name = os.path.basename(image_path)
+            ext = os.path.splitext(image_path)[1].lower()
+            sa
+            new_file = None
+            yaml_data = None
+            binary_data = None
+
+            # 1. Read Image (Works for PGM, PNG, JPG, etc.)
+            if image_path:
+                with open(image_path, "rb") as f:
+                    binary_data = f.read()
+
+            # 2. Read YAML
+            if yaml_path:
+                with open(yaml_path, "r") as f:
+                    yaml_data = yaml.safe_load(f)
+
+            if yaml_data and binary_data:
+                new_file = MediaStorageFile(
+                    filename=name,
+                    extension=ext,
+                    image_bytes=binary_data,
+                    metadata_json=yaml_data,
+                )
+            else:
+                new_file = MediaStorageImage(
+                    filename=name,
+                    extension=ext,
+                    image_bytes=binary_data,
+                )
+
+            # 3. Store in Database
+
+            session.add(new_file)
+            session.commit()
+            print(f"Stored {name} and {yaml_path} successfully.")
+
+    def get_available_maps(self) -> List[dict]:
+        """Retrieve all available maps stored in the database.
+
+        Returns:
+            A list of dictionaries with map information (id, file_path, place_id).
+            Returns an empty list if no maps are found or an error occurs.
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            maps = session.query(Map).all()
+            available_maps = [
+                {
+                    "id": map_record.id,
+                    "file_path": map_record.file_path,
+                    "place_id": map_record.place_id,
+                }
+                for map_record in maps
+            ]
+            return available_maps
+        except Exception as e:
+            session.rollback()
+            print(f"Error retrieving available maps: {e}")
+            return []
+        finally:
+            session.close()
+
+    def ensure_map_file_exists(self, file_path: str) -> str:
+        """Check if file_path corresponds to a file stored in the internal path.
+
+        If the file does not exist on disk, it will be created (along with any
+        necessary parent directories). Also ensures that a corresponding Map
+        entry exists in the database.
+
+        Args:
+            file_path: The path to the map file to check/create.
+
+        Returns:
+            The absolute path of the ensured file, or an empty string on error.
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            # Resolve to absolute path
+            abs_path = os.path.abspath(file_path)
+
+            # Create the file on disk if it does not exist
+            if not os.path.exists(abs_path):
+                parent_dir = os.path.dirname(abs_path)
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir, exist_ok=True)
+                    print(f"Created directory: {parent_dir}")
+
+                with open(abs_path, "w") as f:
+                    f.write("")
+                print(f"Created map file: {abs_path}")
+            else:
+                print(f"Map file already exists: {abs_path}")
+
+            # Ensure the map entry exists in the database
+            map_key = os.path.splitext(os.path.basename(file_path))[0]
+            map_db = session.query(Map).filter_by(file_path=map_key).first()
+
+            if not map_db:
+                map_db = Map(file_path=map_key)
+                session.add(map_db)
+                session.commit()
+                print(f"Created database entry for map: {map_key}")
+            else:
+                print(f"Database entry already exists for map: {map_key}")
+
+            return abs_path
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error ensuring map file exists: {e}")
+            return ""
+        finally:
+            session.close()
+
+    def loss_func(self, x, y):
+        """Mean squared error between two calibration vectors."""
+        # x = np.array(x).reshape(-1, 1)
+        # y = np.array(y).reshape(-1, 1)
+        # [loss] = mutual_info_regression(x, y)
+        loss = mean_squared_error(x, y)
+        return loss
+
+    # Assuming Map is imported from your models file
+    # from your_models import Map
+
+    def export_map_assets(map_record, output_base_dir: Union[str, Path] = ".") -> None:
+        """
+        Extracts and saves image bytes and metadata JSON as local files
+        from a Map model instance if they do not already exist.
+        """
+        if not map_record:
+            print("Error: No Map record provided.")
+            return
+
+        # 1. Resolve paths
+        base_dir = Path(output_base_dir)
+
+        # Fallback name if file_path is somehow null or empty
+        target_file_path = (
+            map_record.file_path if map_record.file_path else f"map_{map_record.id}.png"
+        )
+
+        image_path = base_dir / target_file_path
+        yaml_path = image_path.with_suffix(".yaml")  # Changes .png/.jpg to .yaml
+
+        # Ensure parent directories exist
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 2. Process Image Bytes
+        if map_record.image_bytes:
+            if not image_path.exists():
+                with open(image_path, "wb") as img_file:
+                    img_file.write(map_record.image_bytes)
+                print(f" [SUCCESS] Image created: {image_path}")
+            else:
+                print(f" [SKIPPED] Image already exists: {image_path}")
+        else:
+            print(" [WARNING] No image bytes found for this record.")
+
+        # 3. Process Metadata JSON -> YAML
+        if map_record.metadata_json is not None:
+            if not yaml_path.exists():
+                with open(yaml_path, "w", encoding="utf-8") as yaml_file:
+                    # default_flow_style=False ensures a clean, block-styled YAML output
+                    yaml.dump(
+                        map_record.metadata_json,
+                        yaml_file,
+                        default_flow_style=False,
+                        allow_unicode=True,
+                    )
+                print(f" [SUCCESS] Metadata YAML created: {yaml_path}")
+            else:
+                print(f" [SKIPPED] YAML file already exists: {yaml_path}")
+        else:
+            print(" [WARNING] No metadata JSON found for this record.")
+
+    def get_filtered_alerts(
+        self,
+        page_number: int,
+        page_size: int,
+        status: int = None,
+        ascendant: bool = False,
+        map_file: str = None,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> dict:
+        """
+        Fetches a paginated, sorted, and filtered list of alerts from the database.
+
+        Parameters:
+            session (Session): The active SQLAlchemy database session.
+            page_number (int): The current page index (starting at 0).
+            page_size (int): Maximum number of records to return per page.
+            status (int, optional): Filter by AlertStatus value. If None, fetches all.
+            ascendant (bool): True for oldest first, False for newest first.
+
+        Returns:
+            list of tuples: Contains rows formatted exactly for UI unpacking:
+                        (x_position, y_position, status, date, time, message)
+        """
+        # 1. Target the exact columns in the order your UI unpacks them
+
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        query = session.query(
+            Alert.x_position,
+            Alert.y_position,
+            Alert.status,
+            Alert.date,
+            Alert.time,
+            Alert.message,
+            Checkpoint.image_bytes,
+            Alert.image_filepath,
+        ).outerjoin(Checkpoint, Alert.checkpoint_id == Checkpoint.id)
+
+        # 2. Apply conditional status filtering
+        if status is not None:
+            query = query.filter(Alert.status == status)
+
+        # 2. Apply map file filtering
+        if map_file is not None:
+            # query = query.filter(Alert.map_file == map_file)
+            query = query.join(Map, Alert.map_id == Map.id).filter(
+                Map.file_path == map_file
+            )
+
+        if start_date is not None:
+            query = query.filter(Alert.date >= start_date)
+
+        if end_date is not None:
+            query = query.filter(Alert.date <= end_date)
+
+        # 3. Apply chronological sorting (Primary: Date, Secondary: Time)
+        if ascendant:
+            query = query.order_by(asc(Alert.date), asc(Alert.time))
+        else:
+            query = query.order_by(desc(Alert.date), desc(Alert.time))
+
+        # 4. Calculate pagination offsets
+        # Page 0 -> offset 0; Page 1 -> offset 12, etc.
+        offset_value = page_number * page_size
+
+        query = query.offset(offset_value).limit(page_size)
+        results = query.all()
+        # Check if there is a next page
+        has_more = len(results) == page_size
+
+        # 5. Execute query and return rows
+        return {
+            "alerts": results,
+            "has_more": has_more,
+        }
+
+
+class DataBase(QThread):
+    """Runs a single :class:`InternalStorageManager` call off the GUI thread.
+
+    Construct with an ``action`` name and a ``data`` payload, ``start()`` the
+    thread, and listen on ``action_completed(result_name, result_dict)`` for
+    the outcome. ``run()`` dispatches ``action`` to the matching
+    ``InternalStorageManager`` method.
+    """
+
+    action_completed = pyqtSignal(str, dict)
+
+    def __init__(self, action: str, data: dict = {}, map_file="", place="") -> None:
+        super().__init__()
+        self.action = action
+        self.data = data
+        self.place = place
+        self.map_file = map_file
+
+    def run(self):
+        """Dispatch ``self.action`` to the corresponding storage-manager
+        method and emit ``action_completed`` with its result."""
+        print("DATABASE RUNNING", self.action)
+        self.internal_storage_manager = InternalStorageManager()
+
+        if self.action == "save_patrol":
+            self.internal_storage_manager.save_patrol(self.data)
+            self.action_completed.emit("SuccessSavePatrol", {})
+            return
+
+        if self.action == "get_all_patrols":
+            data = self.internal_storage_manager.get_patrols()
+            self.action_completed.emit("Success", data)
+            return
+
+        if self.action == "get_user_patrols":
+            data = self.internal_storage_manager.get_user_patrols()
+            if not data:
+                data = {}
+            self.action_completed.emit("SuccessGetAllUserPatrols", data)
+            return
+
+        if self.action == "delete_user_patrols":
+            data = self.internal_storage_manager.delete_user_patrols(
+                self.data.get("ids")
+            )
+            self.action_completed.emit("Success", {})
+            return
+
+        if self.action == "update_patrol":
+            self.internal_storage_manager.update_patrol(self.data)
+            self.action_completed.emit("Success", {})
+            return
+        if self.action == "save_point":
+            a = self.internal_storage_manager.save_point(self.data)
+            self.action_completed.emit("SuccessSavePoints", {"a": a})
+
+        if self.action == "track_inspection":
+            a = self.internal_storage_manager.track_inspection(self.data)
+            self.action_completed.emit("SuccessTrackInspection", {"a": a})
+
+        if self.action == "update_point":
+            for key, value in self.data.items():
+                self.internal_storage_manager.update_point(key, value)
+            self.action_completed.emit("SuccessUpdatePoint", {})
+            return
+
+        if self.action == "add_points":
+            self.internal_storage_manager.add_points(self.data, self.map_file)
+            self.action_completed.emit("SuccessAddPoints", {})
+
+        if self.action == "get_points":
+            print("DATABASE RUNNING", self.action, self.data)
+            data = self.internal_storage_manager.get_points(self.data.get("map_file"))
+            if not data:
+                data = {"points": []}
+            self.action_completed.emit("SuccessGetPoinst", data)
+
+        if self.action == "save_alerts":
+            print("DATABASE RUNNING", self.action, self.data)
+            data = self.internal_storage_manager.save_alerts(self.data.get("alerts"))
+            self.action_completed.emit("SuccessSaveAlerts", {})
+
+        if self.action == "save_calibration":
+            data = self.internal_storage_manager.save_calibration(self.data)
+            self.action_completed.emit("SuccessSaveCalibration", {})
+        if self.action == "get_calibration":
+            data = self.internal_storage_manager.get_calibration(
+                self.data.get("pointid"), self.data.get("current_calibration_vector")
+            )
+            self.action_completed.emit("SuccessGetCalibration", data)
+
+        if self.action == "get_available_maps":
+            data = self.internal_storage_manager.get_available_maps()
+            self.action_completed.emit("SuccessGetAvailableMaps", {"maps": data})
+
+        if self.action == "get_filtered_alerts":
+            data = self.internal_storage_manager.get_filtered_alerts(
+                status=self.data.get("status"),
+                page_size=self.data.get("page_size"),
+                page_number=self.data.get("page_number"),
+                map_file=self.data.get("map_file"),
+                start_date=self.data.get("start_date"),
+                end_date=self.data.get("end_date"),
+                ascendant=self.data.get("ascendant", False),
+            )
+            self.action_completed.emit("SuccessGetFilteredAlerts", data)
+            return
+
+        if self.action == "get_alert_histogram_data":
+            data = self.internal_storage_manager.get_alert_histogram_data(
+                granularity=self.data.get("granularity"),
+                map_file=self.data.get("map_file"),
+            )
+            self.action_completed.emit("SuccessGetHistogramData", {"histogram": data})
+
+
+if __name__ == "__main__":
+    patrols_data = {
+        "09999990444": {
+            "days": {
+                "Lun": {"day": "Lun", "time": "20205", "finished": False},
+                "Mar": {"day": "Mar", "time": "20202", "finished": False},
+                "Mie": {"day": "Mar", "time": "20207", "finished": False},
+            },
+            "time": "1212",
+        }
+    }
+    e = InternalStorageManager()
+    e.save_patrol(patrols_data)
+    # e.get_patrols()
+
+# session.query(Patrol).all() The with psycopg2.connect(...) as connection: statement establishes a connection to the PostgreSQL database. When the with block is exited, the connection is automatically closed, even if an exception occurs. The with connection.cursor() as cursor: statement creates a cursor object, which is used to execute SQL queries. The cursor is also automatically closed when the with block is exited.

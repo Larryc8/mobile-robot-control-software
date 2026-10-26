@@ -1,0 +1,48 @@
+{
+    "roi": [
+        50,
+        50
+    ],
+    "log_history_filepath": "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/log/prueba_squeezenet.csv",
+    "recent_map_files": [
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test4.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/test3.yaml",
+        "/pico-sdk/mobile-robot-control-software/src/inspection_control_software/scripts/maps/lab_test1.yaml"
+    ],
+    "conduction_mode": "Soft",
+    "stuck_timeout_index": 1,
+    "path_tolerance": 0.27,
+    "robot": "turtlebot3",
+    "robots": {
+        "turtlebot3": {
+            "name": "Turtlebot3",
+            "URDF_path": "empty",
+            "odom_topic": "odom",
+            "cmd_vel_topic": "cmd_vel",
+            "lidar_topic": "scan",
+            "imu_topic": "imu",
+            "baseframe": "base_link"
+        },
+        "terminatot": {
+            "robot": "terminatot",
+            "URDF_path": "hh",
+            "odom_topic": "odom2",
+            "cmd_vel_topic": "cmd_vel2",
+            "lidar_topic": "scan2",
+            "imu_topic": "imu2",
+            "baseframe": "base_link"
+        },
+        "walle": {
+            "robot": "walle",
+            "URDF_path": "kkkkk",
+            "odom_topic": "ddddd",
+            "cmd_vel_topic": "lllll",
+            "lidar_topic": "jiju",
+            "imu_topic": "",
+            "baseframe": ""
+        }
+    },
+    "max_linear_vel": 0,
+    "max_angular_vel": 0
+}

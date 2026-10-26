@@ -1,0 +1,259 @@
+#!/usr/bin/env python
+"""Watchdogs that detect a blocked path or a physically stuck robot.
+
+:class:`RobotNavigationChecker` compares successive ``move_base`` global
+plans and raises an alert if the path changes more than tolerance (likely
+obstruction). :class:`StuckDetector` compares commanded vs. actual
+(odometry) motion and publishes ``/robot_stuck`` after a timeout.
+"""
+
+import math
+import time
+
+import numpy as np
+import rospy
+from alert_generator import AlertGenerator
+from database_manager import AlertStatus
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
+from nav_msgs.msg import Odometry, Path
+from nav_msgs.srv import GetPlan, GetPlanRequest, GetPlanResponse
+from PyQt5.QtCore import QObject, QSettings, QThread, QTimer, pyqtSignal
+from sensor_msgs.msg import Imu
+from sklearn.utils.extmath import squared_norm
+from std_msgs.msg import Bool
+
+
+def quadratic_median_error(data1, data2, tolerance=0.06):
+    """Return the max point-to-point Euclidean distance between two equal-length pose lists."""
+    ax = []
+    ay = []
+    bx = []
+    by = []
+
+    for d in data1:
+        x = d.pose.position.x
+        y = d.pose.position.y
+        ax.append(x)
+        ay.append(y)
+
+    for d in data2:
+        x = d.pose.position.x
+        y = d.pose.position.y
+        bx.append(x)
+        by.append(y)
+
+    ax = np.array(ax)
+    ay = np.array(ay)
+    bx = np.array(bx)
+    by = np.array(by)
+
+    squared_diffx = [e for i, e in enumerate(ax) if (ax[i] - bx[i]) ** 2 > tolerance]
+    squared_diffy = [e for i, e in enumerate(ay) if (ay[i] - by[i]) ** 2 > tolerance]
+
+    m = [
+        math.sqrt(
+            (a.pose.position.x - b.pose.position.x) ** 2
+            + (a.pose.position.y - a.pose.position.y) ** 2
+        )
+        for a, b in zip(data1, data2)
+    ]
+
+    return max(m)
+
+    # squared_meanx = np.mean([(ax[i] - bx[i]) ** 2 for i, e in enumerate(ax)])
+    # squared_meany = np.mean([(ay[i] - by[i]) ** 2 for i, e in enumerate(ay)])
+
+    # squared_mean = squared_meanx + squared_meany
+
+    # return max(len(squared_diffy), len(squared_diffx))
+
+
+class RobotNavigationChecker(QObject):
+    """Watches ``move_base``'s global plan topic and raises an alert if the
+    planned path shifts by more than ``pathChangeTolerance`` between
+    consecutive updates (signals the path may be obstructed)."""
+
+    alert_generated = pyqtSignal(str, AlertStatus)
+
+    def __init__(self, track, patrol_id, checkpoint_id, map_filename) -> None:
+        super().__init__()
+        self.sub_globalplan = None
+
+        self.current_patrolid = patrol_id
+        self.current_pointid = checkpoint_id
+        self.current_map_filename = map_filename
+
+        self.current_pose = None
+        self.saved_pose = None
+        self.global_plan = None
+        self.old_plan = None
+        self.track = track
+        self.alert = AlertGenerator()
+        self._checkpoint_id = None
+        self._patrol_id = None
+        self.map = None
+        self.TOLERANCE = 0.06 #in meters
+        self._settings = QSettings("MyCompany", "MyApp")
+        self.stuck_checker = StuckDetector()
+
+    def set_current_goal(self, goal, id):
+        """Remember the current navigation goal/point index being checked."""
+        print("set current goal navigation checker", goal)
+        self.goal = goal
+        self.num = id
+
+    def callback_globalplan(self, data):
+        """ROS subscriber callback: compare the new plan to the previous one
+        and raise an alert if they diverge beyond tolerance."""
+        tolerance: float = self._settings.value("pathChangeTolerance", self.TOLERANCE)
+
+        if not self.old_plan:
+            self.old_plan = data.poses
+        else:
+            current_path = list(data.poses)
+            initial_path = list(self.old_plan)
+
+            current_path_len = len(current_path)
+            initial_path_len = len(initial_path)
+
+            if current_path_len == initial_path_len:
+                error = quadratic_median_error(current_path, initial_path, tolerance)
+            else:
+                min_len = min(current_path_len, initial_path_len)
+                current_path = current_path[current_path_len - min_len :]
+                initial_path = initial_path[initial_path_len - min_len :]
+                error = quadratic_median_error(
+                    current_path, initial_path, tolerance=tolerance
+                )
+            self.old_plan = data.poses
+
+            likehood = 100 - error * 100 / current_path_len
+
+            if error > tolerance:
+                self.alert.throw_alert(
+                    message="Camino Bloqueado!!!",
+                    status=AlertStatus.ERROR.value,
+                    patrol_id=self.current_patrolid,
+                    checkpoint_id=self.current_pointid,
+                    map_filepath=self.current_map_filename.split(".")[0],
+                )
+                self.alert_generated.emit(f"Camino bloqueado >> error {error:.3f} m", AlertStatus.ERROR)
+
+            # print(f"Match, {error} {self.track}, tol: {tolerance}")
+            # logger.error(f"dont match, {likehood}, {self.track}")
+
+    def start_checker(self, patrol_id, checkpoint_id, map):
+        """Reset state for a new checkpoint and (re)subscribe to the global plan."""
+        self.old_plan = None
+        self._checkpoint_id = checkpoint_id
+        self._patrol_id = patrol_id
+        self.map = map
+        # self.TOLERANCE = rospy.get_param("/path_tolerance")
+
+        self.listen()
+
+    def listen(self):
+        """Subscribe to the global planner's path topic."""
+        self.sub_globalplan = rospy.Subscriber(
+            "/move_base/NavfnROS/plan", Path, self.callback_globalplan
+        )
+
+
+class StuckDetector(QObject):
+    """Flags the robot as stuck when ``cmd_vel`` commands motion but
+    odometry shows none for longer than the configured timeout, publishing
+    the result on ``/robot_stuck``."""
+
+    def __init__(self):
+        super().__init__()
+        # rospy.init_node("stuck_detector_node", anonymous=True)
+
+        # --- Thresholds & Parameters ---
+        self.cmd_thresh = rospy.get_param(
+            "~cmd_thresh", 0.05
+        )  # Minimum command to consider "trying to move"
+        self.odom_thresh = rospy.get_param(
+            "~odom_thresh", 0.01
+        )  # Maximum odom speed to consider "stopped"
+        self.stuck_timeout = rospy.get_param(
+            "~stuck_timeout", 3.0
+        )  # Seconds before declaring stuck
+
+        # --- State Variables ---
+        self.last_cmd_time = rospy.Time.now()
+        self.is_commanding_movement = False
+        self.is_actually_moving = False
+        self.stuck_start_time = None
+        self.is_stuck = False
+        self._settings = QSettings("MyCompany", "MyApp")
+
+        # --- Publishers & Subscribers ---
+        self.cmd_sub = rospy.Subscriber("/cmd_vel", Twist, self.cmd_callback)
+        self.odom_sub = rospy.Subscriber("/odom", Odometry, self.odom_callback)
+        self.stuck_pub = rospy.Publisher("/robot_stuck", Bool, queue_size=10)
+
+        # --- Timer ---
+        # Checks the status at 10Hz
+        # self.timer = rospy.Timer(rospy.Duration(0.1), self.check_stuck_status)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check_stuck_status)
+        self.timer.start(100)
+
+        rospy.loginfo("Stuck Detector Node Initialized.")
+
+    def cmd_callback(self, msg):
+        """ROS subscriber callback: track whether the robot is currently being commanded to move."""
+        # Calculate magnitude of linear and angular commands
+        linear_cmd = math.sqrt(msg.linear.x**2 + msg.linear.y**2)
+        angular_cmd = abs(msg.angular.z)
+
+        # Check if the navigation system is actively trying to move the robot
+        if linear_cmd > self.cmd_thresh or angular_cmd > self.cmd_thresh:
+            self.is_commanding_movement = True
+            self.last_cmd_time = rospy.Time.now()
+        else:
+            # If we haven't received a move command recently, we aren't trying to move
+            if (rospy.Time.now() - self.last_cmd_time).to_sec() > 0.5:
+                self.is_commanding_movement = False
+
+    def odom_callback(self, msg):
+        """ROS subscriber callback: track whether the robot is actually physically moving."""
+        # Calculate actual linear and angular speed from Odometry
+        linear_speed = math.sqrt(
+            msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2
+        )
+        angular_speed = abs(msg.twist.twist.angular.z)
+
+        # Check if the robot is physically moving
+        if linear_speed > self.odom_thresh or angular_speed > self.odom_thresh:
+            self.is_actually_moving = True
+        else:
+            self.is_actually_moving = False
+
+    def check_stuck_status(self):
+        """Timer tick: flag/clear ``is_stuck`` based on commanded-vs-actual
+        motion duration, and publish the current state."""
+        self.stuck_timeout = self._settings.value("stuckTimeout", 0.5)
+        # Condition for being stuck: Command sent, but no physical movement
+        if self.is_commanding_movement and not self.is_actually_moving:
+            if self.stuck_start_time is None:
+                self.stuck_start_time = rospy.Time.now()
+            else:
+                elapsed_time = (rospy.Time.now() - self.stuck_start_time).to_sec()
+                if elapsed_time >= float(self.stuck_timeout):
+                    if not self.is_stuck:
+                        self.is_stuck = True
+                        rospy.logwarn(
+                            "ROBOT IS STUCK! Command sent but no movement for {}s".format(
+                                elapsed_time
+                            )
+                        )
+        else:
+            # Reset if the robot starts moving or stops receiving commands
+            self.stuck_start_time = None
+            if self.is_stuck:
+                self.is_stuck = False
+                rospy.loginfo("Robot is free and moving again.")
+
+        # Publish the stuck status
+        self.stuck_pub.publish(Bool(self.is_stuck))

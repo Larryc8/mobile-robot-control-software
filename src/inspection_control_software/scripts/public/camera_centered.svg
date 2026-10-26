@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="800px" height="800px" viewBox="-60 -60 1144 1144" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Top-left corner -->
+  <polyline points="-40,44 -40,-40 44,-40" fill="none" stroke="#3A1F7A" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Top-right corner -->
+  <polyline points="980,-40 1084,-40 1084,44" fill="none" stroke="#3A1F7A" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Bottom-left corner -->
+  <polyline points="-40,980 -40,1084 44,1084" fill="none" stroke="#3A1F7A" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Bottom-right corner -->
+  <polyline points="980,1084 1084,1084 1084,980" fill="none" stroke="#3A1F7A" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Camera 2x scaled and centered -->
+  <g transform="scale(2) translate(-256, -107)">
+    <path d="M661.333333 533.333333H362.666667c-24.725333 0-42.666667-17.621333-42.666667-42.666666v-210.666667c0-25.045333 20.053333-45.333333 44.8-45.333333h294.4c24.725333 0 44.8 20.288 44.8 45.333333V490.666667c0 25.045333-17.941333 42.666667-42.666667 42.666666" fill="#5E35B1" stroke="#3A1F7A" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M362.666667 277.333333h42.666666v42.666667h-42.666666z" fill="#8668C5" stroke="#5040A0" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M426.666667 384a106.688 106.688 0 0 1 213.333333 0 106.666667 106.666667 0 0 1-213.333333 0M597.333333 234.666667l-20.928-32.661334A21.461333 21.461333 0 0 0 558.421333 192H454.613333c-7.210667 0-13.952 3.754667-17.962666 10.005333L415.701333 234.666667H597.333333z" fill="#512DA8" stroke="#3A1F7A" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M469.333333 384a64.021333 64.021333 0 0 1 128 0 64.021333 64.021333 0 0 1-128 0" fill="#B388FF" stroke="#7E57C2" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M548.416 390.250667a21.226667 21.226667 0 0 1-15.104-6.272 21.312 21.312 0 1 1-30.144-30.144c8.064-8.064 18.773333-12.501333 30.165333-12.501334h0.042667c11.392 0 22.101333 4.458667 30.144 12.522667a21.312 21.312 0 0 1-15.104 36.394667z" fill="#D2BDFF" stroke="#9E7FD4" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>
