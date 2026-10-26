@@ -4,6 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import cv2
 import numpy as np
 import psycopg2
 import yaml
@@ -405,23 +406,28 @@ class InternalStorageManager:
         finally:
             session.close()
 
-    def get_alerts_error(self):
-        try:
-            with psycopg2.connect(
-                database=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                host=self.db_host,
-                port=self.db_port,
-            ) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT x_position, y_position, status  FROM alert WHERE date >= CURRENT_DATE - INTERVAL '30 day';"
-                    )
-                    rows = cursor.fetchall()
-                    connection.commit()  # Commit the transaction
+    def get_alerts_error(self, map_file = None):
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
-            return rows
+        try:
+            query = session.query(
+                Alert.x_position,
+                Alert.y_position,
+                Alert.status,
+            ).outerjoin(Checkpoint, Alert.checkpoint_id == Checkpoint.id)
+
+            # 2. Apply map file filtering
+            print(f"get alert error {map_file}")
+            if map_file is not None:
+                query = query.join(Map, Alert.map_id == Map.id).filter(
+                    Map.file_path == map_file.split('.')[0]
+                )
+
+            results = query.all()
+            return results
+
         except psycopg2.Error as e:
             print(f"Database error: {e}")
 
@@ -485,21 +491,36 @@ class InternalStorageManager:
         session = Session()
 
         try:
+            map = (
+                session.query(Map)
+                .filter_by(file_path=alerts[0].get("map_filepath"))
+                .first()
+            )
             session.commit()
+            data = []
 
-            data = [
-                Alert(
+            for alert in alerts:
+                success, encoded_image = cv2.imencode(".png", alert.get("image"))
+                # if not success:
+                #     rospy.logerr("Failed to encode image to PNG format")
+                #     return
+
+                # Convert the numpy array stream into raw bytes
+                binary_data = encoded_image.tobytes()
+                new = Alert(
                     checkpoint_id=alert.get("heckpoint_id"),
                     patrol_id=alert.get("patrol_id"),
                     message=alert.get("message"),
                     x_position=alert.get("x_position"),
-                    y_position=alert.get("x_position"),
+                    y_position=alert.get("y_position"),
                     status=alert.get("status"),
                     date=alert.get("date"),
                     time=alert.get("time"),
+                    image_filepath=alert.get("image_filepath"),
+                    image_bytes=binary_data,
+                    map_id=map.id if map else None,
                 )
-                for alert in alerts
-            ]
+                data.append(new)
 
             session.add_all(data)
             session.commit()
@@ -509,57 +530,98 @@ class InternalStorageManager:
         finally:
             session.close()
 
-        def save_calibration(self, calibration_data: dict):
-            """'
-            Save Save Calibrations
+    def save_calibration(self, calibration_data: dict):
+        """'
+        Save Save Calibrations
 
-            parameter:
-            Calibration_data -->
-            """
-            engine = create_engine(DATABASE_URL)
-            Session = sessionmaker(bind=engine)
-            # Base.metadata.create_all(engine) # Create tables if they don't exist
-            session = Session()
-            try:
-                calibration_value = calibration_data.get("value")
-                checkpoint_id = calibration_data.get("checkpoint_id")
-                calibration_vector = None  # calibration_data.get("vector")
+        parameter:
+        Calibration_data -->
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        # Base.metadata.create_all(engine) # Create tables if they don't exist
+        session = Session()
+        try:
+            calibration_value = calibration_data.get("value")
+            checkpoint_id = calibration_data.get("checkpoint_id")
+            calibration_vector = None  # calibration_data.get("vector")
 
-                # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
-                # last_element = (
-                #     session.query(Calibration)
-                #     .filter_by(checkpoint_id=checkpoint_id)
-                #     .order_by(func.random())
-                #     .first()
-                # )
+            # last_element = session.query(Calibration).filter_by(checkpoint_id=checkpoint_id).order_by(desc(Calibration.id)).first()
+            # last_element = (
+            #     session.query(Calibration)
+            #     .filter_by(checkpoint_id=checkpoint_id)
+            #     .order_by(func.random())
+            #     .first()
+            # )
 
-                # print(
-                #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
-                # )
-                # calibration_value = None
+            # print(
+            #     f"Ccalibratonn VEctor {calibration_vector} last_element {last_element}"
+            # )
+            # calibration_value = None
 
-                # if last_element:
-                #     calibration_value = self.loss_func(
-                #         calibration_vector, last_element.calibration_vector
-                #     )
+            # if last_element:
+            #     calibration_value = self.loss_func(
+            #         calibration_vector, last_element.calibration_vector
+            #     )
 
-                calibration = Calibration(
-                    checkpoint_id=checkpoint_id,
-                    calibration_value=calibration_value,
-                    calibration_vector=calibration_vector,
+            calibration = Calibration(
+                checkpoint_id=checkpoint_id,
+                calibration_value=calibration_value,
+            )
+
+            session.add(calibration)
+            session.commit()
+
+            print("Sample data added successfully!")
+
+            session.close()
+        except Exception as e:
+            session.rollback()
+            print(f"Error setting up data: {e}")
+        finally:
+            session.close()
+
+    def get_alert_histogram_data(
+        self, granularity: str, map_file: str = None
+    ) -> List[tuple]:
+        """
+        Fetches alert counts grouped by month or year.
+
+        Args:
+            granularity: 'monthly' or 'yearly'
+            map_file: Optional map file path for filtering
+
+        Returns:
+            List of tuples (label, count)
+        """
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            if granularity == "hourly":
+                # Group by hour of day (00:00 - 23:00)
+                label_expr = func.to_char(Alert.time, "HH24:00")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+            elif granularity == "monthly":
+                # Group by Month-Year for the last 12 months (simplified to Month for now per request)
+                label_expr = func.to_char(Alert.date, "YYYY-MM")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+            else:  # yearly
+                label_expr = func.to_char(Alert.date, "YYYY")
+                query = session.query(label_expr.label("label"), func.count(Alert.id))
+
+            if map_file:
+                query = query.join(Map, Alert.map_id == Map.id).filter(
+                    Map.file_path == map_file
                 )
 
-                session.add(calibration)
-                session.commit()
-
-                print("Sample data added successfully!")
-
-                session.close()
-            except Exception as e:
-                session.rollback()
-                print(f"Error setting up data: {e}")
-            finally:
-                session.close()
+            results = query.group_by("label").order_by(asc("label")).all()
+            return results
+        except Exception as e:
+            print(f"Error fetching histogram data: {e}")
+            return []
+        finally:
+            session.close()
 
     def get_calibration(self, pointid: str, current_calibration_vector: list) -> dict:
         engine = create_engine(DATABASE_URL)
@@ -645,6 +707,7 @@ class InternalStorageManager:
             # Extract file info
             name = os.path.basename(image_path)
             ext = os.path.splitext(image_path)[1].lower()
+            sa
             new_file = None
             yaml_data = None
             binary_data = None
@@ -860,6 +923,7 @@ class InternalStorageManager:
             Alert.time,
             Alert.message,
             Checkpoint.image_bytes,
+            Alert.image_filepath,
         ).outerjoin(Checkpoint, Alert.checkpoint_id == Checkpoint.id)
 
         # 2. Apply conditional status filtering
@@ -997,6 +1061,14 @@ class DataBase(QThread):
                 ascendant=self.data.get("ascendant", False),
             )
             self.action_completed.emit("SuccessGetFilteredAlerts", data)
+            return
+
+        if self.action == "get_alert_histogram_data":
+            data = self.internal_storage_manager.get_alert_histogram_data(
+                granularity=self.data.get("granularity"),
+                map_file=self.data.get("map_file"),
+            )
+            self.action_completed.emit("SuccessGetHistogramData", {"histogram": data})
 
 
 if __name__ == "__main__":

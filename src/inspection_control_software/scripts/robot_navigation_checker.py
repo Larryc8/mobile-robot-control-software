@@ -63,9 +63,13 @@ def quadratic_median_error(data1, data2, tolerance=0.06):
 class RobotNavigationChecker(QObject):
     alert_generated = pyqtSignal(str, AlertStatus)
 
-    def __init__(self, track) -> None:
+    def __init__(self, track, patrol_id, checkpoint_id, map_filename) -> None:
         super().__init__()
         self.sub_globalplan = None
+
+        self.current_patrolid = patrol_id
+        self.current_pointid = checkpoint_id
+        self.current_map_filename = map_filename
 
         self.current_pose = None
         self.saved_pose = None
@@ -76,7 +80,7 @@ class RobotNavigationChecker(QObject):
         self._checkpoint_id = None
         self._patrol_id = None
         self.map = None
-        self.TOLERANCE = 0.06
+        self.TOLERANCE = 0.06 #in meters
         self._settings = QSettings("MyCompany", "MyApp")
         self.stuck_checker = StuckDetector()
 
@@ -110,16 +114,17 @@ class RobotNavigationChecker(QObject):
 
             likehood = 100 - error * 100 / current_path_len
 
-            if error > self.TOLERANCE and self._checkpoint_id:
+            if error > tolerance:
                 self.alert.throw_alert(
-                    "obstacle",
-                    AlertStatus.ERROR.value,
-                    self._patrol_id,
-                    self._checkpoint_id,
+                    message="Camino Bloqueado!!!",
+                    status=AlertStatus.ERROR.value,
+                    patrol_id=self.current_patrolid,
+                    checkpoint_id=self.current_pointid,
+                    map_filepath=self.current_map_filename.split(".")[0],
                 )
-                self.alert_generated.emit("Se detecto un obtaculo!!", AlertStatus.ERROR)
+                self.alert_generated.emit(f"Camino bloqueado >> error {error:.3f} m", AlertStatus.ERROR)
 
-            print(f"Match, {error} {self.track}, tol: {tolerance}")
+            # print(f"Match, {error} {self.track}, tol: {tolerance}")
             # logger.error(f"dont match, {likehood}, {self.track}")
 
     def start_checker(self, patrol_id, checkpoint_id, map):

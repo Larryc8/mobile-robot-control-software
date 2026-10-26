@@ -3,7 +3,7 @@ import sys
 import rospy
 from config_model import UserConfigFileManager
 from input_textdialog import CustomDialog, InputDialog
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSettings, Qt
 from PyQt5.QtWidgets import (
     QApplication,
     QComboBox,
@@ -21,8 +21,8 @@ from PyQt5.QtWidgets import (
 from styles.buttons import (
     border_button_style,
     border_button_style_danger,
-    secondary_button_style,
     colored_button_style,
+    secondary_button_style,
 )
 
 
@@ -30,12 +30,29 @@ class RobotConfigForm(QWidget):
     def __init__(self):
         super().__init__()
         self.user_config = UserConfigFileManager()
+        self._config = QSettings("MyCompany", "MyApp")
         self.init_ui()
+        self.init_params()
 
     def init_ui(self):
         # Window settings
         self.setWindowTitle("Configuración del Robot")
         # self.setGeometry(100, 100, 500, 300)  # x, y, width, height
+
+        self.robots = self._config.value(
+            "robots",
+            {
+                "turtlebot3": {
+                    "name": "turtlebot3",
+                    "URDF_path": "empty",
+                    "odom_topic": "odom",
+                    "cmd_vel_topic": "cmd_vel",
+                    "lidar_topic": "scan",
+                    "imu_topic": "imu",
+                    "baseframe": "base_link",
+                }
+            },
+        )
 
         # Main Layout
         main_layout = QVBoxLayout()
@@ -47,7 +64,7 @@ class RobotConfigForm(QWidget):
         )
 
         delete_option_btn.setStyleSheet(border_button_style_danger)
-        add_option_btn.setStyleSheet(colored_button_style )
+        add_option_btn.setStyleSheet(colored_button_style)
 
         buttons_layout.addWidget(delete_option_btn)
         buttons_layout.addWidget(add_option_btn)
@@ -56,14 +73,9 @@ class RobotConfigForm(QWidget):
         # Load Config
         self.config = self.user_config.read_data()
 
-        robots_options = list(self.config["robots"].keys())
-
-        for option in robots_options:
-            self.robots_dropdown.addItem(option)
-
-        self.robots_dropdown.setCurrentText(self.config["robot"])
-
-        self.robots_dropdown.currentIndexChanged.connect(self.handleDropDownRobotChange)
+        robot_name = self._config.value("name", "turtlebot3")
+        self.robots_dropdown.setCurrentText(robot_name)
+        # self.robots_dropdown.setCurrentText(self._config.value('robot', 'turtlebot3'))
 
         # Title
         title_label = QLabel("Ingrese los detalles del robot")
@@ -137,6 +149,31 @@ class RobotConfigForm(QWidget):
         # Set the layout
         self.setLayout(main_layout)
 
+    def init_params(self):
+
+        robots_options = list(self.robots.keys())
+
+        for option in robots_options:
+            self.robots_dropdown.addItem(option)
+
+        robot_name = self._config.value("robot", "turtlebot3")
+        self.update_param_view(robot_name=robot_name)
+
+        self.robots_dropdown.currentIndexChanged.connect(self.handleDropDownRobotChange)
+
+    def update_param_view(self, robot_name):
+        robot = self.robots[robot_name]
+
+        print("robot config", robot)
+
+        self.name_input.setText(robot["name"])
+        self.urdf_input.setText(robot["URDF_path"])
+        self.odom_input.setText(robot["odom_topic"])
+        self.cmd_vel_input.setText(robot["cmd_vel_topic"])
+        self.lidar_input.setText(robot["lidar_topic"])
+        self.imu_input.setText(robot["imu_topic"])
+        self.baseframe_input.setText(robot["baseframe"])
+
     def browse_file(self):
         """Opens a file dialog to select the URDF file."""
         options = QFileDialog.Options()
@@ -152,6 +189,7 @@ class RobotConfigForm(QWidget):
 
     def handleDropDownRobotChange(self):
         robot = self.robots_dropdown.currentText()
+        self.update_param_view(robot)
 
         dg = CustomDialog(
             self,
@@ -162,23 +200,24 @@ class RobotConfigForm(QWidget):
         )
         dg.exec_()
 
-        self.user_config.update_value("robot", robot)
+        # self.user_config.update_value("robot", robot)
+        self._config.setValue("robot", robot)
         print("HI, HOLA! SE CAMBIO DE ROBot", robot)
 
     def submit_form(self):
         """Collects data and displays it."""
         name = self.name_input.text()
         data = {
-            "robot": self.name_input.text(),
+            "name": self.name_input.text(),
             "URDF_path": self.urdf_input.text(),
-            "odom_topic": self.odom_input.text(),
-            "cmd_vel_topic": self.cmd_vel_input.text(),
             "lidar_topic": self.lidar_input.text(),
             "imu_topic": self.imu_input.text(),
+            "odom_topic": self.odom_input.text(),
+            "cmd_vel_topic": self.cmd_vel_input.text(),
             "baseframe": self.baseframe_input.text(),
         }
 
-        if not data["robot"]:
+        if not data["name"]:
             self.alert_label.setText("Llene todos los campos, ingrese un nombre válido")
             return
         if not data["odom_topic"]:
@@ -200,8 +239,12 @@ class RobotConfigForm(QWidget):
             return
 
         self.alert_label.setText("")
-        self.user_config.update_value(f"robots.{name}", data)
+        # self.user_config.update_value(f"robots.{name}", data)
+        self.robots[name] = data
+        self._config.setValue("robots", self.robots)
+        print("all robots", self.robots)
         self.robots_dropdown.addItem(name)
+        self.robots_dropdown.setCurrentText(name)
 
         dg = CustomDialog(
             self,

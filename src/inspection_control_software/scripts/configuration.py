@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import time
@@ -465,7 +464,7 @@ class FriendlyConfig(QWidget):
         self.start_calibrations_btn.setMaximumWidth(300)
         self.debug = QLabel("debug")
 
-        self.text = QLabel("Se ejecuraran periodos de calibracion")
+        self.text = QLabel("Se ejecutaran periodos de calibración")
         self.text.setFixedHeight(30)
 
         self.h_slider = QSlider(Qt.Horizontal)
@@ -497,10 +496,12 @@ class FriendlyConfig(QWidget):
         # subtitle_label_style
         self.layout.addWidget(config_form, 1, 0, 3, 1)
         self.layout.addWidget(navigation_settings, 4, 0)
+        label_title =QLabel("Patrullajes de calibración")
+        label_title.setStyleSheet("font-size: 18px; font-weight: bold;")
         self.layout.addWidget(
             Wrapper(
                 children=[
-                    QLabel("Patrullajes de calibración"),
+                    label_title,
                     self.start_calibrations_btn,
                     self.h_slider,
                     self.text,

@@ -7,7 +7,7 @@ from typing import List
 
 import rospy
 import yaml
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt5.QtCore import QObject, QSettings, QThread, pyqtSignal
 from roslaunch import configure_logging, parent, rlutil
 from roslaunch.core import Node
 from roslaunch.scriptapi import ROSLaunch
@@ -180,6 +180,7 @@ class NodesManager(QObject):
         self.rosbag = None
         self.started_nodes = {}
         self.user_configs = UserConfigFileManager()
+        self._config = QSettings("MyCompany", "MyApp")
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
         node_instances = {}
@@ -195,9 +196,22 @@ class NodesManager(QObject):
             if not respawn:
                 respawn = False
 
-            config = self.user_configs.read_data()
-            robot_name = config["robot"]
-            robot = config["robots"][robot_name]
+            robots = self._config.value(
+                "robots",
+                {
+                    "turtlebot3": {
+                        "name": "turtlebot3",
+                        "URDF_path": "empty",
+                        "odom_topic": "odom",
+                        "cmd_vel_topic": "cmd_vel",
+                        "lidar_topic": "scan",
+                        "imu_topic": "imu",
+                        "baseframe": "base_link",
+                    }
+                },
+            )
+            robot_name = self._config.value("robot", "turtlebot3")
+            robot = robots[robot_name]
 
             # "URDF_path": "",
             # "odom_topic": "",
@@ -215,7 +229,7 @@ class NodesManager(QObject):
                     ("/odom", robot["odom_topic"]),
                     ("/scan", robot["lidar_topic"]),
                     ("/imu", robot["imu_topic"]),
-                    ("/move_base_simple/goal", "/move_base_simple/goal2")
+                    ("/move_base_simple/goal", "/move_base_simple/goal2"),
                 ],
             )
             node_instances.update(

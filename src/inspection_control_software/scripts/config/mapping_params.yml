@@ -1,12 +1,12 @@
-angularUpdate: 0.48
-astep: 0.05
+angularUpdate: 0.4
+astep: 0.044
 base_frame: base_footprint
 delta: 0.05
 iterations: 5.0
 kernelSize: 1.0
 lasamplerange: 0.005
-lasamplestep: 0.0048
-linearUpdate: 0.4
+lasamplestep: 0.005
+linearUpdate: 0.52
 llsamplerange: 0.01
 llsamplestep: 0.01
 lsigma: 0.075

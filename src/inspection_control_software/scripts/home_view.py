@@ -342,7 +342,7 @@ class VisualizationPanel(QWidget):
         self.view_menu_btn = QPushButton("Opciones")
 
         self.buttons_layout.addWidget(self.load_map_button, 0, 0)
-        self.buttons_layout.addWidget(self.points_window_btn, 0, 3)
+        # self.buttons_layout.addWidget(self.points_window_btn, 0, 3)
         line = QFrame()
         line.setFrameShape(QFrame.VLine)
         # line.setLineWidth(1)
@@ -512,7 +512,7 @@ class VisualizationPanel(QWidget):
     def on_mount(self):
 
         followTutorial = self.settings.value("followTutorial")
-        if followTutorial == False:
+        if True:
             return
 
         dg = CustomDialog(

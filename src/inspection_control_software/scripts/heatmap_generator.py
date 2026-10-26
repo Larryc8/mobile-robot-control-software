@@ -70,7 +70,7 @@ class HeatmapGenerator:
             (-1.7, 1.8, 0),
         ]
         a.extend(s)
-        # a.extend(data)
+        a.extend(data)
 
         for x, y, rssi in a:
             self.set_data(x, y, rssi)

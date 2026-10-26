@@ -113,7 +113,12 @@ class PointsScheduler(QObject):
 
         self.track = [0]
         self.user_config = UserConfigFileManager()
-        self.navigation_checker = RobotNavigationChecker(self.track)
+        self.navigation_checker = RobotNavigationChecker(
+            self.track,
+            self.current_patrolid,
+            self.current_pointid,
+            self.current_map_filename,
+        )
         # self.stuck_detector = StuckDetector()
 
         self.battery_state_sub = rospy.Subscriber(
@@ -243,6 +248,7 @@ class PointsScheduler(QObject):
             self.dispatch()
             self.batteryIsLow = True
             self.num_predicts = 0
+            self.handleAlertGeneration(message="No hay suficiente bateria para completar el patrullaje")
             self.recovery_mode.emit("RecoveryModeActive")
 
     def update_battery(self, msg):
@@ -298,9 +304,17 @@ class PointsScheduler(QObject):
 
         return len(self._goals)
 
-    def handleAlertGeneration(self, message, status):
+    def handleAlertGeneration(self, message, status=AlertStatus.ERROR):
         print(f"POINT SCHEDULER {message}")
         self.alert_generated.emit(message, status)
+        self.alert.throw_alert(
+            message=message,
+            status=AlertStatus.ERROR.value,
+            patrol_id=self.current_patrolid,
+            checkpoint_id=self.current_pointid,
+            map_filepath=self.current_map_filename.split(".")[0],
+        )
+
 
     def setGoals(self):
         self.goals = self._goals.copy()
@@ -387,7 +401,7 @@ class PointsScheduler(QObject):
                 pose.get("y_meters"),
                 pose.get("checked"),
                 pose.get("yaw"),
-                pose.get("image"),
+                pose.get("image_path"),
             )
             self.currrent_pose = (x_meters, y_meters, yaw)
             self.current_reference_image_path = image
@@ -715,7 +729,6 @@ class PointsScheduler(QObject):
         try:
             if self.current_reference_image_path:
                 cv.imwrite(self.camera_image_filepath, self.current_image)
-                print(f"{__name__} path:{self.camera_image_filepath}")
                 ImgSim = imgsim.ImgSimilarity("efficientnet_b0")
 
                 reference = self.current_reference_image_path
@@ -725,9 +738,13 @@ class PointsScheduler(QObject):
                 # config = self.user_config.read_data()
 
                 # img_width, img_height = 160, 120
-                img_width, img_height = self.current_image.size()
+                img_height, img_width, channels = self.current_image.shape
                 # crop_width, crop_height = config["roi"]
                 crop_width, crop_height = self._settings.value("roi", [60, 60])
+
+                print(
+                    f"{__name__} path:{self.camera_image_filepath}, W: {img_width} H: {img_height}"
+                )
 
                 # Calculate the coordinates
                 left = (img_width - crop_width) / 2
@@ -781,19 +798,21 @@ class PointsScheduler(QObject):
             mean = data["mean_value"]
             std = data["std_dev_value"]
             loss_func = self.current_rate  # self.get_image_similarity()
-            condition = loss_func < (mean - std * 3)
+            condition = loss_func < (mean - std * 2)
 
             robot_actions_logger.logger.log(
-                f"Scaneo finalizados. sim, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - good: {condition}"
+                f"Scaneo finalizado. sim_val, {loss_func:.4f} std, {std:.4f} mean, {mean:.4f} - obstruido: {condition}"
             )
 
             if condition:
-                self.alert.throw_alert(
-                    "Desague Tapado",
-                    AlertStatus.ERROR.value,
-                    self.current_patrolid,
-                    self.current_pointid,
-                )
+                self.handleAlertGeneration(message=f"Desague Tapado >> obstruido: {condition}")
+                # self.alert.throw_alert(
+                #     message=f"Desague Tapado >> obstruido: {condition}",
+                #     status=AlertStatus.ERROR.value,
+                #     patrol_id=self.current_patrolid,
+                #     checkpoint_id=self.current_pointid,
+                #     map_filepath=self.current_map_filename.split(".")[0],
+                # )
 
             self.__database.quit()
             self.__database.wait()

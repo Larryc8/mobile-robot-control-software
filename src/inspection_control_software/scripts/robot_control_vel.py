@@ -48,7 +48,7 @@ class RobotVelocityController(QWidget):
 
         # Title
         title_label = QLabel("Panel de Control")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; ")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; ")
         main_layout.addWidget(title_label)
 
         # --- Conduction Mode Section ---

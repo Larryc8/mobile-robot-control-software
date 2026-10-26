@@ -8,7 +8,8 @@ matplotlib.use("Qt5Agg")
 import random
 
 import rospy
-from better_image_display import ImageViewer
+
+# from better_image_display import ImageViewer
 from database_manager import AlertStatus, DataBase, InternalStorageManager
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from heatmap_generator import HeatmapGenerator
@@ -84,10 +85,34 @@ from styles.labels import (
 
 
 class MplCanvas(FigureCanvasQTAgg):
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+    def __init__(self, parent=None, width=5, height=2, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
         super().__init__(fig)
+
+
+class AlertHistogram(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+        self.canvas = MplCanvas(self, width=10, height=3, dpi=100)
+        self.layout.addWidget(self.canvas)
+        # self.canvas.axes.set_title("Frecuencia de Alertas")
+        # self.canvas.axes.set_xlabel("Tiempo")
+        # self.canvas.axes.set_ylabel("Cantidad")
+        self.setFixedHeight(210)
+
+    def update_plot(self, labels, values):
+        self.canvas.axes.clear()
+        self.canvas.axes.bar(labels, values, color="#3498db", alpha=0.7)
+        # self.canvas.axes.set_title("Frecuencia de Alertas")
+        # self.canvas.axes.set_xlabel("Tiempo")
+        # self.canvas.axes.set_ylabel("Cantidad")
+        # self.canvas.axes.tick_params(axis="x", rotation=45)
+        # self.canvas.figure.tight_layout()
+        self.canvas.draw()
+        self.hide()
+        self.show()
 
 
 class PatrolStatsViewer(QMainWindow):
@@ -172,6 +197,8 @@ class PatrolStatsViewer(QMainWindow):
 
 # import pyqtgraph as pg
 class ImageViewer(QWidget):
+    on_close = pyqtSignal(bool)
+
     def __init__(
         self,
         ylm_map_filepath=None,
@@ -250,7 +277,7 @@ class ImageViewer(QWidget):
         layout.addWidget(self.graphics_view)
 
         buttons_layout.addWidget(self.close_button, 1)
-        # layout.addLayout(buttons_layout)
+        layout.addLayout(buttons_layout)
 
         icon = QApplication.style().standardIcon(QStyle.SP_DialogCloseButton)
         self.close_button.setIcon(icon)
@@ -265,7 +292,8 @@ class ImageViewer(QWidget):
         # self.show()
 
     def close_win(self, e):
-        self.hide()
+        print("Close Heatmap")
+        self.on_close.emit(True)
 
 
 class Example(QGraphicsView):
@@ -345,15 +373,23 @@ class AlertItem(QWidget):
         self.setLayout(layout)
 
     def mousePressEvent(self, event):
-        x_position, y_position, status, date, time, message, image_bytes = (
-            self.alert_data
-        )
+        (
+            x_position,
+            y_position,
+            status,
+            date,
+            time,
+            message,
+            image_bytes,
+            image_filepath,
+        ) = self.alert_data
         self.show_details.emit(
             {
                 "message": message,
                 "date": str(date),
                 "time": str(time),
                 "status": status,
+                "image_filepath": image_filepath,
                 "image_bytes": image_bytes,
             }
         )
@@ -401,14 +437,14 @@ class InfoPanel(QGroupBox):
         layout.addWidget(map_filepath_label)
         layout.addWidget(stats_title_image, alignment=Qt.AlignCenter)
         layout.addWidget(self.checkpoints_stats, alignment=Qt.AlignCenter)
-        layout.addWidget(self.alerts_stats, alignment=Qt.AlignCenter)
+        # layout.addWidget(self.alerts_stats, alignment=Qt.AlignCenter)
 
         self.checkpoints_stats.generate_stats.connect(self.get_checkpoints_stats)
+        self.checkpoints_stats.viewdata_button.clicked.connect(self.show_heatmap)
+
         self.alerts_stats.map_loaded.connect(self.set_map)
         self.alerts_stats.generate_stats.connect(self.get_alerts_stats)
         self.alert_details.back2stats_button.clicked.connect(self.go2stats)
-
-        self.checkpoints_stats.viewdata_button.clicked.connect(self.show_heatmap)
 
         self.stats_panel.setLayout(layout)
         self.main_layout.addWidget(self.stats_panel)
@@ -418,10 +454,14 @@ class InfoPanel(QGroupBox):
         self.stacked_layout.addWidget(self.container)
         self.stacked_layout.addWidget(self.heatmap)
 
+        self.heatmap.on_close.connect(self.go2stats)
+
         self.setLayout(self.stacked_layout)
 
     def go2stats(self):
         self.main_layout.setCurrentIndex(0)
+        self.stacked_layout.setCurrentIndex(0)
+        print("Go to stats")
 
     def go2alert_details(self):
         self.main_layout.setCurrentIndex(1)
@@ -495,9 +535,10 @@ class AlertDetails(QGroupBox):
     def __init__(self) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
+        self.info_layout = QVBoxLayout()
 
         self.image_label = QLabel("No Image")
-        self.image_label.setFixedSize(700, 500)
+        self.image_label.setFixedSize(800, 400)
         self.image_label.setScaledContents(True)
         self.image_label.setStyleSheet(
             "border: 1px solid #ddd; background-color: #f0f0f0;"
@@ -512,19 +553,20 @@ class AlertDetails(QGroupBox):
         self.message_label.setStyleSheet(normal_label_style)
         self.message_label.setWordWrap(True)
 
-        self.back2stats_button = QPushButton("Volver a Estadisticas")
+        self.back2stats_button = QPushButton("< Volver")
         self.playdata_button = QPushButton("Play recorded data")
-        self.back2stats_button.setStyleSheet(secondary_button_style)
+        # self.back2stats_button.setStyleSheet(secondary_button_style)
         self.playdata_button.setStyleSheet(primary_button_style)
 
         self.layout.addWidget(self.image_label, alignment=Qt.AlignCenter)
-        self.layout.addWidget(self.title_label)
-        self.layout.addWidget(self.datetime_label)
-        self.layout.addWidget(self.message_label)
+        # self.info_layout.addWidget(self.title_label)
+        # self.info_layout.addWidget(self.datetime_label)
+        self.info_layout.addWidget(self.message_label)
+        self.layout.addLayout(self.info_layout)
 
         buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.datetime_label)
         buttons_layout.addWidget(self.back2stats_button)
-        buttons_layout.addWidget(self.playdata_button)
         self.layout.addLayout(buttons_layout)
 
         self.setLayout(self.layout)
@@ -535,6 +577,7 @@ class AlertDetails(QGroupBox):
         time = data.get("time", "N/A")
         status = data.get("status", 0)
         image_bytes = data.get("image_bytes")
+        image_filepath = data.get("image_filepath")
 
         status_text = "INFO"
         if status == AlertStatus.ERROR.value:
@@ -544,13 +587,11 @@ class AlertDetails(QGroupBox):
 
         self.title_label.setText(f"{status_text}: {message}")
         self.datetime_label.setText(f"{date} {time}")
-        self.message_label.setText(
-            f"Detalles de la alerta registrada en el punto de control."
-        )
+        self.message_label.setText(f"{message}")
 
-        if image_bytes:
-            pixmap = QPixmap()
-            pixmap.loadFromData(image_bytes)
+        if image_filepath:
+            pixmap = QPixmap(image_filepath)
+            # pixmap.loadFromData(image_bytes)
             if not pixmap.isNull():
                 self.image_label.setPixmap(pixmap)
             else:
@@ -632,6 +673,7 @@ class StatContainer(QGroupBox):
         )
         print(file_path)
         self.map_loaded.emit(file_path)
+        self.map_filepath = file_path.split('.')[0]
         return file_path
 
 
@@ -644,7 +686,8 @@ class TaskWorkerHeatmap(QThread):
 
     def run(self):
         ma = InternalStorageManager()
-        data = ma.get_alerts_error()
+        data = ma.get_alerts_error(self.map)
+        print(f"Esto es la data {__name__}: {data}")
         heatmapgenerator = HeatmapGenerator(file_path=self.map)
         heatmapimg_filepath = heatmapgenerator.generate(data=data)
         print(heatmapimg_filepath)
@@ -703,7 +746,7 @@ class LogPanel(QWidget):
 
         # Core Pagination Variables
         self.page_number = 0
-        self.PAGE_SIZE = 12  # Fixed typo from PAGE_ZISE
+        self.PAGE_SIZE = 9  # Fixed typo from PAGE_ZISES
         self.status = None
         self.ascendant = False
         self.map = None
@@ -713,12 +756,12 @@ class LogPanel(QWidget):
         # Setup the dynamic pagination UI component
 
         self.info_panel = InfoPanel(parent=parent)
-        self.layout.addLayout(self.main_layout, 2, 0)
         self.toggle = True
         self.node_manager = node_manager
 
         self.stacked_layout = QStackedLayout()
         self.main_layout.addLayout(self.stacked_layout)
+        self.update_data_btn = QPushButton('Actualizar datos')
 
         self.start_date_edit = QDateEdit(QDate.currentDate().addDays(-30))
         self.end_date_edit = QDateEdit(QDate.currentDate())
@@ -726,18 +769,73 @@ class LogPanel(QWidget):
         btn = QPushButton("Cargar mapa")
         self.input_layout.addWidget(btn)
 
-        self.layout.addLayout(self.input_layout, 1, 0)
-        self.layout.addWidget(self.info_panel, 0, 1, 3, 1)
+        # Histogram Section
+        self.histogram_container = QWidget()
+        self.histogram_layout = QVBoxLayout(self.histogram_container)
+
+        self.granularity_layout = QHBoxLayout()
+        self.granularity_label = QLabel("Granularidad:")
+        self.granularity_label.setStyleSheet(muted_label_style)
+        self.granularity_combo = QComboBox()
+        self.granularity_combo.addItems(["Mensual", "Anual", "Por hora"])
+        self.granularity_combo.currentIndexChanged.connect(self.getHistogramData)
+
+        self.granularity_layout.addWidget(self.granularity_label)
+        self.granularity_layout.addWidget(self.granularity_combo)
+        self.granularity_layout.addStretch()
+
+        self.alert_histogram = AlertHistogram()
+        self.histogram_layout.addLayout(self.granularity_layout)
+        self.histogram_layout.addWidget(self.alert_histogram)
 
         self.maps_selection = QComboBox()
         self.get_maps()
         self.maps_selection.currentIndexChanged.connect(self.handleMapSelection)
-        self.layout.addWidget(self.maps_selection, 0, 0)
+
+        self.layout.addLayout(self.main_layout, 4, 0, 1, 2)
+        # self.layout.addLayout(self.input_layout, 3, 0)
+        self.layout.addWidget(self.info_panel, 4, 2)
+        self.layout.addWidget(self.histogram_container, 0, 0, 2, 4)
+        self.layout.addWidget(self.maps_selection, 2, 0)
+        self.layout.addWidget(self.update_data_btn, 2, 1)
 
         self.info_panel.map_loaded.connect(self.set_map)
+        self.update_data_btn.clicked.connect(self.updateData)
+
+    def updateData(self):
+        self.page_number = 0
+        self.getAlerts()
 
     def handleMapSelection(self, index):
+        self.page_number = 0
         self.getAlerts()
+        self.getHistogramData()
+
+    def getHistogramData(self):
+        index = self.granularity_combo.currentIndex()
+        if index == 0:
+            granularity = "monthly"
+        elif index == 1:
+            granularity = "yearly"
+        else:
+            granularity = "hourly"
+
+        map_file = self.maps_selection.currentText()
+
+        self._db_hist = DataBase(
+            action="get_alert_histogram_data",
+            data={"granularity": granularity, "map_file": map_file},
+        )
+        self._db_hist.action_completed.connect(self.handleHistogramFinish)
+        self._db_hist.start()
+
+    def handleHistogramFinish(self, msg, data):
+        if msg == "SuccessGetHistogramData":
+            hist_data = data.get("histogram", [])
+            labels = [row[0] for row in hist_data]
+            values = [row[1] for row in hist_data]
+            self.alert_histogram.update_plot(labels, values)
+            self.histogram_container.update()
 
     def setup_alert_list(self):
         """Creates a dedicated UI container for alerts along with pagination controls."""
@@ -801,8 +899,10 @@ class LogPanel(QWidget):
 
     def add_alerts(self, alerts=[]):
         for alert in alerts:
-            x_position, y_position, status, date, time, message, image_bytes = alert
-            text = f"{message} {date} {time}"
+            x_position, y_position, status, date, time, message, image_bytes, _aaa = (
+                alert
+            )
+            text = f"{message} // {date} {time}"
             if text:
                 if status == AlertStatus.ERROR.value:
                     style = error_label_style
@@ -954,6 +1054,7 @@ class LogPanel(QWidget):
             self.maps_selection.addItem(file_path)
 
         self.setup_alert_list()
+        self.getHistogramData()
         self._database1.quit()
         self._database1.wait()
         self._database1 = None

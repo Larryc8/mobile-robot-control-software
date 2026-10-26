@@ -113,7 +113,8 @@ class Alert(Base):
     status = Column(Integer)
     date = Column(Date)
     time = Column(Time)
-    # image_bytes = Column(LargeBinary)
+    image_bytes = Column(LargeBinary)
+    image_filepath = Column(String)
 
     checkpoint_id = Column(String, ForeignKey("checkpoints.id"))
     patrol_id = Column(String, ForeignKey("patrols.id"))
