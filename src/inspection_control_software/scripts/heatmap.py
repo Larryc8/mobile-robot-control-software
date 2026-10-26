@@ -1,3 +1,8 @@
+"""Standalone experimental heatmap-blending scratchpad (not imported elsewhere;
+superseded by :mod:`generate_heatmap`/:mod:`heatmap_generator`).
+
+Running this module directly executes :func:`test` at import time.
+"""
 from collections import namedtuple
 from copy import copy
 import cv2
@@ -18,6 +23,7 @@ RssiWaypoint = namedtuple("RssiWaypoint", "x y rssi")
 
 
 def generateGradient(c, z, a):
+    """Build a 20x20 radial-falloff intensity patch scaled by ``a`` (``c``/``z`` are unused)."""
     size = 20
     center = 4
     max_radius = 5
@@ -33,6 +39,7 @@ def generateGradient(c, z, a):
 
 
 def applyGradient(gradient, matrix, x, y, width, height):
+    """Stamp a 10x10 corner of ``gradient`` onto ``matrix`` at ``(x, y)`` and return the sum."""
     size = 10
     m = np.zeros((width, height))
     for i in range(size):
@@ -42,6 +49,7 @@ def applyGradient(gradient, matrix, x, y, width, height):
 
 
 def generateHeatmap(points=[]):
+    """Blend a few hardcoded gradient blobs onto ``./mymap.pgm``, save and display the result."""
     image_path = "./mymap.pgm"
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert to RGB
@@ -95,6 +103,7 @@ cmapGR = LinearSegmentedColormap(  # Colour map
 )
 
 def test():
+    """Apply the custom green-red colormap to the map's free-space pixels, with a gradient patch in one region, and display it."""
     image_path = "./mymap.pgm"
     image = cv2.imread(image_path)
 

@@ -1,3 +1,8 @@
+"""Builds a checkpoint-alert-density heatmap image overlaid on the map.
+
+Used by the alerts tab (``logsystem_view.TaskWorkerHeatmap``) to visualize
+where error alerts cluster on a given map.
+"""
 # ROS
 from cv2 import imshow
 from collections import namedtuple
@@ -19,6 +24,9 @@ Waypoint = namedtuple("Waypoint", "x y")
 
 
 class HeatmapGenerator:
+    """Converts alert positions (real-world meters) for a given map into a
+    heatmap image overlaid on that map, via :mod:`generate_heatmap`."""
+
     def __init__(self, file_path: str = "./test1.yaml"):
         with open(file_path, "r") as file:
             map_data = yaml.safe_load(file)
@@ -30,6 +38,8 @@ class HeatmapGenerator:
         print('heatmap origin resolution',self.map_origin, self.map_resolution)
 
     def set_data(self, x, y, rssi):
+        """Convert a real-world ``(x, y)`` point to map pixel coordinates
+        and buffer it as a weighted sample for the heatmap."""
         x = int(
             (x - self.map_origin.x) / self.map_resolution
         )  # Change coordinates from real to map's
@@ -40,6 +50,8 @@ class HeatmapGenerator:
         self.rssi_data.append(data)  # store data sent from topic
 
     def get_heatmap(self):
+        """Interpolate the buffered samples into a heatmap, overlay it on
+        the map, save it to disk and return the saved filename."""
         heatmap = generate_heatmap(
             self.rssi_data, len(self.map), len(self.map[0]), 1, filtered=True
         )[0]
@@ -50,6 +62,9 @@ class HeatmapGenerator:
 
 
     def generate(self, data=[]):
+        """Seed the heatmap with a background grid plus a few fixed sample
+        points and the given ``data`` points, then build and return the
+        heatmap image filename."""
         s = []
         for i in range(-10, 10):
             for j in range(-10, 10):

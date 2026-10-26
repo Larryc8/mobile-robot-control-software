@@ -1,3 +1,15 @@
+"""Configuration tab UI: advanced ROS-parameter editor and the "friendly" setup screen.
+
+``ConfigPanel`` is the widget mounted as the app's "Configuracion" tab. It
+flips between two views via a ``QStackedLayout``:
+
+- ``FriendlyConfig``: simplified robot/navigation setup plus a calibration
+  patrol runner and a scratch to-do list.
+- The advanced view: one ``Panel`` of ``ConfigInput`` sliders per
+  ``ConfigModel`` (mapping/localization/planning ROS params), with a text
+  filter and save/apply buttons that persist values and restart the
+  affected ROS nodes.
+"""
 import os
 import sys
 import time
@@ -81,6 +93,14 @@ from styles.labels import (
 
 
 class ConfigPanel(QWidget):
+    """Advanced + friendly configuration screen for the robot's ROS stack.
+
+    Owns three :class:`~config_model.ConfigModel` instances (mapping,
+    localization, DWA planner) rendered as tabs of :class:`Panel` sliders,
+    and a :class:`FriendlyConfig` simplified view. ``query_param`` carries
+    the live text-filter query to each tab's parameter list.
+    """
+
     query_param = pyqtSignal(str)
 
     def __init__(self, nodes_manager, parent=None, patrols_scheduler=None) -> None:
@@ -217,13 +237,17 @@ class ConfigPanel(QWidget):
         self.setLayout(self.upper_layout)
 
     def handleConfigTypeChange(self, x):
+        """Switch the stacked layout to page ``x`` (0=friendly, 1=advanced)."""
         self.stacklayout.setCurrentIndex(x)
 
     def set_friendly_config(self, x):
+        """Go back to the friendly (simplified) configuration view."""
         self.stacklayout.setCurrentIndex(0)
 
     @pyqtSlot()
     def saveClickHandler(self) -> None:
+        """Persist every panel's current values and prompt the user to
+        apply (restart the affected nodes) or defer."""
         self.apply_config_button.hide()
         for panel in self.panels:
             [(name, tab)] = panel.items()
@@ -251,6 +275,7 @@ class ConfigPanel(QWidget):
 
     @pyqtSlot()
     def applyClickHandler(self) -> None:
+        """Restart the ROS nodes so the newly saved parameters take effect."""
         # self.nodes_manager.stopNodes(["turtlebot3_slam_gmapping"])
         # self.nodes_manager.bringUpStop()
         self.nodes_manager.restartNodes()
@@ -261,16 +286,19 @@ class ConfigPanel(QWidget):
 
     @pyqtSlot()
     def startNodesClickHandler(self) -> None:
+        """Bring up the robot driver stack and start the configured nodes."""
         self.nodes_manager.bringUpStart()
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes))
 
     @pyqtSlot()
     def handleLineEditEnter(self):
+        """Emit the filter text typed into the search box to all tabs."""
         text = self.filter_text.text()
         self.query_param.emit(text)
 
     @pyqtSlot(int)
     def update_query_state(self):
+        """Toggle the filter field's error style when the query is empty."""
         text = ""
         if text:
             self.filter_text.setStyleSheet(simple_line_edit_style)
@@ -279,6 +307,13 @@ class ConfigPanel(QWidget):
 
 
 class Panel(QWidget):
+    """Grid of :class:`ConfigInput` sliders, one per numeric ROS parameter.
+
+    Built from a ``{name: value}`` config dict and a matching ``{name:
+    range}`` dict; supports re-filtering its inputs by name via
+    :meth:`update_panel`.
+    """
+
     query_result = pyqtSignal(int)
 
     def __init__(self, configs: dict, ranges: dict = {}) -> None:
@@ -300,6 +335,8 @@ class Panel(QWidget):
         self.setLayout(self.layout)
 
     def generateConfigInputs(self):
+        """Rebuild ``config_inputs`` with one :class:`ConfigInput` per
+        numeric, non-boolean, non-zero value in ``input_values``."""
         self.config_inputs = []
         for name, value in self.input_values.items():
             if (
@@ -320,14 +357,17 @@ class Panel(QWidget):
                 )
 
     def getInputs(self) -> list:
+        """Return the current list of :class:`ConfigInput` widgets."""
         return self.config_inputs
 
     def getInputsValue(self) -> dict:
+        """Return the full config dict updated with each input's live value."""
         for input in self.config_inputs:
             self.input_values.update(input.value())
         return self.input_values
 
     def update_panel(self, text):
+        """Rebuild the grid showing only inputs whose name contains ``text``."""
         # if text:
         print("filter from panel", text)
         for index in range(len(self.config_inputs)):
@@ -353,6 +393,12 @@ class Panel(QWidget):
 
 
 class ConfigInput(QGroupBox):
+    """Labelled slider + line edit for a single numeric ROS parameter.
+
+    Maps the parameter's ``_range`` onto 100 slider steps so the slider and
+    the free-text line edit can be kept in sync in both directions.
+    """
+
     def __init__(
         self, label_text: str, default_value: int = 0, _range: List[float] = [1, 2]
     ) -> None:
@@ -407,15 +453,18 @@ class ConfigInput(QGroupBox):
 
     @pyqtSlot(int)
     def changeEventHandler(self, slider_value):
+        """Reflect a slider move in the value label and the line edit."""
         # range_index = [value * step for value in _range]
         value = self.mapRangeToValue(slider_value)
         self.value_lebel.setText(str(value))
         self.line_edit.setText(str(value))
 
     def mapRangeToValue(self, index: int) -> float:
+        """Convert a slider step index into the corresponding param value."""
         return self.param_values_range[index]
 
     def mapValueToRange(self, value) -> int:
+        """Convert a param value into its slider step index (-1 if not found)."""
         try:
             index = self.param_values_range.index(value)
             print(f"Found at index {index}")
@@ -425,9 +474,11 @@ class ConfigInput(QGroupBox):
         return index
 
     def value(self) -> dict:
+        """Return ``{param_name: current_slider_value}``."""
         return {self.label.text(): self.mapRangeToValue(self.slider.value())}
 
     def handleLineEditChange(self):
+        """Parse the typed value and move the slider to the closest step."""
         try:
             x = self.line_edit.text()
             value = float(x)
@@ -445,6 +496,12 @@ class ConfigInput(QGroupBox):
 
 
 class FriendlyConfig(QWidget):
+    """Simplified configuration screen: robot/velocity settings, a
+    calibration-patrol runner with progress tracking, and a scratch to-do
+    list. ``calibration_started`` is emitted (False=starting, True=stopped)
+    so other panels can disable/enable themselves accordingly.
+    """
+
     config_type_change = pyqtSignal(int)
     calibration_started = pyqtSignal(bool)
 
@@ -517,6 +574,7 @@ class FriendlyConfig(QWidget):
         self.setLayout(self.layout)
 
     def update_all(self, value):
+        """Update the calibration period count and the progress bar's max."""
         self.calibration_periods = int(value)
         points_count = len(self.patrols_scheduler.points_scheduler._goals)
         self.calibrations_progress.setMaximum(
@@ -527,9 +585,12 @@ class FriendlyConfig(QWidget):
         )
 
     def advance_config_callack(self, x):
+        """Switch the parent stacked layout to the advanced config view."""
         self.config_type_change.emit(1)
 
     def test(self, x):
+        """Toggle the calibration run on/off (despite the name, the main
+        start/stop handler for the calibration button)."""
         if self.isStart:
             self.calibrations_progress.setValue(0)
             self.start_calibrations()
@@ -540,11 +601,13 @@ class FriendlyConfig(QWidget):
         self.isStart = True
 
     def update_progress(self, x) -> None:
+        """Advance the calibration progress bar by one checkpoint reached."""
         if not self.isStart:
             self.calibrations_progress.setValue(self.calibrations_progress.value() + 1)
             self.debug.setText(f"debug {self.calibrations_progress.value()}")
 
     def start_calibrations(self):
+        """Load and start the calibration patrol set, resetting the progress bar."""
         self.calibration_started.emit(False)
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
         self.start_calibrations_btn.setIcon(icon_stop)
@@ -556,6 +619,7 @@ class FriendlyConfig(QWidget):
         pass
 
     def stop_calibrations(self) -> None:
+        """Cancel the running calibration patrol and reset the button state."""
         self.calibration_started.emit(True)
         self.patrols_scheduler.cancel_task()
         icon_start = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
@@ -564,6 +628,9 @@ class FriendlyConfig(QWidget):
 
 
 class Wrapper(QGroupBox):
+    """Generic vertical container that stacks arbitrary ``children`` widgets
+    inside a titled group box."""
+
     def __init__(self, title="Estatdiaticas", children: list = []) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
@@ -575,6 +642,8 @@ class Wrapper(QGroupBox):
 
 
 class DataSetConfigContainer(QGroupBox):
+    """Group box with a single button to pick a dataset file (unused elsewhere)."""
+
     def __init__(self, parent=None) -> None:
         super().__init__()
         self.main_layout = QVBoxLayout()
@@ -586,6 +655,7 @@ class DataSetConfigContainer(QGroupBox):
         self.setLayout(self.main_layout)
 
     def open_file_dialog(self):
+        """Open a file picker (selected file is currently discarded)."""
         options = QFileDialog.Options()
         options |= QFileDialog.ShowDirsOnly
         file_name, _ = QFileDialog.getOpenFileName(
@@ -598,6 +668,9 @@ class DataSetConfigContainer(QGroupBox):
 
 
 class TodoItem(QWidget):
+    """Collapsible to-do entry: a header (title + expand/delete) and a
+    details panel toggled by clicking the header."""
+
     deleted = pyqtSignal(object)
 
     def __init__(self, title, details="No details provided"):
@@ -659,17 +732,22 @@ class TodoItem(QWidget):
         """)
 
     def mousePressEvent(self, event):
+        """Toggle the details panel on left click."""
         if event.button() == Qt.LeftButton:
             self.toggle_details()
         super().mousePressEvent(event)
 
     def toggle_details(self):
+        """Flip the visibility of the details panel and the expand arrow."""
         is_visible = self.details_widget.isVisible()
         self.details_widget.setVisible(not is_visible)
         self.expand_icon.setText("▲" if not is_visible else "▼")
 
 
 class TodoWidget(QGroupBox):
+    """Simple scratch to-do list: add/remove :class:`TodoItem` entries from
+    a text input (not persisted anywhere)."""
+
     def __init__(self, title="ToDos / Tareas"):
         super().__init__(title)
         self.setStyleSheet("""
@@ -718,6 +796,7 @@ class TodoWidget(QGroupBox):
         self.setLayout(self.main_layout)
 
     def add_todo(self):
+        """Create a :class:`TodoItem` from the input fields and clear them."""
         text = self.todo_input.text().strip()
         details = self.details_input.text().strip() or "Sin descripción detallada."
         if text:
@@ -728,6 +807,7 @@ class TodoWidget(QGroupBox):
             self.details_input.clear()
 
     def remove_todo(self, item):
+        """Remove a to-do entry from the list and schedule it for deletion."""
         self.list_layout.removeWidget(item)
         item.deleteLater()
 

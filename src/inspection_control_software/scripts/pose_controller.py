@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+"""PID-based differential-drive controller for ArUco-marker-relative approach.
+
+:class:`PIDController` is a generic PID loop; :class:`DifferentialDriveController`
+uses one for linear distance and one for yaw to drive the robot toward a
+target pose/heading tracked via ``/aruco/odom``, publishing ``/cmd_vel``.
+"""
 
 import rospy
 from numpy.linalg import norm
@@ -9,6 +15,9 @@ from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 
 class PIDController:
+    """Generic PID loop with anti-windup on the integral term and a
+    dead-zone (``tolerancia``) around the setpoint."""
+
     def __init__(self, kp, ki, kd, max_output, min_output, max_integral, tolerancia = 0.10):
         self.kp = kp
         self.ki = ki
@@ -23,14 +32,17 @@ class PIDController:
         self.last_time = None
 
     def set_setpoint(self, setpoint):
+        """Unused setpoint setter (no-op; callers pass the setpoint directly to :meth:`compute`)."""
         pass
-        
+
     def reset(self):
+        """Clear accumulated error state."""
         self.previous_error = 0.0
         self.integral = 0.0
         self.last_time = None
-        
+
     def compute(self, setpoint, current_value, current_time):
+        """Return the PID control output for the current error (zeroed within ``tolerancia``)."""
         error = setpoint - current_value
         if abs(error) < self.tolerancia:
             error = 0
@@ -71,8 +83,13 @@ class PIDController:
         return output
 
 class DifferentialDriveController:
+    """Drives the robot toward a target pose/yaw relative to a visible
+    ArUco marker, publishing ``/cmd_vel`` from linear and yaw PID loops.
+    Stops advancing (small corrective turn only) whenever the marker is
+    not currently visible."""
+
     def __init__(self):
-        
+
         # PID parameters for linear velocity
         linear_kp = 0.01#rospy.get_param('~linear_kp', 0.5)
         linear_ki = 0#rospy.get_param('~linear_ki', 0.01)
@@ -124,10 +141,12 @@ class DifferentialDriveController:
         self.control_rate = rospy.Rate(10)  # 50 Hz
 
     def marker_callback(self, msg):
+        """ROS subscriber callback: track whether the ArUco marker is currently visible."""
         pass
         self._markerIsVisible = msg.data
-        
+
     def odom_callback(self, odom_msg):
+        """ROS subscriber callback: update the current pose from ``/aruco/odom``."""
         # Extract position
         self.current_pose.x = odom_msg.pose.pose.position.x
         self.current_pose.y = odom_msg.pose.pose.position.y
@@ -145,12 +164,15 @@ class DifferentialDriveController:
         # print(f"{__name__}: {yaw}")
         
     def velocity_setpoint_callback(self, twist_msg):
+        """Unused callback for setting desired pose/yaw from a ``Twist`` topic."""
         self.desired_pose = twist_msg.linear.x
         self.desired_yaw = twist_msg.angular.z  # or use separate yaw setpoint
-        
+
     def yaw_setpoint_callback(self, yaw_msg):
+        """Unused callback for setting the desired yaw from a topic."""
         self.desired_yaw = yaw_msg.data
-        
+
+
     def normalize_angle(self, angle):
         """Normalize angle to [-pi, pi]"""
         while angle > math.pi:
@@ -160,6 +182,14 @@ class DifferentialDriveController:
         return angle
         
     def control_loop(self, yaw = False):
+        """Run one control step and publish ``cmd_vel``.
+
+        ``yaw=False`` drives linear approach toward ``desired_pose`` (with a
+        proportional turn derived from the lookahead geometry), returning
+        early with a small corrective spin if the marker isn't visible.
+        ``yaw=True`` instead runs a pure yaw-alignment step toward
+        ``desired_yaw``.
+        """
         if not yaw:
             current_time = rospy.get_time()
             
@@ -232,13 +262,16 @@ class DifferentialDriveController:
             # self.control_rate.sleep()
             
     def set_linear_distance_setpoint(self, target_pose):
+        """Set the target ``(x, y)`` the linear controller should approach."""
         self.desired_pose.x = target_pose[0]
         self.desired_pose.y = target_pose[1]
-        
+
     def set_yaw_setpoint(self, yaw):
+        """Set the target heading (radians) for the yaw controller."""
         self.desired_yaw = yaw
-        
+
     def reset_controllers(self):
+        """Reset both PID loops' accumulated state."""
         self.linear_pid.reset()
         self.yaw_pid.reset()
 

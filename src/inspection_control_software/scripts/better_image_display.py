@@ -1,3 +1,13 @@
+"""Checkpoint picker window: a map view where the user places/edits/orders
+points of interest for patrols.
+
+``ImageViewer`` is the popup window hosting the map; ``Example`` is the
+``QGraphicsView`` doing the heavy lifting — rendering the map pixmap,
+letting the user click to add checkpoints, drag them to reposition,
+right-click to delete/rename, draws numbered squares with yaw arrows, and
+converts between pixel and real-world (map) coordinates using the map's
+resolution and origin.
+"""
 import logging
 import math
 import random
@@ -80,6 +90,9 @@ from styles.labels import (
 
 
 class ImageViewer(QMainWindow):
+    """Frameless popup window hosting the checkpoint-editing :class:`Example`
+    graphics view, plus save/close controls and status labels."""
+
     save_selected_points = pyqtSignal(dict)
     save_in_database = pyqtSignal(dict)
 
@@ -117,10 +130,12 @@ class ImageViewer(QMainWindow):
         #
 
     def test(self):
+        """Switch to the point-details page of the stacked layout (triggered on a key press in the view)."""
         self.stackedlayout.setCurrentIndex(1)
         pass
 
     def init_ui(self):
+        """Build the graphics view, status labels, legend and save/close buttons."""
         # Central widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -219,9 +234,11 @@ class ImageViewer(QMainWindow):
     # self.graphics_view.load_stored_points()
 
     def reset_points_state(self, patrolid=None):
+        """Reset the displayed progress state of all checkpoints."""
         self.graphics_view.reset_points_state(patrolid)
 
     def handlePointsChanged(self, state):
+        """Show a transient success message after a point is added/deleted."""
         if state == "added":
             self.success_label.setText(
                 "✓ SUCCESS: Se agrego un nuevo punto al patrullaje"
@@ -232,11 +249,13 @@ class ImageViewer(QMainWindow):
         self.timer.start(4000)
 
     def hide_alerts(self):
+        """Hide the transient success label after its display timer elapses."""
         self.timer.stop()
         self.success_label.hide()
         pass
 
     def toggleSize(self):
+        """Toggle between the expanded (near full-window) and default popup size."""
         if self.setBiggerSize:
             self.setGeometry(
                 self.parent.x(),
@@ -255,6 +274,7 @@ class ImageViewer(QMainWindow):
             self.setBiggerSize = True
 
     def show_win(self):
+        """Position (if not expanded) and show the popup."""
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
         if self.setBiggerSize:
@@ -262,16 +282,19 @@ class ImageViewer(QMainWindow):
         self.show()
 
     def move_win(self):
+        """Position the popup near the top-right of the parent window."""
         popup_x = self.parent.x() + (self.parent.width() - self.width() - 10)
         # popup_y = self.parent.y() + (self.parent.height() - self.height() - 30)
         popup_y = self.parent.y() + 100
         self.move(popup_x, popup_y)
 
     def close_win(self):
+        """Hide the popup."""
         self.hide()
         # self.timer.start(1000)  # Update every 1000ms (1 second)
 
     def save_points(self, a):
+        """Cache the current checkpoints and emit ``save_selected_points``."""
         # a = self.getPointsInMap()
         self.pointsInMap = a
         self.save_selected_points.emit(a)
@@ -279,9 +302,11 @@ class ImageViewer(QMainWindow):
         logging.info("from ImageViewer POINT SAVED")
 
     def saveInDatabase(self, x):
+        """Emit the cached checkpoints for persistence to the database."""
         self.save_in_database.emit(self.pointsInMap)
 
     def load_map(self, file_path, stored_database_points=[]):
+        """Load a map YAML/image into the graphics view and reset its state."""
         self.stackedlayout.setCurrentIndex(0)
         if file_path == "NO_MAP":
             self.graphics_view.display_image("")
@@ -317,6 +342,7 @@ class ImageViewer(QMainWindow):
             print(e)
 
     def load_stored_points(self, data):
+        """Unreachable (returns immediately): meant to load stored checkpoints into the view."""
         return
         print("ImageViewer", data)
         self.graphics_view.load_stored_points(data)
@@ -330,23 +356,27 @@ class ImageViewer(QMainWindow):
             ntf.show()
 
     def update_points_state(self, current_poin_id, next_point_id, point_state):
+        """Forward a patrol progress update to the graphics view's checkpoint markers."""
         self.graphics_view.update_points_state(
             current_poin_id, next_point_id, point_state
         )
 
     def zoom_in(self):
+        """Unused zoom-in hook (body is commented out)."""
         # self.graphics_view.scale(1.2, 1.2)
         # self.zoom_factor *= 1.2
         # self.update()
         pass
 
     def zoom_out(self):
+        """Unused zoom-out hook (body is commented out)."""
         # self.graphics_view.scale(1 / 1.2, 1 / 1.2)
         # self.zoom_factor /= 1.2
         # self.update()
         pass
 
     def reset_view(self):
+        """Fit the loaded map back into the view."""
         # if self.graphics_view.scene.items():
         if self.graphics_view.pixmap:
             self.graphics_view.fitInView(
@@ -356,6 +386,15 @@ class ImageViewer(QMainWindow):
 
 
 class Example(QGraphicsView):
+    """Interactive map view for placing, moving and ordering checkpoints.
+
+    Renders the map pixmap in a ``QGraphicsScene``, lets the user left-click
+    to add a numbered checkpoint square (with a draggable yaw arrow),
+    drag squares to reposition them, and converts between scene pixel
+    coordinates and real-world map meters using ``map_resolution`` and the
+    map's bottom-left origin.
+    """
+
     send_points = pyqtSignal(dict)
     pointsChanged = pyqtSignal(str)
     key_presssed = pyqtSignal(bool)
@@ -395,11 +434,13 @@ class Example(QGraphicsView):
         #
 
     def test(self):
+        """Keyboard-shortcut handler (Ctrl+A): emit ``key_presssed``."""
         self.key_presssed.emit(True)
         print("Chala te amo")
         pass
 
     def getPointsPath(self) -> dict:
+        """Return the raw checkpoint dict, keyed by id, in scene pixel coordinates."""
         print("Points to Check:", self.pointsToCheck)
         # if self.pixmap:
         #     width = self.pixmap.width()
@@ -412,6 +453,8 @@ class Example(QGraphicsView):
         return self.pointsToCheck
 
     def getPointsInMap(self) -> dict:
+        """Convert every checkpoint's pixel position into real-world map
+        meters, ready to persist/send to the robot."""
         path = {}
         if self.pixmap:
             width = self.pixmap.width()
@@ -448,22 +491,26 @@ class Example(QGraphicsView):
         return path
 
     def zoom_in(self):
+        """Scale the view up by 10%."""
         self.scale(1.1, 1.1)
         self.zoom_factor *= 1.1
         # self.update()
 
     def zoom_out(self):
+        """Scale the view down by 10%."""
         self.scale(1 / 1.1, 1 / 1.1)
         self.zoom_factor /= 1.1
         # self.update()
 
     def reset_view(self):
+        """Fit the whole map back into the viewport and reset zoom to 1x."""
         # if self.scene.items():
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
         self.zoom_factor = 1.0
         # self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
     def wheelEvent(self, event):
+        """Zoom in/out with the mouse wheel, within a [1, 80] zoom range."""
         # Get the wheel delta (positive for up, negative for down)
         delta = event.angleDelta().y()
 
@@ -480,10 +527,14 @@ class Example(QGraphicsView):
         event.accept()
 
     def releaseMouse(self, event):
+        """Debug hook for mouse release (unused, no-op beyond logging)."""
         print("clicked one")
         pass
 
     def mouseDoubleClickEvent(self, event):
+        """Left double-click: place a new checkpoint (first click) then set
+        its yaw from a second click, emitting ``send_points``/``pointsChanged``.
+        Right double-click: delete the checkpoint under the cursor."""
         if not self.pixmap:
             return
 
@@ -630,10 +681,13 @@ class Example(QGraphicsView):
             # self.updateScene()
 
     def clear_points(self):
+        """Remove every checkpoint marker from the view."""
         self.pointsToCheck = {}
         self.squares = {}
 
     def load_stored_points(self, stored_points):
+        """Render checkpoints loaded from the database for the current map,
+        converting their stored real-world coordinates to pixel positions."""
         # print('Example', stored_points)
         if stored_points:
             for point in stored_points.get("points"):
@@ -704,6 +758,7 @@ class Example(QGraphicsView):
         self.pointsChanged.emit("added")
 
     def display_image(self, file_path):  # ghghghghhg
+        """Load the map image from the local ``maps/`` folder and fit it to the view."""
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
         self.scene.clear()
@@ -722,10 +777,12 @@ class Example(QGraphicsView):
         # self.load_stored_points()
 
     def update_view(self):
+        """Force a repaint by scaling up then back down."""
         self.scale(1.2, 1.2)
         self.scale(1 / 1.2, 1 / 1.2)  # force a repaint
 
     def reset_points_state(self, patrolid=None):
+        """Reset every checkpoint marker's color back to pending (red)."""
         # if  point_state == -1:
         # print("Image viwer, SQUARE", self.squares)
         for id, square in self.squares.items():
@@ -735,6 +792,8 @@ class Example(QGraphicsView):
         self.update_view()
 
     def update_points_state(self, current_point_id, next_point_id, point_state):
+        """Color the current checkpoint green (checked) or red (pending),
+        and the next one up orange, based on patrol progress."""
         standard_orange = QColor("#FFA500")  # Orange
         dark_orange = QColor("#FF8C00")  # DarkOrange
         coral = QColor("#FF7F50")  # Coral
@@ -752,6 +811,7 @@ class Example(QGraphicsView):
         self.update_view()
 
     def drawForeground(self, painter, rect):
+        """Paint each checkpoint's colored square, status label and yaw arrow on top of the map."""
         standard_orange = QColor("#FFA500")  # Orange
         dark_orange = QColor("#FF8C00")  # DarkOrange
         coral = QColor("#FF7F50")  # Coral
@@ -787,6 +847,8 @@ class Example(QGraphicsView):
         super().drawForeground(painter, rect)
 
     def getYaw(self, centerx, centery, finalx, finaly):
+        """Return ``(map_yaw, gui_yaw)`` from a checkpoint's center to its
+        second-click target point."""
         vx = centerx - finalx
         vy = centery - finaly
         yaw = math.atan2(vy, vx)
@@ -794,6 +856,7 @@ class Example(QGraphicsView):
         return map_yaw, yaw
 
     def drawArrowDirection(self, painter, poses, squere_id, centerx, centery, yaw):
+        """Draw a small triangular arrow at ``(centerx, centery)`` pointing along ``yaw``."""
         # print("POSES LEN", self.poses)
         # if poses.get(squere_id):
         # vx = centerx - self.poses.get(squere_id).x()
@@ -829,6 +892,7 @@ class Example(QGraphicsView):
         painter.drawPolygon(points)
 
     def keyPressEvent(self, event):
+        """Pan the view with the arrow keys."""
         move_step = 10
         center = self.mapToScene(self.viewport().rect().center())
 

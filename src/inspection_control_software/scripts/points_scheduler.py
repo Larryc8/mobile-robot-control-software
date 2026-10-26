@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+"""Drives the robot through a sorted set of checkpoints via ``move_base``.
+
+:class:`PointsScheduler` is the lowest-level piece of the patrol stack: it
+sorts the goals nearest-neighbor from the robot's current position, sends
+them one by one to ``move_base`` as ``MoveBaseGoal``s, and after each
+arrival runs the inspection "subroutine" (image-similarity scan against a
+reference photo, logged and optionally checked against the checkpoint's
+calibration stats). It also predicts battery drain from odometry to trigger
+an early return-to-home recovery before the battery runs out.
+"""
 import math
 import os
 import queue
@@ -49,11 +59,17 @@ from utils.sorting import sort_nearest_neighbor
 
 
 class Pose(NamedTuple):
+    """Simple 2D position (unused beyond tracking an initial pose)."""
+
     x: float = 0
     y: float = 0
 
 
 class PointsScheduler(QObject):
+    """Sends checkpoints to ``move_base`` one at a time and runs the
+    per-checkpoint inspection scan, battery-aware recovery and calibration
+    bookkeeping."""
+
     points_state = pyqtSignal(str, str, int)
     ## current pointid, next point id, numbres of points tha left, total points
     patrol_progress = pyqtSignal(str, int, int, PatrolEndState)
@@ -167,6 +183,7 @@ class PointsScheduler(QObject):
         return prediction
 
     def acml_callback(self, msg):
+        """ROS subscriber callback: store the latest AMCL-estimated pose."""
         # Accessing the position
         self.current_acml_pose = msg.pose.pose
 
@@ -252,6 +269,7 @@ class PointsScheduler(QObject):
             self.recovery_mode.emit("RecoveryModeActive")
 
     def update_battery(self, msg):
+        """ROS subscriber callback: store the latest battery percentage."""
         self.battery_state = msg.percentage * 100
 
     def setup(self, on_calibration: bool = False, rospy_thread: bool = False) -> int:
@@ -305,6 +323,7 @@ class PointsScheduler(QObject):
         return len(self._goals)
 
     def handleAlertGeneration(self, message, status=AlertStatus.ERROR):
+        """Emit an alert signal and persist it via :class:`~alert_generator.AlertGenerator`."""
         print(f"POINT SCHEDULER {message}")
         self.alert_generated.emit(message, status)
         self.alert.throw_alert(
@@ -317,6 +336,7 @@ class PointsScheduler(QObject):
 
 
     def setGoals(self):
+        """Reset ``goals``/``points_left`` from ``_goals`` and return the goal count."""
         self.goals = self._goals.copy()
         self.goals_count = len(self.goals)
         self.points_left = len(self.goals)
@@ -324,6 +344,7 @@ class PointsScheduler(QObject):
         return self.goals_count
 
     def configGoal(self, x, y, yaw):
+        """Build a ``MoveBaseGoal`` for position ``(x, y)`` and heading ``yaw`` (radians)."""
         quaternion = Rotation.from_euler("z", yaw).as_quat()
         goal = MoveBaseGoal()
 
@@ -340,10 +361,12 @@ class PointsScheduler(QObject):
         return goal
 
     def amcl_pose_callback(self, msg):
+        """ROS subscriber callback: track the robot's current x/y for nearest-neighbor sorting."""
         self.current_position_x = msg.pose.pose.position.x
         self.current_position_y = msg.pose.pose.position.y
 
     def aruco_odom_callback(self, odom_msg):
+        """Unused odometry callback for ArUco-marker-relative tracking."""
         orientation_q = odom_msg.pose.pose.orientation
         orientation_list = [
             orientation_q.x,
@@ -360,12 +383,15 @@ class PointsScheduler(QObject):
         )
 
     def setHomePoint(self):
+        """Unused hook for explicitly setting the home point (no-op)."""
         pass
 
     def setMap(self, map):
+        """Set the active map filename used for alert/calibration bookkeeping."""
         self.map = map
 
     def cancel_points_scheduling(self):
+        """Cancel the active ``move_base`` goal, if any, and stop dispatching."""
         if self.client:
             if self.client.get_state() == GoalStatus.ACTIVE:
                 self.client.cancel_goal()
@@ -376,6 +402,8 @@ class PointsScheduler(QObject):
         print("points canceled from points sche", self.schedulingCancelled)
 
     def dispatch(self, patrolid=None):
+        """Pop the next goal, send it to ``move_base``, and start its
+        navigation checker/watchdog."""
         print(f"{__name__} dispatched!! len(goals): {len(self.goals)}")
         self.current_patrolid = patrolid
         self.patrol_progress.emit(
@@ -422,14 +450,18 @@ class PointsScheduler(QObject):
             self.client.send_goal(goal, self.done_cb, self.active_cb, self.feedback_cb)
 
     def restart(self):
+        """Reset the goal queue back to the full ``_goals`` set."""
         self.goals = self._goals.copy()
         self.points_left = len(self.goals)
         # self.points_state.emit(None, None, 0)
 
     def setDoneTask(self, done_task):
+        """Set the callback invoked once every goal has been visited."""
         self.done_task = done_task
 
     def done_cb(self, state, result):
+        """``move_base`` result callback: track inspection, run the
+        per-checkpoint subroutine and dispatch the next goal (or finish)."""
         ids_list = list(self.goals.keys())
         if len(ids_list) == 0:
             self.points_state.emit(self.current_pointid, None, state)
@@ -479,6 +511,7 @@ class PointsScheduler(QObject):
         self.dispatch(str(self.current_patrolid))
 
     def track_inspection(self):
+        """Record the current patrol/checkpoint visit in the database (background)."""
         rospy.loginfo("tracking inspection")
         if self.__database1 is not None and self.__database1.isRunning():
             return
@@ -491,9 +524,11 @@ class PointsScheduler(QObject):
         self.__database1.start()
 
     def _db_is_busy(self) -> bool:
+        """Return True if a calibration/get-calibration database call is in flight."""
         return self.__database is not None and self.__database.isRunning()
 
     def active_cb(self):
+        """``move_base`` active callback: emit progress now that the goal is being pursued."""
         rospy.loginfo("Goal just went active")
         self.track[0] = self.points_left
         # self.navigation_checker.listen()
@@ -506,6 +541,7 @@ class PointsScheduler(QObject):
         self.points_state.emit(self.current_pointid, self.current_pointid, 0)
 
     def feedback_cb(self, feedback):
+        """``move_base`` feedback callback: forward to ``feedback_task`` if set."""
         if self.feedback_task:
             self.feedback_task(feedback)
         if self.client.get_state() == GoalStatus.ACTIVE:
@@ -520,10 +556,12 @@ class PointsScheduler(QObject):
     # self.emit_callback = callback#callback(str(self.current_patrolid), len(self.goals), len(self._goals))
 
     def update_points(self, points: list):
+        """Replace the full checkpoint set to visit."""
         self._goals = points.copy()
         # print("from points_scheduler POINTS UPDATE")
 
     def image_callback(self, msg):
+        """ROS subscriber callback: keep the latest camera frame as an OpenCV image."""
         try:
             # Convert ROS Image message to OpenCV image
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -532,6 +570,8 @@ class PointsScheduler(QObject):
             rospy.logerr(f"Error converting image: {e}")
 
     def edit_image(self, path: str):
+        """Unused helper meant to crop an image and save it alongside the
+        original (the crop itself is currently a no-op passthrough)."""
         image = cv.imread(path)
         file_name = path.split("/")[-1]
         file_path = "/".join(path.split("/")[:-1])
@@ -554,6 +594,9 @@ class PointsScheduler(QObject):
         return new_path
 
     def subroutines_wrapper(self):
+        """Run the per-checkpoint inspection: compute the image-similarity
+        score against the reference photo and either save it as a
+        calibration sample or check it against stored calibration stats."""
         x, y, yaw = self.currrent_pose
         yaw_degrees = round(degrees(yaw) % 360)
         delta_yaw = 40
@@ -658,6 +701,7 @@ class PointsScheduler(QObject):
     #         # self.init_pose.y = position_y
 
     def recovery_subroutine(self):
+        """Unused battery-recovery hook (no-op)."""
         pass
 
     def scan_subroutine(self, x: float, y: float, target_yaws_array: list) -> list:
@@ -720,12 +764,15 @@ class PointsScheduler(QObject):
         return [*self.scan_subroutine(x, y, target_yaws_array.copy()), *[rate]]
 
     def remove_image(self, path):
+        """Delete ``path`` if it exists."""
         if os.path.exists(path=path):
             os.remove(path=path)
         else:
             print(f"{__name__} el archivo EXISTE {path}")
 
     def get_image_similarity(self) -> float:
+        """Capture the current camera frame and compare it, center-cropped
+        by the configured ROI, against the checkpoint's reference image."""
         try:
             if self.current_reference_image_path:
                 cv.imwrite(self.camera_image_filepath, self.current_image)
@@ -769,6 +816,7 @@ class PointsScheduler(QObject):
     def save_calibration(
         self, calibration_value: float, calibration_vector: list, map_filename: str, id
     ) -> None:
+        """Persist a new calibration sample for checkpoint ``id`` (background)."""
         self.__database = DataBase(
             action="save_calibration",
             data={
@@ -781,6 +829,7 @@ class PointsScheduler(QObject):
         self.__database.start()
 
     def get_calibration(self, current_calibration_vector, id):
+        """Fetch checkpoint ``id``'s calibration mean/std-dev (background)."""
         self.__database = DataBase(
             action="get_calibration",
             data={
@@ -792,6 +841,11 @@ class PointsScheduler(QObject):
         self.__database.start()
 
     def database_task_finished(self, msg, data):
+        """Handle the result of a calibration/tracking database call.
+
+        On ``SuccessGetCalibration``, compares the current similarity rate
+        against (mean - 2*std) and raises an alert if it looks obstructed.
+        """
         # print("datbase calibration Finished: ", msg, data)
 
         if msg == "SuccessGetCalibration":

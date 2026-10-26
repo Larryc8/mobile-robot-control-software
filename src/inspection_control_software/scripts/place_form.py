@@ -1,3 +1,4 @@
+"""Form for picking a place's directory/URDF path when saving a map."""
 import sys
 
 from database_manager import DataBase
@@ -20,6 +21,8 @@ from PyQt5.QtWidgets import (
 
 
 class GroupWrapper(QGroupBox):
+    """Titled group box that stacks arbitrary ``children`` widgets (unused elsewhere)."""
+
     def __init__(self, text, children=[]) -> None:
         super().__init__(text)
         self.layout = QVBoxLayout()
@@ -31,6 +34,8 @@ class GroupWrapper(QGroupBox):
 
 
 class PlaceForm(QWidget):
+    """Directory picker form shown inside the "save map as" dialog."""
+
     def __init__(self):
         super().__init__()
         self.directory_path: str = ""
@@ -66,6 +71,7 @@ class PlaceForm(QWidget):
         self.setLayout(layout)
 
     def handleSubmit(self, filename):
+        """Unused submit hook (no-op)."""
         pass
 
     def browse_file(self):
@@ -89,6 +95,8 @@ class PlaceForm(QWidget):
             self.urdf_input.setText(self.directory_path)
 
     def create_place(self):
+        """Validate and submit the place form (references inputs that are
+        never created in ``__init__``; unreachable/broken as written)."""
         name = self.name_input.text()
         email = self.email_input.text()
         password = self.password_input.text()
@@ -110,6 +118,7 @@ class PlaceForm(QWidget):
         self.clear_form()
 
     def clear_form(self):
+        """Reset the form fields (same undefined-attribute issue as :meth:`create_place`)."""
         self.name_input.clear()
         self.email_input.clear()
         self.password_input.clear()

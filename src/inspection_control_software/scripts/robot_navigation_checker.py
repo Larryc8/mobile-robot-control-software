@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Watchdogs that detect a blocked path or a physically stuck robot.
+
+:class:`RobotNavigationChecker` compares successive ``move_base`` global
+plans and raises an alert if the path changes more than tolerance (likely
+obstruction). :class:`StuckDetector` compares commanded vs. actual
+(odometry) motion and publishes ``/robot_stuck`` after a timeout.
+"""
 
 import math
 import time
@@ -17,6 +24,7 @@ from std_msgs.msg import Bool
 
 
 def quadratic_median_error(data1, data2, tolerance=0.06):
+    """Return the max point-to-point Euclidean distance between two equal-length pose lists."""
     ax = []
     ay = []
     bx = []
@@ -61,6 +69,10 @@ def quadratic_median_error(data1, data2, tolerance=0.06):
 
 
 class RobotNavigationChecker(QObject):
+    """Watches ``move_base``'s global plan topic and raises an alert if the
+    planned path shifts by more than ``pathChangeTolerance`` between
+    consecutive updates (signals the path may be obstructed)."""
+
     alert_generated = pyqtSignal(str, AlertStatus)
 
     def __init__(self, track, patrol_id, checkpoint_id, map_filename) -> None:
@@ -85,11 +97,14 @@ class RobotNavigationChecker(QObject):
         self.stuck_checker = StuckDetector()
 
     def set_current_goal(self, goal, id):
+        """Remember the current navigation goal/point index being checked."""
         print("set current goal navigation checker", goal)
         self.goal = goal
         self.num = id
 
     def callback_globalplan(self, data):
+        """ROS subscriber callback: compare the new plan to the previous one
+        and raise an alert if they diverge beyond tolerance."""
         tolerance: float = self._settings.value("pathChangeTolerance", self.TOLERANCE)
 
         if not self.old_plan:
@@ -128,6 +143,7 @@ class RobotNavigationChecker(QObject):
             # logger.error(f"dont match, {likehood}, {self.track}")
 
     def start_checker(self, patrol_id, checkpoint_id, map):
+        """Reset state for a new checkpoint and (re)subscribe to the global plan."""
         self.old_plan = None
         self._checkpoint_id = checkpoint_id
         self._patrol_id = patrol_id
@@ -137,12 +153,17 @@ class RobotNavigationChecker(QObject):
         self.listen()
 
     def listen(self):
+        """Subscribe to the global planner's path topic."""
         self.sub_globalplan = rospy.Subscriber(
             "/move_base/NavfnROS/plan", Path, self.callback_globalplan
         )
 
 
 class StuckDetector(QObject):
+    """Flags the robot as stuck when ``cmd_vel`` commands motion but
+    odometry shows none for longer than the configured timeout, publishing
+    the result on ``/robot_stuck``."""
+
     def __init__(self):
         super().__init__()
         # rospy.init_node("stuck_detector_node", anonymous=True)
@@ -181,6 +202,7 @@ class StuckDetector(QObject):
         rospy.loginfo("Stuck Detector Node Initialized.")
 
     def cmd_callback(self, msg):
+        """ROS subscriber callback: track whether the robot is currently being commanded to move."""
         # Calculate magnitude of linear and angular commands
         linear_cmd = math.sqrt(msg.linear.x**2 + msg.linear.y**2)
         angular_cmd = abs(msg.angular.z)
@@ -195,6 +217,7 @@ class StuckDetector(QObject):
                 self.is_commanding_movement = False
 
     def odom_callback(self, msg):
+        """ROS subscriber callback: track whether the robot is actually physically moving."""
         # Calculate actual linear and angular speed from Odometry
         linear_speed = math.sqrt(
             msg.twist.twist.linear.x**2 + msg.twist.twist.linear.y**2
@@ -208,6 +231,8 @@ class StuckDetector(QObject):
             self.is_actually_moving = False
 
     def check_stuck_status(self):
+        """Timer tick: flag/clear ``is_stuck`` based on commanded-vs-actual
+        motion duration, and publish the current state."""
         self.stuck_timeout = self._settings.value("stuckTimeout", 0.5)
         # Condition for being stuck: Command sent, but no physical movement
         if self.is_commanding_movement and not self.is_actually_moving:

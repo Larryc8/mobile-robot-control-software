@@ -1,3 +1,16 @@
+"""Configuration and ROS node lifecycle management.
+
+Provides the data-side counterpart to ``configuration.py``:
+
+- :class:`UserConfigFileManager` persists arbitrary app settings to a JSON file.
+- :class:`StaticParamsConfigLoader` pushes a YAML file straight onto the ROS
+  parameter server.
+- :class:`ConfigModel` reads/writes a specific set of ROS params backed by a
+  YAML file (e.g. mapping parameters) and their valid ranges.
+- :class:`NodesManager` builds ``roslaunch`` ``Node`` instances from
+  dictionaries describing ROS nodes and starts/stops/restarts them, plus a
+  few helpers for bring-up, map saving and rosbag recording.
+"""
 import json
 import os
 import subprocess
@@ -14,6 +27,8 @@ from roslaunch.scriptapi import ROSLaunch
 
 
 class UserConfigFileManager:
+    """Reads and writes a JSON file used to persist user-level app settings."""
+
     def __init__(self, filename: str = "./config/app_config.json"):
         self.filename = filename
         self.ensure_file_exists()
@@ -81,6 +96,9 @@ class UserConfigFileManager:
 
 
 class StaticParamsConfigLoader:
+    """Loads a YAML file and pushes every key/value onto the ROS parameter
+    server under ``workspace``, on construction."""
+
     def __init__(self, param_file: str, workspace: str = "/calamardo_loader/") -> None:
         with open(param_file, "r") as file:
             data = yaml.load(file, Loader=yaml.SafeLoader)
@@ -90,6 +108,13 @@ class StaticParamsConfigLoader:
 
 
 class ConfigModel:
+    """Syncs a named set of ROS parameters with a YAML file on disk.
+
+    ``param_file`` holds the default values; :meth:`get_params` reconciles
+    them with whatever is already on the ROS parameter server, and
+    :meth:`set_params` writes updated values back to both.
+    """
+
     def __init__(
         self, param_file: str = "./config/mapping_params.yml", workspace: str = "elpepe"
     ) -> None:
@@ -102,6 +127,8 @@ class ConfigModel:
             # print(self.data)
 
     def get_params(self) -> dict:
+        """Return current param values, seeding the ROS server from the YAML
+        defaults for any key not already set."""
         params = {}
         for key, value in self.data.items():
             if rospy.has_param(key):
@@ -116,6 +143,8 @@ class ConfigModel:
         return params
 
     def get_ranges(self) -> dict:
+        """Load the ``<param_file>_range.yml`` sibling describing valid
+        min/max ranges for each parameter."""
         filename_with_extension = self.param_file.split("/")[-1]
         [filename, extension] = filename_with_extension.split(".")
         # filename = 'mapping_params'
@@ -127,6 +156,8 @@ class ConfigModel:
         return data
 
     def set_params(self, configs: dict) -> None:
+        """Merge ``configs`` into the tracked params, push them to the ROS
+        server and persist them to ``param_file``."""
         self.all_config_params.update(configs)
         for key, value in self.all_config_params.items():
             rospy.set_param(self.workspace + key, value)
@@ -135,6 +166,7 @@ class ConfigModel:
             yaml.dump(self.all_config_params, file, sort_keys=False)
 
     def restore_values(self):
+        """Unimplemented hook for restoring previous parameter values."""
         pass
 
 
@@ -172,6 +204,16 @@ class ConfigModel:
 
 
 class NodesManager(QObject):
+    """Creates, starts, stops and restarts ROS nodes on behalf of the GUI.
+
+    Node descriptions (package/exec/name/args) come from the configuration
+    panel; this class turns them into ``roslaunch`` ``Node`` objects (remapped
+    to the currently selected robot's topics), launches them via a shared
+    ``ROSLaunch`` instance and keeps track of the running subprocesses so
+    they can be stopped or restarted later. Also exposes helpers to bring up
+    the robot driver stack, save maps and record/stop rosbag sessions.
+    """
+
     def __init__(self) -> None:
         super().__init__()
         self.nodes_subprocess = {}
@@ -183,6 +225,8 @@ class NodesManager(QObject):
         self._config = QSettings("MyCompany", "MyApp")
 
     def initNodes(self, nodes: List[dict] = []) -> dict:
+        """Build a ``{name: roslaunch.Node}`` map from node descriptor dicts,
+        remapping cmd_vel/odom/scan/imu topics to the selected robot."""
         node_instances = {}
         for node in nodes:
             node_values = node.values()
@@ -254,6 +298,8 @@ class NodesManager(QObject):
     # return nodes
 
     def startNodes(self, node_instances: dict = {}) -> dict:
+        """Launch every not-yet-running node in ``node_instances`` and track
+        its subprocess handle."""
         self._launcher.start()
         # subprocesses = {name: self._launcher.launch(node) for name, node in node_instances.items()}
         for name, node in node_instances.items():
@@ -289,6 +335,8 @@ class NodesManager(QObject):
     #     return {}
 
     def stopNodes(self, node_names: List[str]) -> None:
+        """Stop the subprocesses for ``node_names`` and drop them from the
+        tracked node maps."""
         # self.bringup.shutdown()
         # [subprocess.stop() for name, subprocess in self.nodes_subprocess.items()]
         # subprocess = self.get(node_name)
@@ -326,6 +374,7 @@ class NodesManager(QObject):
             self.started_nodes.pop(node_name)
 
     def restartNodes(self):
+        """Stop every running node and relaunch the full ``started_nodes`` set."""
         for name, _subprocess in self.nodes_subprocess.items():
             _subprocess.stop()
 
@@ -333,6 +382,7 @@ class NodesManager(QObject):
         self.startNodes(self.started_nodes)
 
     def bringUpStart(self):
+        """Launch the turtlebot3 bring-up launch file (robot driver stack)."""
         # rospy.init_node("harold_start_launch", anonymous=True)
 
         uuid = rlutil.get_or_generate_uuid(None, False)
@@ -347,15 +397,19 @@ class NodesManager(QObject):
         # rospy.loginfo("started")
 
     def bringUpStop(self):
+        """Shut down the robot bring-up launch, if it was started."""
         if self.bringup is not None:
             self.bringup.shutdown()
 
     def save_map(self, mapname):
+        """Run ``map_server``'s ``map_saver`` to dump the current map to
+        ``mapname`` and return the spawned subprocess."""
         x = subprocess.Popen(["rosrun", "map_server", "map_saver", "-f", f"{mapname}"])
         # x.wait()
         return x
 
     def topicHasPublisher(self, topic, publisher=None):
+        """Return True if ``topic`` appears among currently published ROS topics."""
         for available_topic, _type in rospy.get_published_topics():
             if available_topic == topic:
                 return True
@@ -363,17 +417,20 @@ class NodesManager(QObject):
         return False
 
     def nodeIsRunning(self, nodename):
+        """Return True if ``nodename`` has a tracked running subprocess."""
         if self.nodes_subprocess.get(nodename):
             return True
         return False
 
     def recordSensordata(self, topicslist: list):
+        """Start a ``rosbag record`` subprocess capturing ``topicslist``."""
         topics = " ".join(topicslist)
         filename = "haroldjeje"
         self.rosbag = subprocess.Popen(["rosbag", "record", "-O", filename, topics])
         print("ROSBAG: ", topics)
 
     def stopRecordSensorData(self):
+        """Terminate the active rosbag recording, if any."""
         if self.rosbag:
             self.rosbag.terminate()
         pass

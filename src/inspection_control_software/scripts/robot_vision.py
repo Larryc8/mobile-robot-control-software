@@ -1,3 +1,4 @@
+"""Experimental ORB feature-matching scratchpad for comparing two reference images."""
 import numpy as np
 import cv2 as cv
 import cv2
@@ -20,13 +21,18 @@ from PyQt5.QtCore import QObject, QThread
         # )
 
 class ImageMatcheChecker():
+    """Scratch ORB-feature-matching experiments against hardcoded reference
+    images (not integrated into the main inspection pipeline)."""
+
     def __init__(self) -> None:
         super().__init__()
 
     def run(self) -> None:
+        """Unused entry point (no-op)."""
         pass
 
     def s(self):
+        """Match two hardcoded reference images with ORB + brute-force Hamming matching, plotting results."""
         # Crear ORB
         img1 = cv.imread('./reference_images/Untitled2_mod.jpg',cv.IMREAD_GRAYSCALE)          # queryImage
         # img2 = cv.imread('./reference_images/Untitled_mod_leaf.png',cv.IMREAD_GRAYSCALE) # trainImage
@@ -84,6 +90,8 @@ class ImageMatcheChecker():
         # print(f' matches: {len(matches)}, des1: {len(des1)} des2: {len(des2)} ---> {len(matches)/len(des1)}')
 
     def s1(self):
+        """Same ORB matching as :meth:`s`, but with KNN matching + ratio
+        test and a visualization of the matched keypoints."""
         # Load images
         img1_path = './reference_images/Untitled3_mod.jpg'
         img2_path = './reference_images/Untitled2_mod.jpg'
@@ -145,6 +153,7 @@ class ImageMatcheChecker():
         print(f"Good matches after ratio test: {len(good_matches)}")
 
     def s2(self):
+        """Unused placeholder (no-op)."""
         pass
 
 

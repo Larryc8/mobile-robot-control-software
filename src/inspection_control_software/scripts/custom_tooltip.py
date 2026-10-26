@@ -1,3 +1,4 @@
+"""Custom speech-bubble tooltips, including an interactive variant with action buttons."""
 from PyQt5.QtCore import QEvent, QObject, QPoint, QRectF, Qt, QTimer
 from PyQt5.QtGui import (
     QBrush,
@@ -12,6 +13,9 @@ from PyQt5.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
 
 class BaseTooltipWidget(QWidget):
+    """Frameless speech-bubble shape (rounded rect + top arrow); subclasses
+    add their own content on top of :meth:`paintEvent`'s bubble."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
@@ -27,6 +31,7 @@ class BaseTooltipWidget(QWidget):
         self.text_color = QColor("white")
 
     def paintEvent(self, event):
+        """Draw the rounded-rect + arrow speech-bubble background."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
@@ -54,6 +59,8 @@ class BaseTooltipWidget(QWidget):
 
 
 class TooltipWidget(BaseTooltipWidget):
+    """Plain text speech-bubble, auto-sized to fit its content."""
+
     def __init__(self, text, parent=None):
         super().__init__(parent)
         self.text = text
@@ -61,6 +68,7 @@ class TooltipWidget(BaseTooltipWidget):
         self.update_size()
 
     def update_size(self):
+        """Resize the bubble to fit the current text."""
         fm = QFontMetrics(self.font)
         text_rect = fm.boundingRect(self.text)
         self.text_width = text_rect.width()
@@ -71,6 +79,7 @@ class TooltipWidget(BaseTooltipWidget):
         self.setFixedSize(int(total_width), int(total_height))
 
     def paintEvent(self, event):
+        """Draw the bubble background then the centered text."""
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -86,6 +95,9 @@ from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QLabel
 
 
 class ActionTooltipWidget(BaseTooltipWidget):
+    """Speech-bubble with a text label plus up to two action buttons,
+    used by :class:`ActionToolTip` for interactive onboarding hints."""
+
     def __init__(self, text, btn1_text=None, btn2_text=None, parent=None):
         super().__init__(parent)
         self.text = text
@@ -152,14 +164,20 @@ class ActionTooltipWidget(BaseTooltipWidget):
         self.setFixedHeight(self.height())
 
     def enterEvent(self, event):
+        """Hook for the controller to detect hover-in (no extra behavior here)."""
         # We'll use this in the controller
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        """Hook for the controller to detect hover-out (no extra behavior here)."""
         super().leaveEvent(event)
 
 
 class CustomToolTip(QObject):
+    """Hover-triggered tooltip controller: shows a :class:`TooltipWidget`
+    below the installed widget after ``delay`` ms of hovering, with a grace
+    period before hiding so the mouse can move onto the tooltip itself."""
+
     def __init__(self, parent=None, delay=300):
         super().__init__(parent)
         self.delay = delay
@@ -178,11 +196,14 @@ class CustomToolTip(QObject):
         self.destroyed.connect(self.handle_destruction)
 
     def install(self, widget: QWidget, text: str):
+        """Attach this tooltip to ``widget``, to be shown on hover with ``text``."""
         self.widget = widget
         self.text = text
         widget.installEventFilter(self)
 
     def eventFilter(self, obj, event):
+        """Drive the show/hide timers from enter/leave/click events on the
+        target widget and the tooltip itself."""
         if not self._active_hover:
             return super().eventFilter(obj, event)
 
@@ -206,21 +227,25 @@ class CustomToolTip(QObject):
         return super().eventFilter(obj, event)
 
     def handle_destruction(self):
+         """Clean up the installed event filter when this object is destroyed."""
          self.widget.removeEventFilter(self)
 
     def show_tooltip(self):
+        """Create, position and show the tooltip widget."""
         if True or self.widget and self.widget.underMouse():
             self._create_tooltip()
             self._position_tooltip()
             self.tooltip_widget.show()
 
     def _create_tooltip(self):
+        """(Re)build the plain :class:`TooltipWidget` for the current text."""
         if self.tooltip_widget:
             self.tooltip_widget.close()
         self.tooltip_widget = TooltipWidget(self.text)
         self.tooltip_widget.installEventFilter(self)
 
     def _position_tooltip(self):
+        """Center the tooltip horizontally below the target widget."""
         # Calculate position
         widget_pos = self.widget.mapToGlobal(QPoint(0, 0))
         widget_rect = self.widget.rect()
@@ -233,11 +258,16 @@ class CustomToolTip(QObject):
         self.tooltip_widget.move(int(x), int(y))
 
     def hide_tooltip(self):
+        """Hide the tooltip, unless the mouse has moved onto it."""
         if self.tooltip_widget and not self.tooltip_widget.underMouse():
             self.tooltip_widget.hide()
 
 
 class ActionToolTip(CustomToolTip):
+    """Explicitly-triggered tooltip (``show_tooltip`` called directly, not
+    on hover) that renders an :class:`ActionTooltipWidget` with up to two
+    action buttons, temporarily highlighting the target widget's border."""
+
     def __init__(self, parent=None, delay=600):
         super().__init__(parent, delay)
         self.btn1_text = None
@@ -256,6 +286,7 @@ class ActionToolTip(CustomToolTip):
         btn2_text: str = None,
         btn2_callback=None,
     ):
+        """Install on ``widget`` with up to two labeled action buttons/callbacks."""
         self.btn1_text = btn1_text
         self.btn1_callback = btn1_callback
         self.btn2_text = btn2_text
@@ -266,6 +297,7 @@ class ActionToolTip(CustomToolTip):
         super().install(widget, text)
 
     def _create_tooltip(self):
+        """Highlight the target widget's border and build the action tooltip, wiring button callbacks."""
         if self.tooltip_widget:
             self.tooltip_widget.close()
 
@@ -288,6 +320,7 @@ class ActionToolTip(CustomToolTip):
             self.tooltip_widget.btn2.clicked.connect(self.hide_tooltip_forced)
 
     def hide_tooltip_forced(self):
+        """Hide the tooltip and restore the target widget's original style."""
         if self.tooltip_widget:
             self.tooltip_widget.hide()
             self.widget.setStyleSheet(self._current)

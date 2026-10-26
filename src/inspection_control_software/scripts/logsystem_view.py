@@ -1,3 +1,11 @@
+"""Alert log / statistics tab UI ("Sistema de alertas").
+
+``LogPanel`` is the widget mounted as the app's alerts tab: a map selector,
+an alert-count histogram (``AlertHistogram``), a paginated/filterable alert
+list fetched from the database via background ``DataBase``/``QThread``
+workers, and an ``InfoPanel`` that can drill into a single alert's details
+or generate/show a checkpoint heatmap and patrol stats popup.
+"""
 import sys
 from collections import namedtuple
 
@@ -85,6 +93,8 @@ from styles.labels import (
 
 
 class MplCanvas(FigureCanvasQTAgg):
+    """Thin wrapper exposing a single matplotlib ``Axes`` as a Qt widget."""
+
     def __init__(self, parent=None, width=5, height=2, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = fig.add_subplot(111)
@@ -92,6 +102,9 @@ class MplCanvas(FigureCanvasQTAgg):
 
 
 class AlertHistogram(QWidget):
+    """Bar chart of alert counts per bucket (hour/month/year), redrawn via
+    :meth:`update_plot`."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
@@ -103,6 +116,7 @@ class AlertHistogram(QWidget):
         self.setFixedHeight(210)
 
     def update_plot(self, labels, values):
+        """Redraw the bar chart with new ``(labels, values)`` data."""
         self.canvas.axes.clear()
         self.canvas.axes.bar(labels, values, color="#3498db", alpha=0.7)
         # self.canvas.axes.set_title("Frecuencia de Alertas")
@@ -116,6 +130,9 @@ class AlertHistogram(QWidget):
 
 
 class PatrolStatsViewer(QMainWindow):
+    """Frameless popup window showing a histogram of patrol statistics
+    anchored over its parent window (currently plotted with placeholder data)."""
+
     def __init__(
         self,
         parent=None,
@@ -135,6 +152,7 @@ class PatrolStatsViewer(QMainWindow):
         )
 
     def init_ui(self):
+        """Build the histogram canvas and close/save buttons."""
         # Central widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -189,6 +207,7 @@ class PatrolStatsViewer(QMainWindow):
         central_widget.setLayout(layout)
 
     def show_win(self):
+        """Position the popup at the parent window's top-right and show it."""
         popup_x = self.parent.x() + (self.parent.width() - self.width())
         popup_y = self.parent.y()
         self.move(popup_x, popup_y)
@@ -197,6 +216,9 @@ class PatrolStatsViewer(QMainWindow):
 
 # import pyqtgraph as pg
 class ImageViewer(QWidget):
+    """Full-size heatmap image viewer with a zoom/pan ``Example`` graphics
+    view and a legend; emits ``on_close`` when the user closes it."""
+
     on_close = pyqtSignal(bool)
 
     def __init__(
@@ -223,6 +245,7 @@ class ImageViewer(QWidget):
         self.setStyleSheet("QMainWindow { background-color: white;}")
 
     def init_ui(self):
+        """Build the heatmap legend, the ``Example`` graphics view and the close button."""
         # Central widget and layout
         # central_widget = QWidget()
         # self.setCentralWidget(central_widget)
@@ -285,6 +308,7 @@ class ImageViewer(QWidget):
         self.setLayout(layout)
 
     def show_win(self, file_path):
+        """Load and display the heatmap image at ``file_path``."""
         self.graphics_view.display_image(file_path=file_path)
         # popup_x = self.parent.x() + (self.parent.width() - self.width())
         # popup_y = self.parent.y()
@@ -292,11 +316,14 @@ class ImageViewer(QWidget):
         # self.show()
 
     def close_win(self, e):
+        """Notify listeners (via ``on_close``) that the viewer was closed."""
         print("Close Heatmap")
         self.on_close.emit(True)
 
 
 class Example(QGraphicsView):
+    """Pannable, mouse-wheel-zoomable image viewport used by :class:`ImageViewer`."""
+
     def __init__(self, parent):
         super().__init__()
         self.wheel_delta = 0
@@ -314,21 +341,25 @@ class Example(QGraphicsView):
         self.setStyleSheet("QGraphicsView {border: 2px solid gray;}")
 
     def zoom_in(self):
+        """Scale the view up by 10%."""
         self.scale(1.1, 1.1)
         self.zoom_factor *= 1.1
         self.update()
 
     def zoom_out(self):
+        """Scale the view down by 10%."""
         self.scale(1 / 1.1, 1 / 1.1)
         self.zoom_factor /= 1.1
         self.update()
 
     def reset_view(self):
+        """Fit the whole scene back into the viewport and reset zoom to 1x."""
         # if self.scene.items():
         self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
         self.zoom_factor = 1.0
 
     def wheelEvent(self, event):
+        """Zoom in/out with the mouse wheel, within a [1, 80] zoom range."""
         # Get the wheel delta (positive for up, negative for down)
         delta = event.angleDelta().y()
         # Accumulate the total wheel movement
@@ -342,6 +373,7 @@ class Example(QGraphicsView):
         event.accept()
 
     def display_image(self, file_path):  # ghghghghhg
+        """Load ``file_path`` into a fresh scene and fit it to the view."""
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
         self.scene.clear()
@@ -356,6 +388,9 @@ class Example(QGraphicsView):
 
 
 class AlertItem(QWidget):
+    """One row in the alert list; clicking it emits ``show_details`` with
+    the alert's fields unpacked into a dict for :class:`AlertDetails`."""
+
     show_details = pyqtSignal(dict)
 
     def __init__(self, text, alert_data, parent=None, style=None):
@@ -373,6 +408,7 @@ class AlertItem(QWidget):
         self.setLayout(layout)
 
     def mousePressEvent(self, event):
+        """Unpack this alert's row and emit ``show_details`` with it."""
         (
             x_position,
             y_position,
@@ -396,6 +432,14 @@ class AlertItem(QWidget):
 
 
 class InfoPanel(QGroupBox):
+    """Right-hand side panel of the alerts tab.
+
+    Switches between: the stats landing page (load a map, generate
+    checkpoint/alert stats via background workers), the heatmap viewer, and
+    the single-alert :class:`AlertDetails` view. Emits ``map_loaded`` when
+    the user picks a map file to analyze.
+    """
+
     map_loaded = pyqtSignal(str)
 
     def __init__(self, parent) -> None:
@@ -459,18 +503,22 @@ class InfoPanel(QGroupBox):
         self.setLayout(self.stacked_layout)
 
     def go2stats(self):
+        """Return to the stats landing page from the heatmap or details view."""
         self.main_layout.setCurrentIndex(0)
         self.stacked_layout.setCurrentIndex(0)
         print("Go to stats")
 
     def go2alert_details(self):
+        """Switch the stats stack to the alert-details page."""
         self.main_layout.setCurrentIndex(1)
 
     def handleShowAlertInfo(self, info_data):
+        """Populate and show the alert-details view for one alert."""
         self.alert_details.set_data(info_data)
         self.main_layout.setCurrentIndex(1)
 
     def get_checkpoints_stats(self, map_filepath):
+        """Kick off a background :class:`TaskWorkerHeatmap` for ``map_filepath``."""
         if self.generate_heatmap_task and self.generate_heatmap_task.isRunning():
             return
 
@@ -486,6 +534,7 @@ class InfoPanel(QGroupBox):
         self.generate_heatmap_task.start()
 
     def get_checkpoints_stats_finished(self, filepath):
+        """Stop the loading indicator and remember the generated heatmap path."""
         self.checkpoints_stats.timer.stop()
         self.checkpoints_stats.progress.hide()
         self.checkpoints_stats.success_label.show()
@@ -498,16 +547,19 @@ class InfoPanel(QGroupBox):
         self.heatmap_img_filepath = filepath
 
     def show_heatmap(self, m):
+        """Switch to the heatmap view if a heatmap has already been generated."""
         if self.heatmap_img_filepath:
             self.heatmap.show_win(self.heatmap_img_filepath)
             self.stacked_layout.setCurrentIndex(1)
 
     def set_map(self, map_filepath):
+        """Forward the selected map upward and show the patrol stats popup."""
         self.map_loaded.emit(map_filepath)
         print("map loaded Logsistem")
         self.patrols_stats.show_win()
 
     def get_alerts_stats(self, map_filepath):
+        """Kick off a background :class:`TaskWorkerAlerts` for ``map_filepath``."""
         if (
             self.generate_alerts_stats_task
             and self.generate_alerts_stats_task.isRunning()
@@ -526,12 +578,16 @@ class InfoPanel(QGroupBox):
         self.generate_alerts_stats_task.start()
 
     def get_alerts_stats_finished(self):
+        """Stop the loading indicator once alert stats have been generated."""
         self.alerts_stats.timer.stop()
         self.alerts_stats.progress.hide()
         self.alerts_stats.success_label.show()
 
 
 class AlertDetails(QGroupBox):
+    """Single-alert detail view: image, message, status and timestamp,
+    with a button back to the stats landing page."""
+
     def __init__(self) -> None:
         super().__init__()
         self.layout = QVBoxLayout()
@@ -572,6 +628,7 @@ class AlertDetails(QGroupBox):
         self.setLayout(self.layout)
 
     def set_data(self, data):
+        """Populate the title/message/timestamp/image labels from an alert dict."""
         message = data.get("message", "N/A")
         date = data.get("date", "N/A")
         time = data.get("time", "N/A")
@@ -601,6 +658,9 @@ class AlertDetails(QGroupBox):
 
 
 class StatContainer(QGroupBox):
+    """Two-step card: first pick a map file (``map_loaded``), then trigger
+    stats generation for it (``generate_stats``), with a progress bar."""
+
     generate_stats = pyqtSignal(str)
     map_loaded = pyqtSignal(str)
 
@@ -654,6 +714,7 @@ class StatContainer(QGroupBox):
         self.setLayout(self.layout)
 
     def toggle(self):
+        """First click: open the map picker. Second click: emit ``generate_stats``."""
         if self.isUploadMap:
             self.map_filepath = self.handleLoadMap()
             self.isUploadMap = False
@@ -665,9 +726,11 @@ class StatContainer(QGroupBox):
         pass
 
     def updateProgress(self):
+        """Advance the fake progress bar by one tick (timer-driven)."""
         self.progress.setValue(self.progress.value() + 1)
 
     def handleLoadMap(self):
+        """Open a file picker for a map YAML file and emit ``map_loaded``."""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Open Image File", "", "Image Files (*.yaml)"
         )
@@ -678,6 +741,9 @@ class StatContainer(QGroupBox):
 
 
 class TaskWorkerHeatmap(QThread):
+    """Background thread: fetches error-alert positions for ``map`` and
+    renders them into a heatmap image via :class:`HeatmapGenerator`."""
+
     task_finished = pyqtSignal(str)
 
     def __init__(self, data=[], map: str = "") -> None:
@@ -685,6 +751,7 @@ class TaskWorkerHeatmap(QThread):
         self.map = map
 
     def run(self):
+        """Generate the heatmap image and emit ``task_finished`` with its path."""
         ma = InternalStorageManager()
         data = ma.get_alerts_error(self.map)
         print(f"Esto es la data {__name__}: {data}")
@@ -696,6 +763,9 @@ class TaskWorkerHeatmap(QThread):
 
 
 class TaskWorkerAlerts(QThread):
+    """Background thread meant to generate alert statistics for a map
+    (currently a stub: it never emits ``task_finished``)."""
+
     task_finished = pyqtSignal(str)
 
     def __init__(self, data=[], map: str = "") -> None:
@@ -703,12 +773,15 @@ class TaskWorkerAlerts(QThread):
         self.map = map
 
     def run(self):
+        """Stub: never emits ``task_finished`` (alert-stats generation is incomplete)."""
         ma = InternalStorageManager()
         # data = ma.get_alerts_error()
         # self.task_finished.emit(heatmapimg_filepath)
 
 
 class TaskWorkerFilterByTypeAlerts(QThread):
+    """Background thread fetching a filtered/paginated page of alerts."""
+
     filter_bytype_finished = pyqtSignal(list)
 
     def __init__(self, status, ascendant, page_number, page_size, map) -> None:
@@ -720,6 +793,7 @@ class TaskWorkerFilterByTypeAlerts(QThread):
         self.map = map
 
     def run(self):
+        """Fetch the requested alert page and emit ``filter_bytype_finished``."""
         ma = InternalStorageManager()
         data = ma.get_filtered_alerts(
             status=self.status,
@@ -736,6 +810,13 @@ class TaskWorkerFilterByTypeAlerts(QThread):
 
 
 class LogPanel(QWidget):
+    """Top-level widget for the "Sistema de alertas" tab.
+
+    Ties together the map selector, alert histogram, paginated/filterable
+    alert list and :class:`InfoPanel`, dispatching all database reads
+    through background :class:`~database_manager.DataBase` threads.
+    """
+
     def __init__(self, node_manager=None, parent=None):
         super().__init__()
         self._database = None
@@ -803,15 +884,18 @@ class LogPanel(QWidget):
         self.update_data_btn.clicked.connect(self.updateData)
 
     def updateData(self):
+        """Reset pagination and refresh the alert list."""
         self.page_number = 0
         self.getAlerts()
 
     def handleMapSelection(self, index):
+        """Reset pagination and refresh alerts + histogram for the new map."""
         self.page_number = 0
         self.getAlerts()
         self.getHistogramData()
 
     def getHistogramData(self):
+        """Fetch histogram data for the selected granularity/map in the background."""
         index = self.granularity_combo.currentIndex()
         if index == 0:
             granularity = "monthly"
@@ -830,6 +914,7 @@ class LogPanel(QWidget):
         self._db_hist.start()
 
     def handleHistogramFinish(self, msg, data):
+        """Redraw the histogram once the background fetch completes."""
         if msg == "SuccessGetHistogramData":
             hist_data = data.get("histogram", [])
             labels = [row[0] for row in hist_data]
@@ -898,6 +983,7 @@ class LogPanel(QWidget):
         self.getAlerts()
 
     def add_alerts(self, alerts=[]):
+        """Append an :class:`AlertItem` row for each alert tuple, styled by status."""
         for alert in alerts:
             x_position, y_position, status, date, time, message, image_bytes, _aaa = (
                 alert
@@ -919,6 +1005,7 @@ class LogPanel(QWidget):
                 self.alerts_items.append(alert_item)
 
     def remove_alert_item(self):
+        """Clear all alert rows from the list before loading a new page."""
         for item in self.alerts_items:
             self.alerts_layout.removeWidget(item)
             item.deleteLater()
@@ -980,6 +1067,7 @@ class LogPanel(QWidget):
         self.next_button.setEnabled(has_more)
 
     def filterAlertsAll(self, filter):
+        """Clear the status filter and reload the alert list (first page)."""
         if not self.map:
             return
         self.status = None
@@ -991,6 +1079,7 @@ class LogPanel(QWidget):
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
 
     def filterAlertsError(self):
+        """Filter the alert list to ERROR-status rows only."""
         if not self.map:
             return
         self.status = AlertStatus.ERROR.value
@@ -1002,6 +1091,7 @@ class LogPanel(QWidget):
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
 
     def filterAlertsWarning(self):
+        """Filter the alert list to WARNING-status rows only."""
         if not self.map:
             return
         self.status = AlertStatus.WARNING.value
@@ -1013,6 +1103,7 @@ class LogPanel(QWidget):
         self.filter_byWarnings_button.setStyleSheet(tag_selected_button_style)
 
     def filterAlertsInfo(self):
+        """Filter the alert list to INFO-status rows only."""
         if not self.map:
             return
         self.status = AlertStatus.INFO.value
@@ -1024,6 +1115,7 @@ class LogPanel(QWidget):
         self.filter_byWarnings_button.setStyleSheet(tag_button_style)
 
     def toggleAscendantDescendant(self):
+        """Flip chronological sort order and reload the first page."""
         if not self.map:
             return
         self.ascendant = not self.ascendant
@@ -1031,6 +1123,7 @@ class LogPanel(QWidget):
         self.getAlerts()
 
     def set_map(self, map_filepath):
+        """Select the active map for alert filtering and reload the list."""
         # Prevent runtime AttributeError if info_label isn't declared
         if hasattr(self, "info_label"):
             self.info_label.hide()
@@ -1040,6 +1133,7 @@ class LogPanel(QWidget):
         self.getAlerts()
 
     def get_maps(self):
+        """Fetch the list of available maps in the background to populate the selector."""
         if self._database1 and self._database1.isRunning():
             return
 
@@ -1048,6 +1142,7 @@ class LogPanel(QWidget):
         self._database1.start()
 
     def get_maps_finished(self, msg, data):
+        """Populate the map selector and build the alert list once maps are loaded."""
         maps = data.get("maps")
         for map in maps:
             file_path = map["file_path"]

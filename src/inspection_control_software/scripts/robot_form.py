@@ -1,3 +1,4 @@
+"""Robot profile form: name, URDF path and ROS topic names, stored per-robot."""
 import sys
 
 import rospy
@@ -27,6 +28,9 @@ from styles.buttons import (
 
 
 class RobotConfigForm(QWidget):
+    """Add/edit/delete named robot profiles (URDF path + topic names),
+    persisted via ``QSettings`` and selectable from a dropdown."""
+
     def __init__(self):
         super().__init__()
         self.user_config = UserConfigFileManager()
@@ -35,6 +39,7 @@ class RobotConfigForm(QWidget):
         self.init_params()
 
     def init_ui(self):
+        """Build the robot dropdown, profile form and add/delete buttons."""
         # Window settings
         self.setWindowTitle("Configuración del Robot")
         # self.setGeometry(100, 100, 500, 300)  # x, y, width, height
@@ -150,7 +155,7 @@ class RobotConfigForm(QWidget):
         self.setLayout(main_layout)
 
     def init_params(self):
-
+        """Populate the dropdown from stored robot profiles and select the active one."""
         robots_options = list(self.robots.keys())
 
         for option in robots_options:
@@ -162,6 +167,7 @@ class RobotConfigForm(QWidget):
         self.robots_dropdown.currentIndexChanged.connect(self.handleDropDownRobotChange)
 
     def update_param_view(self, robot_name):
+        """Fill the form fields from the stored profile for ``robot_name``."""
         robot = self.robots[robot_name]
 
         print("robot config", robot)
@@ -188,6 +194,7 @@ class RobotConfigForm(QWidget):
             self.urdf_input.setText(file_path)
 
     def handleDropDownRobotChange(self):
+        """Switch the active robot profile and persist the selection (requires app restart)."""
         robot = self.robots_dropdown.currentText()
         self.update_param_view(robot)
 
@@ -205,7 +212,7 @@ class RobotConfigForm(QWidget):
         print("HI, HOLA! SE CAMBIO DE ROBot", robot)
 
     def submit_form(self):
-        """Collects data and displays it."""
+        """Validate required fields and save the new robot profile."""
         name = self.name_input.text()
         data = {
             "name": self.name_input.text(),
@@ -261,6 +268,12 @@ class RobotConfigForm(QWidget):
         print(data)
 
     def delete_robot(self):
+        """Confirm and delete the currently selected robot profile.
+
+        Note: the confirm dialog's positive/negative labels are swapped
+        ("Cancelar" is the positive response) and the actual deletion is
+        not implemented below the confirmation check.
+        """
         robot = self.robots_dropdown.currentText()
         dg = CustomDialog(
             self,

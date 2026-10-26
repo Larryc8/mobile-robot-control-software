@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+"""Scheduling engine for recurring and one-shot patrols.
+
+:class:`ScheduleChecker` is a background ``QThread`` that polls the clock
+against a sorted list of per-day patrol entries and dispatches the one
+that's due (or forces a single patrol) to :class:`~points_scheduler.PointsScheduler`.
+:class:`PatrolsEscheduler` is the QObject-facing API used by the UI: it
+owns the patrol data (loaded from/saved to the database via
+:class:`~database_manager.DataBase`), builds/sorts the flat per-day patrol
+list, and starts/cancels :class:`ScheduleChecker` runs.
+"""
 import queue
 import time
 from datetime import datetime
@@ -17,6 +27,10 @@ from utils.patrol import PatrolEndState
 
 
 class ScheduleChecker(QThread):
+    """Background polling loop that dispatches the due patrol (or a forced
+    single patrol) to the points scheduler, checking the clock every
+    ``sleep_time`` seconds."""
+
     progress_updated = pyqtSignal(int)
     task_completed = pyqtSignal(str)
     patrol_state = pyqtSignal(str)
@@ -58,6 +72,7 @@ class ScheduleChecker(QThread):
     # def transitions(self):
 
     def getDatetime(self, patrol):
+        """Parse a per-day patrol entry's ``day``/``time`` into ``(weekday_index, hour, minute)``."""
         days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol["day"])
         patrol_time = list(patrol["time"])
@@ -67,6 +82,9 @@ class ScheduleChecker(QThread):
         return day, int(hour), int(minute)
 
     def run(self):
+        """Main loop: either force-run ``single_patrolid`` to completion, or
+        walk ``patrols`` dispatching whichever one matches the current
+        day/hour/minute, advancing the index and tracking delays."""
         try:
             if self.isForcingPatrolExec:
                 self.points_scheduler.setDoneTask(
@@ -183,21 +201,33 @@ class ScheduleChecker(QThread):
             toast.show()
 
     def free_points_dispatcher(self):
+        """Callback for when a scheduled patrol's points finish: advance to
+        the next patrol and restart the points scheduler."""
         self.movePatrolsIndex = True
         self.isDispatching = False
         self.points_scheduler.restart()
         print("FREEE POINT DISPACHER!!!!!!")
 
     def handlePatrolsForcedExec(self):
+        """Callback for when a forced single patrol's points finish."""
         self.isSinglePatrolFinished = True
         self.points_scheduler.restart()
         pass
 
     def forced_cancel(self, x):
+        """Unused flag setter for a forced cancellation (never read elsewhere)."""
         self.isForcedCancel = True
 
 
 class PatrolsEscheduler(QObject):
+    """UI-facing patrol scheduling API.
+
+    Owns ``patrols_data`` (loaded from/persisted to the database), builds
+    the flat sorted per-day ``patrols`` list consumed by
+    :class:`ScheduleChecker`, and exposes start/stop/edit/delete operations
+    plus the points-to-visit the points scheduler should use.
+    """
+
     compelted_patrols = []
     looped_patrols = []
     update_patrols_view = pyqtSignal(dict)
@@ -264,6 +294,7 @@ class PatrolsEscheduler(QObject):
     # def patrols_schedule_generator(self):
     # for patrol in self.
     def load_test_patrols(self, patrols_count):
+        """Build ``patrols_count`` synthetic calibration patrols scheduled a few seconds out."""
         self.patrols_data_test = {
             str(id): {
                 "days": {
@@ -283,6 +314,8 @@ class PatrolsEscheduler(QObject):
         }
 
     def send_database_action(self, action: str, data: dict = {}):
+        """Run a :class:`~database_manager.DataBase` action in the
+        background, queuing it if one is already in flight."""
         if self.database and self.database.isRunning():
             self.actions_queue.append((action, data))
             return
@@ -292,6 +325,7 @@ class PatrolsEscheduler(QObject):
         self.database.start()
 
     def database_action_finished(self, state, data):
+        """Handle a finished database action's result, then run the next queued one."""
         # self.patrols_data.update(data)
         if state == "SuccessGetAllUserPatrols":
             self.patrols_data.update(data)
@@ -325,6 +359,7 @@ class PatrolsEscheduler(QObject):
             self.database.start()
 
     def start_patrols_scheduling(self, patrol=None):
+        """Start a :class:`ScheduleChecker` thread over the full ``patrols`` list."""
         if self.scheduler and self.scheduler.isRunning():
             return
 
@@ -345,6 +380,7 @@ class PatrolsEscheduler(QObject):
         self.patrolIsRunning = True
 
     def start_single_patrol_scheduling(self, patrolid):
+        """Cancel any running schedule, then force-execute ``patrolid``."""
         self.single_patrolid = patrolid
         if not self.cancel_task():
             self.exec_single_patrol()
@@ -352,6 +388,7 @@ class PatrolsEscheduler(QObject):
         pass
 
     def exec_single_patrol(self):
+        """Start a :class:`ScheduleChecker` forced to run ``single_patrolid`` only."""
         self.scheduler = ScheduleChecker(
             currentpatrol=self.indexKeeper,
             single_patrolid=self.single_patrolid,
@@ -374,12 +411,14 @@ class PatrolsEscheduler(QObject):
         self.patrolIsRunning = True
 
     def update_progress(self, k):
+        """Unused progress-update hook (no-op; body is commented out)."""
         # a = self.indexKeeper["currentpatrol_index"]
         # self.patrol_progress.emit(a)
         # print(f"updated {a}")
         pass
 
     def cancel_task(self) -> bool:
+        """Request the running scheduler thread to stop. Returns True if one was running."""
         self.indexKeeper["currentpatrol_index"] = 0
         # if self.scheduler.isForcingPatrolExec:
         #     self.points_scheduler.cancel_points_scheduling()
@@ -393,6 +432,8 @@ class PatrolsEscheduler(QObject):
         return False  # patrol was cancel?
 
     def task_finished(self, message):
+        """Clean up the finished scheduler thread, restore ``patrols_data``
+        and, if a single patrol was queued up next, start it."""
         self.indexKeeper["currentpatrol_index"] = 0
         self.patrolIsRunning = False
         print(message)
@@ -418,6 +459,7 @@ class PatrolsEscheduler(QObject):
             self.single_patrolid = None
 
     def update_patrol(self, x):
+        """Save (new) or update (existing) a single ``{id: patrol}`` entry, locally and in the database."""
         [id] = list(x.keys())
         print("update PATROL ID verifcation", self.patrols_data.get(id))
 
@@ -431,6 +473,7 @@ class PatrolsEscheduler(QObject):
         self.update_patrols_view.emit(self.patrols_data)
 
     def delete_patrols(self, patrolsToDelete):
+        """Remove the given patrol ids locally and soft-delete them in the database."""
         for patrol in patrolsToDelete:
             self.patrols_data.pop(patrol)
         self.send_database_action(
@@ -439,9 +482,11 @@ class PatrolsEscheduler(QObject):
         self.update_patrols_view.emit(self.patrols_data)
 
     def get_current_patrols(self):
+        """Re-emit the current ``patrols_data`` (used to refresh the UI's pagination)."""
         self.update_patrols_view.emit(self.patrols_data)
 
     def sort_key(self, patrol):
+        """Sort key for per-day patrol entries: days-until-due first, then time of day."""
         days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol["day"])
         now = datetime.now()
@@ -453,6 +498,8 @@ class PatrolsEscheduler(QObject):
         return int(f"{days_until}{patrol['time']}")
 
     def start_patrols(self, on_calibration=False):
+        """Flatten ``patrols_data`` into the per-day ``patrols`` list (sorted,
+        delayed-last), set the points-scheduler goals and start scheduling."""
         self.patrols = []
         self.on_calibration = on_calibration
 
@@ -497,6 +544,7 @@ class PatrolsEscheduler(QObject):
                 self.weekday_changed.emit(datetime.now().weekday())
 
     def filter_delayed_patrols(self, patrol):
+        """Return True if ``patrol``'s scheduled time for today has already passed."""
         day, hour, minute = self.getDatetime(patrol)
         now = datetime.now()
         if now.weekday() == day:
@@ -512,10 +560,12 @@ class PatrolsEscheduler(QObject):
         return False
 
     def update_patrol_info(self, id):
+        """Forward the id of the patrol that just started running."""
         print("UPDATE PATROL INFO")
         self.set_running_patrol.emit(id)
 
     def handlePatrolDelayed(self, patrolid):
+        """Forward a delayed-patrol notification up to the UI."""
         self.patrol_delayed.emit(patrolid)
 
     def setPointsToVisit(self, points: dict):
@@ -527,19 +577,23 @@ class PatrolsEscheduler(QObject):
         self.points_scheduler.update_points(points)
 
     def handleSavePointsInDatabase(self, points_to_save):
+        """Persist a batch of checkpoints to the database in the background."""
         self.send_database_action(action="save_points", data=points_to_save)
 
     def send_points_data(self, map_file):
+        """Fetch the stored checkpoints for ``map_file`` from the database."""
         self.send_database_action(action="get_points", data={"map_file": map_file})
 
         rospy.loginfo(map_file)
         # self.get_stored_database_points.emit()
 
     def handleWeekDayChanged(self, current_weekday):
+        """Forward the scheduler's weekday-changed notification up to the UI."""
         print("CURRENT WEEKDAY", current_weekday)
         self.weekday_changed.emit(current_weekday)
 
     def getDatetime(self, patrol):
+        """Parse a per-day patrol entry's ``day``/``time`` into ``(weekday_index, hour, minute)``."""
         days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
         day = days_shortname.index(patrol["day"])
         patrol_time = list(patrol["time"])

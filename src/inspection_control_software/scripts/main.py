@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Entry point of the robot control panel application.
+
+Boots the ROS node and launches the PyQt5 GUI (``App``), which hosts the
+three main tabs of the application: Home (teleoperation/visualization),
+Configuracion (robot/sensor configuration and patrol scheduling) and
+Sistema de alertas (alert log viewer).
+"""
 import sys
 import rospy
 
@@ -18,6 +25,12 @@ from configuration import ConfigPanel
 from logsystem_view import LogPanel
 
 class App(QMainWindow):
+    """Top-level application window.
+
+    Hosts a single :class:`MyTableWidget` as its central widget and asks
+    the user for confirmation before closing.
+    """
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Panel de Control del Robot")
@@ -27,6 +40,7 @@ class App(QMainWindow):
         self.setCentralWidget(self.table_widget)
 
     def closeEvent(self, event):
+        """Prompt for confirmation before letting the window close."""
         reply = QMessageBox.warning(
             self,
             "Confirmar salida",
@@ -41,6 +55,13 @@ class App(QMainWindow):
 
 
 class MyTableWidget(QWidget):
+    """Builds the tabbed layout (Home / Configuracion / Sistema de alertas).
+
+    Owns the shared :class:`~config_model.NodesManager` instance and wires
+    the panels together (e.g. forwarding ``calibration_started`` from the
+    configuration panel to the patrol and visualization panels).
+    """
+
     def __init__(self, parent):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)

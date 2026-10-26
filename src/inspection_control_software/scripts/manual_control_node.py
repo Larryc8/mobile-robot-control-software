@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Joystick-style teleoperation: converts a normalized (x, y) pose into ``cmd_vel``."""
 import math
 import time
 
@@ -14,6 +15,9 @@ from tf.transformations import euler_from_quaternion
 
 
 class DynamicPoseController(QObject):
+    """Publishes ``/cmd_vel`` at ~30fps from the last joystick-style
+    ``(x, y)`` input, scaled by the configured max linear/angular velocity."""
+
     def __init__(self, max_speed=None, max_turn=None):
         super().__init__()
         # rospy.init_node("imu_to_cmd_vel", anonymous=True)
@@ -40,6 +44,8 @@ class DynamicPoseController(QObject):
         rospy.loginfo("IMU to cmd_vel node started")
 
     def vel_control_callback(self, msg=None):
+        """Timer tick: publish ``cmd_vel`` from the current (x, y) input,
+        reading max velocities from ROS params; stops once input returns to zero."""
         # print(len(msg.ranges))
         #
         if not rospy.has_param("/max_linear_velocity"):
@@ -64,6 +70,7 @@ class DynamicPoseController(QObject):
         self.cmd_vel_pub.publish(self.cmd_vel)
 
     def setRobotDynamicPose(self, x, y):
+        """Set the normalized joystick input (x: turn, y: forward/back)."""
         self.x = x
         self.y = y
 
@@ -74,6 +81,7 @@ class DynamicPoseController(QObject):
             self.stop = False
 
     def setControlMode(self, mode):
+        """Set whether control is "manual" or "auto" (raises on any other value)."""
         if mode == "manual":
             self.isManualControl = True
             return

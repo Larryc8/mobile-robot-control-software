@@ -1,3 +1,9 @@
+"""RBF-interpolated heatmap generation and map overlay (used by :class:`~heatmap_generator.HeatmapGenerator`).
+
+Turns a sparse set of ``(x, y, value)`` samples into a smooth, colored
+heatmap image via radial-basis-function interpolation, then stamps it onto
+the free-space pixels of a given map image.
+"""
 from collections import namedtuple
 from copy import copy
 import cv2
@@ -33,6 +39,7 @@ cmapGR = LinearSegmentedColormap( #Colour map
 
 #Function generating rgb image based on rssi data array
 def rssi2rgb(data,cmap,minval = -100,maxval = 0):
+    """Map a 2D array of scalar values to an RGB image using ``cmap``, normalized to ``[minval, maxval]``."""
     xsize,ysize = np.shape(data)[0], np.shape(data)[1]
     norm = matplotlib.colors.Normalize(vmin=minval,vmax=maxval,clip = True) #Normalize data to (-100,0)
     mapper = cm.ScalarMappable(norm = norm,cmap = cmap)
@@ -44,7 +51,9 @@ def rssi2rgb(data,cmap,minval = -100,maxval = 0):
 
 #Main function generating continous heatmap from discrete rssi data
 def generate_heatmap(data,x_image_size,y_image_size,resize_coeff,filtered:bool = False,relative = False):
-
+    """Interpolate sparse ``RssiWaypoint`` samples into a full-size colored
+    heatmap image via RBF interpolation, optionally median-filtered and
+    resized. Returns ``(rgb_image, (min_value, max_value))``."""
     minrssi = inf
     maxrssi = -100
     xdata,ydata,valdata = [],[],[] #Data arrays for interpolation
@@ -81,6 +90,8 @@ def generate_heatmap(data,x_image_size,y_image_size,resize_coeff,filtered:bool =
 
 #Fuction for adding obsctacles from saved map to generated heatmap
 def add_heatmap(map,heatmap):
+    """Overlay ``heatmap`` onto ``map``'s free-space pixels (value 254),
+    resizing the map first if its dimensions don't match the heatmap's."""
     newmap = copy(map)
     if np.shape(map) != np.shape(heatmap):
         if np.shape(map)[0] / np.shape(heatmap)[0] == np.shape(map)[1] / np.shape(heatmap)[1]:

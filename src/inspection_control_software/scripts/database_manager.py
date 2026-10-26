@@ -1,3 +1,11 @@
+"""PostgreSQL persistence layer for patrols, checkpoints, alerts and calibration data.
+
+:class:`InternalStorageManager` holds all the SQLAlchemy-based CRUD methods
+used by the rest of the app (patrols, points/checkpoints, alerts, map assets,
+calibration stats). :class:`DataBase` wraps it in a ``QThread`` so the GUI
+can dispatch a named ``action`` (e.g. ``"save_patrol"``, ``"get_points"``)
+without blocking, and emits ``action_completed`` with the result.
+"""
 import os
 from datetime import datetime
 from enum import Enum
@@ -29,6 +37,8 @@ Base = declarative_base()
 
 
 class AlertStatus(Enum):
+    """Severity levels used for the ``Alert.status`` column."""
+
     ERROR = -100
     WARNING = -50
     INFO = 0
@@ -38,6 +48,10 @@ DATABASE_URL = "postgresql://postgres:123@localhost:5432/postgres"
 
 
 class InternalStorageManager:
+    """Opens a fresh SQLAlchemy/psycopg2 session per call and performs CRUD
+    operations against the ``postgres`` database for patrols, checkpoints,
+    maps, alerts and calibration records (see ``internal_storage.tables``)."""
+
     def __init__(self) -> None:
         # Database credentials
         self.db_name = "postgres"
@@ -47,6 +61,7 @@ class InternalStorageManager:
         self.db_port = "5432"
 
     def track_inspection(self, data):
+        """Insert a patrol/checkpoint visit row into the association table."""
         patrol_id = data.get("patrol_id")
         point_id = data.get("point_id")
         engine = create_engine(DATABASE_URL)
@@ -80,6 +95,8 @@ class InternalStorageManager:
             session.close()
 
     def save_places(self, places):
+        """Insert a batch of ``(name, email, username, institution, phone,
+        address)`` tuples as ``Place`` rows."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -103,6 +120,7 @@ class InternalStorageManager:
             session.close()  # Always close the session
 
     def get_places(self):
+        """Return the names of all patrols (note: queries ``Patrol``, not ``Place``)."""
         pass
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
@@ -119,6 +137,7 @@ class InternalStorageManager:
             session.close()  # Always close the session
 
     def update_patrol(self, patrols_data: dict):
+        """Update days/time for each ``{patrol_id: {days, time}}`` entry."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -139,6 +158,7 @@ class InternalStorageManager:
             session.close()  # Always close the session
 
     def delete_user_patrols(self, ids: List[str]):
+        """Soft-delete patrols by setting ``enabled=False`` for each id."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -156,6 +176,7 @@ class InternalStorageManager:
             session.close()
 
     def delete_patrols(self, ids: List[str]):
+        """Hard-delete ``Patrol`` rows by id."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -175,6 +196,8 @@ class InternalStorageManager:
             session.close()
 
     def get_user_patrols(self):
+        """Return enabled patrols only, keyed by id, in the UI's nested
+        ``{id: {days: {...}, time}}`` shape."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -210,6 +233,8 @@ class InternalStorageManager:
             session.close()
 
     def get_patrols(self):
+        """Return all patrols (enabled or not), in the same nested shape as
+        :meth:`get_user_patrols`."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -243,6 +268,7 @@ class InternalStorageManager:
             session.close()
 
     def save_patrol(self, patrol_data: dict):
+        """Create new ``Patrol`` rows from ``{id: {days, time}}`` entries."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         # Base.metadata.create_all(engine) # Create tables if they don't exist
@@ -271,11 +297,14 @@ class InternalStorageManager:
 
     ####### point
     def save_point(self, point: dict):
+        """Create ``Checkpoint`` rows for ``{id: point_data}`` entries,
+        linking each one to the ``Map`` matching ``point_data['mapfile']``."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
 
         def get_image_bytes(file_path: str) -> bytes:
+            """Read a file's bytes, or return empty bytes if it's missing."""
             try:
                 with open(file_path, "rb") as image_file:
                     return image_file.read()
@@ -312,6 +341,7 @@ class InternalStorageManager:
             session.close()
 
     def update_point(self, id: str, point: dict):
+        """Update the ``Checkpoint`` row ``id`` with the fields in ``point``."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -326,6 +356,8 @@ class InternalStorageManager:
             session.close()
 
     def add_points(self, points, mapfile):
+        """Create a new ``Map`` row for ``mapfile`` and attach a ``Checkpoint``
+        for each entry in ``points``."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -366,6 +398,8 @@ class InternalStorageManager:
             session.close()
 
     def get_points(self, mapfile: str):
+        """Return ``{"points": {id: {...}}}`` for all checkpoints belonging
+        to ``mapfile``."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -407,6 +441,8 @@ class InternalStorageManager:
             session.close()
 
     def get_alerts_error(self, map_file = None):
+        """Return ``(x, y, status)`` rows for every alert, optionally
+        filtered to a single map file."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -432,6 +468,7 @@ class InternalStorageManager:
             print(f"Database error: {e}")
 
         def get_alerts_months_stats(self):
+            """Return 2025 error-alert counts grouped by month (raw ``psycopg2`` query)."""
             try:
                 with psycopg2.connect(
                     database=self.db_name,
@@ -458,6 +495,7 @@ class InternalStorageManager:
                 print(f"Database error: {e}")
 
         def get_alerts_weeks_stats(self):
+            """Return alert counts grouped by year/month/week-of-month (raw ``psycopg2`` query)."""
             try:
                 with psycopg2.connect(
                     database=self.db_name,
@@ -486,6 +524,8 @@ class InternalStorageManager:
                 print(f"Database error: {e}")
 
     def save_alerts(self, alerts: list):
+        """Encode each alert's image as PNG and insert the batch as ``Alert``
+        rows, linked to the ``Map`` named in the first alert's filepath."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         session = Session()
@@ -624,6 +664,8 @@ class InternalStorageManager:
             session.close()
 
     def get_calibration(self, pointid: str, current_calibration_vector: list) -> dict:
+        """Return the mean and standard deviation of calibration values
+        recorded for checkpoint ``pointid``."""
         engine = create_engine(DATABASE_URL)
         Session = sessionmaker(bind=engine)
         # Base.metadata.create_all(engine) # Create tables if they don't exist
@@ -825,6 +867,7 @@ class InternalStorageManager:
             session.close()
 
     def loss_func(self, x, y):
+        """Mean squared error between two calibration vectors."""
         # x = np.array(x).reshape(-1, 1)
         # y = np.array(y).reshape(-1, 1)
         # [loss] = mutual_info_regression(x, y)
@@ -966,6 +1009,14 @@ class InternalStorageManager:
 
 
 class DataBase(QThread):
+    """Runs a single :class:`InternalStorageManager` call off the GUI thread.
+
+    Construct with an ``action`` name and a ``data`` payload, ``start()`` the
+    thread, and listen on ``action_completed(result_name, result_dict)`` for
+    the outcome. ``run()`` dispatches ``action`` to the matching
+    ``InternalStorageManager`` method.
+    """
+
     action_completed = pyqtSignal(str, dict)
 
     def __init__(self, action: str, data: dict = {}, map_file="", place="") -> None:
@@ -976,6 +1027,8 @@ class DataBase(QThread):
         self.map_file = map_file
 
     def run(self):
+        """Dispatch ``self.action`` to the corresponding storage-manager
+        method and emit ``action_completed`` with its result."""
         print("DATABASE RUNNING", self.action)
         self.internal_storage_manager = InternalStorageManager()
 

@@ -1,3 +1,4 @@
+"""Reusable modal dialogs: filename input and yes/no confirmation."""
 import sys
 
 from PyQt5.QtCore import pyqtSignal
@@ -32,6 +33,10 @@ from styles.labels import (
 
 
 class InputDialog(QDialog):
+    """Modal prompting for a sanitized filename, optionally wrapping a
+    ``child`` widget (e.g. :class:`~place_form.PlaceForm`) that provides
+    the save directory and receives ``submitted``."""
+
     submitted = pyqtSignal(str)
 
     def __init__(self, parent, title, msg="Algo de texto", child=None):
@@ -53,6 +58,7 @@ class InputDialog(QDialog):
         self.initUI()
 
     def initUI(self):
+        """Build the title/message, filename input, child widget and buttons."""
         layout = QVBoxLayout()
         buttons_layout = QHBoxLayout()
 
@@ -92,6 +98,9 @@ class InputDialog(QDialog):
         self.setLayout(layout)
 
     def on_submit(self):
+        """Build the full save path from the child's directory and the
+        sanitized filename, then accept the dialog (or show an alert /
+        force-close after too many empty attempts)."""
         input_text = self.file_name_input.text()
         if not self.child.directory_path:
             return
@@ -124,11 +133,16 @@ class InputDialog(QDialog):
         return clean_name
 
     def on_discard(self):
+        """Clear the filename and close the dialog."""
         self.filename = None
         self.accept()
 
 
 class CustomDialog(QDialog):
+    """Generic modal: a message plus positive/negative buttons (or a single
+    close button when ``interative=False``), with an optional retry counter
+    before the dialog auto-closes on repeated negative responses."""
+
     def __init__(
         self,
         parent,
@@ -156,6 +170,7 @@ class CustomDialog(QDialog):
         self.initUI()
 
     def initUI(self):
+        """Build the title/message labels and the interactive/close buttons."""
         layout = QVBoxLayout()
         buttons_layout = QHBoxLayout()
 
@@ -199,13 +214,16 @@ class CustomDialog(QDialog):
         self.setLayout(layout)
 
     def setPositiveResponse(self):
+        """Record a positive response and close."""
         self.response = "Positive"
         self.accept()
 
     def close(self):
+        """Close the dialog (used by the single close button)."""
         self.accept()
 
     def setNegativeResponse(self):
+        """Record a negative response, closing after exceeding ``retries``."""
         self.response = "Negative"
         self.atempts = self.atempts + 1
 

@@ -1,3 +1,10 @@
+"""Application action log: in-UI terminal view plus a CSV-backed logger.
+
+``logger`` (module-level :class:`Logger` instance) is the shared sink used
+across the app (``logger.log(msg)``); it appends timestamped rows to a CSV
+file and emits ``log_changed`` for :class:`RobotActionsLoggerView` to render
+as a scrolling in-app terminal.
+"""
 import csv
 import datetime
 import os
@@ -111,6 +118,7 @@ class CsvHandler:
 
 
 def add_color(msg):
+    """Wrap a value in an HTML ``<span>`` colored/styled by its type."""
     if isinstance(msg, bool):
         return f"<span style='color:#196F3D;font-weight: bold'>bool {msg}</span>"
     if isinstance(msg, str):
@@ -120,6 +128,8 @@ def add_color(msg):
 
 
 class FixedMessage(QGroupBox):
+    """Header bar above the log terminal: toggle visibility and export the log file."""
+
     log_file_updated = pyqtSignal(str)
     show_terminal = pyqtSignal(bool)
 
@@ -173,12 +183,14 @@ class FixedMessage(QGroupBox):
         self.setLayout(layout)
 
     def toggle_terminal(self):
+        """Emit the new terminal-visible state and flip the toggle button."""
         self.show_terminal.emit(self.__terminal_visible)
         self.show_terminal_btn.toggle()
 
         self.__terminal_visible = not self.__terminal_visible
 
     def export_log(self, x):
+        """Prompt for a save path and switch the active log file to it."""
         options = QFileDialog.Options()
         fileName, _ = QFileDialog.getSaveFileName(
             self,
@@ -249,6 +261,7 @@ class RobotActionsLoggerView(QGroupBox):
         self.setLayout(main_layout)
 
     def toggle_terminal(self, visible: bool) -> None:
+        """Show/hide every log line label."""
         for l in self.labels:
             if visible:
                 l.show()
@@ -258,6 +271,7 @@ class RobotActionsLoggerView(QGroupBox):
         pass
 
     def update_log(self, log_msg: str) -> None:
+        """Push a new log line into the fixed-size visible queue."""
         if len(self.log_queue) == self._queue_size:
             self.log_queue.pop(0)
 
@@ -270,10 +284,14 @@ class RobotActionsLoggerView(QGroupBox):
             self.labels[i].setText(text)
 
     def update_log_file(self, filepath):
+        """Forward a change of log file path up to listeners."""
         self.log_file_updated.emit(filepath)
 
 
 class Logger(QObject):
+    """Shared application logger: appends to a CSV file and emits ``log_changed``
+    for the in-app terminal view. Instantiated once as module-level ``logger``."""
+
     log_changed: pyqtSignal = pyqtSignal(str)
 
     def __init__(self, parent: QObject = None) -> None:
@@ -291,9 +309,11 @@ class Logger(QObject):
         )
 
     def update_battery(self, msg):
+        """ROS subscriber callback: track battery percentage for log entries."""
         self.battery_state = msg.percentage * 100
 
     def log(self, msg: str = "Chala es suepr linda! Bienvenido!", level=None) -> None:
+        """Emit a timestamped, battery-annotated log line and append it to the CSV."""
         now = datetime.now()
         timestamp = now.strftime("%A, %B %d, %Y - %I:%M %p")
         self.log_changed.emit(
@@ -304,6 +324,7 @@ class Logger(QObject):
         )
 
     def update_log_file(self, filepath):
+        """Switch the CSV sink to a new log file path."""
         config = self.user_config.read_data()
         self._logger = CsvHandler(
             header=["time", "level", "battery", "msg"],

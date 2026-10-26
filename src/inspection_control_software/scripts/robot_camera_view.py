@@ -1,3 +1,10 @@
+"""Live robot camera view, ROI overlay, and reference-photo capture for checkpoints.
+
+:class:`RobotCamera` renders the ``/camera/image`` stream with the
+configured region-of-interest box drawn on top, and lets the user buffer up
+reference photos (with the robot's map pose) at checkpoints, later saved to
+the database via :meth:`RobotCamera.save_buffered_data`.
+"""
 import math
 import sys
 import typing
@@ -71,12 +78,16 @@ groupbox_style = """
 
 
 class TaskWorker(QThread):
+    """Background thread that looks up the robot's current ``map -> base_link``
+    transform and emits it as ``(x, y, yaw)``."""
+
     task_completed = pyqtSignal(tuple)
 
     def __init__(self) -> None:
         super().__init__()
 
     def run(self):
+        """Resolve the current map-frame pose via ``tf`` and emit it."""
         pass
         try:
             listener = tf.TransformListener(
@@ -111,6 +122,10 @@ class TaskWorker(QThread):
 
 
 class RobotCamera(QWidget):
+    """Displays the live camera feed with a drawn ROI box, and lets the
+    user buffer reference photos (with robot pose) at checkpoints to later
+    persist via :meth:`save_buffered_data`."""
+
     send_buffered_data = pyqtSignal(list)
     custom_option_clicked = pyqtSignal()
 
@@ -170,19 +185,23 @@ class RobotCamera(QWidget):
         self.setLayout(self.layout)
 
     def get_transforms(self, msg):
+        """ROS subscriber callback for ``/tf`` (currently unused, no-op)."""
         pass
 
     def enterEvent(self, event):
+        """Hover-in hook (menu-show line is currently disabled)."""
         # self.menu_btn.show()
 
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        """Hide the overlay menu button when the cursor leaves the camera view."""
         self.menu_btn.hide()
 
         super().leaveEvent(event)
 
     def add_visual_aid(self, pixmap):
+        """Draw the configured ROI rectangle, centered, onto ``pixmap``."""
         if pixmap.isNull():
             print("Failed to load image")
             return -1
@@ -212,6 +231,7 @@ class RobotCamera(QWidget):
         return result
 
     def setup_submenu(self):
+        """Build the overlay menu (save reference image / toggle size)."""
         menu = QMenu("Transform", self)
         menu.setStyleSheet(menu_style)
 
@@ -225,6 +245,8 @@ class RobotCamera(QWidget):
         self.menu_btn.setMenu(menu)
 
     def save_buffered_data(self, mapfile):
+        """Write buffered reference images to disk and persist them as
+        checkpoints for ``mapfile`` via the database (background)."""
         if self.database and self.database.isRunning():
             return
 
@@ -263,10 +285,12 @@ class RobotCamera(QWidget):
             pass
 
     def database_task_completed(self, x, y):
+        """Callback for the background add-points call (currently just logs)."""
         print(x)
         pass
 
     def buffer_reference_image(self):
+        """Resolve the current map pose and queue a reference photo capture."""
         print("SAVE IMAGE REFERENCE", f"aruco pose {self.current_aruco_pose}")
         # ntf = Notification(
         #     title="Accion en proceso... Guardando referencia",
@@ -291,6 +315,7 @@ class RobotCamera(QWidget):
         self.pose_getter.start()
 
     def aruco_odom_callback(self, odom_msg):
+        """ROS subscriber callback: track the robot's ArUco-relative pose."""
         # Extract position
         self.current_aruco_pose.x = odom_msg.pose.pose.position.x
         self.current_aruco_pose.y = odom_msg.pose.pose.position.y
@@ -307,6 +332,8 @@ class RobotCamera(QWidget):
         self.current_aruco_pose.theta = yaw
 
     def set_pose_and_image(self, pose):
+        """Buffer the current image+pose as a new reference checkpoint
+        (capped at 10) and publish the pose as a goal for visualization."""
         if len(self.data_buffer) < 10:
             id = str(datetime.now().timestamp())
             img_file_path = f"./reference_images/reference_image{id}.jpg"
@@ -353,15 +380,18 @@ class RobotCamera(QWidget):
             self.pose_getter = None
 
     def paintEvent(self, event) -> None:
+        """Refresh the displayed frame on every repaint."""
         # self.pixmap = QPixmap('./mora1.png')
         self.update_display()
         super().paintEvent(event)
 
     def resize_image(self):
+        """Apply the current pixmap to the image label, scaled to fit."""
         self.image_label.setPixmap(self.pixmap)
         self.image_label.setScaledContents(True)
 
     def image_callback(self, msg):
+        """ROS subscriber callback: keep the latest camera frame as an OpenCV image."""
         try:
             # Convert ROS Image message to OpenCV image
             self.cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -370,6 +400,7 @@ class RobotCamera(QWidget):
             rospy.logerr(f"Error converting image: {e}")
 
     def update_display(self):
+        """Convert the latest camera frame to a pixmap with the ROI overlay and show it."""
         if self.current_image is not None:
             # Convert OpenCV image to QImage
             height, width, channel = self.current_image.shape
@@ -391,6 +422,7 @@ class RobotCamera(QWidget):
         self.image_label.setText("No hay datos de la camara")
 
     def toggleSize(self):
+        """Emit a request to toggle this widget's display size."""
         self.custom_option_clicked.emit()
         # self.setFixedSize(140, 80)
         print("camer button cliked")

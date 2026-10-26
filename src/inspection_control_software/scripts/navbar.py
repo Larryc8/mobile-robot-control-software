@@ -1,3 +1,4 @@
+"""Top bar widget showing the app and partner institution logos."""
 import sys
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -19,6 +20,8 @@ from PyQt5.QtCore import QSize, Qt
 
 
 class TopBar(QWidget):
+    """Header bar with the Univalle, app and PSI logos laid out left/center/right."""
+
     def __init__(self):
         super().__init__()
         self.layout = QGridLayout(self)
@@ -70,6 +73,9 @@ class TopBar(QWidget):
 
 
 class CustomImage(QWidget):
+    """Image + optional label pair (currently unused by :class:`TopBar`,
+    which renders logos as plain ``QPushButton`` icons instead)."""
+
     def __init__(self, file_name: str, label_text: str) -> None:
         super().__init__()
         absolute_path = "/pico-sdk/mobile-robot-control-software/src/test/images/"

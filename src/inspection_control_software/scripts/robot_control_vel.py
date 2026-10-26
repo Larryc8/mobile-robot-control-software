@@ -1,3 +1,9 @@
+"""Driving-mode and navigation-tolerance settings panel.
+
+Lets the user pick a conduction mode (Soft/Medium/Aggressive, which sets
+``/max_linear_velocity`` and ``/max_angular_velocity``) and tune the stuck
+timeout and path-change tolerance used elsewhere during navigation.
+"""
 import sys
 
 import rospy
@@ -21,6 +27,9 @@ from utils.custom_toolbutton import CustomToolButtom
 
 
 class RobotVelocityController(QWidget):
+    """Driving-mode selector plus stuck-timeout/path-tolerance controls,
+    persisted via ``QSettings`` and pushed to ROS params."""
+
     def __init__(self):
         super().__init__()
 
@@ -42,6 +51,7 @@ class RobotVelocityController(QWidget):
         # self.timeout_combo.setCurrentIndex(config["stuck_timeout_index"])
 
     def init_ui(self):
+        """Build the mode buttons and navigation-parameter controls."""
         # Main Layout
         main_layout = QVBoxLayout()
         info_label_style = "color: gray; font-style: italic; margin-top: 5px;"
@@ -159,16 +169,19 @@ class RobotVelocityController(QWidget):
         self.setLayout(main_layout)
 
     def update_linear_vel(self, value):
+        """Unused manual linear-velocity slider handler (no such slider is built in ``init_ui``)."""
         self.linear_vel = value / 100.0
         self.lcd_linear.display(self.linear_vel)
         self.publish_cmd_vel()
 
     def update_angular_vel(self, value):
+        """Unused manual angular-velocity slider handler (no such slider is built in ``init_ui``)."""
         self.angular_vel = value / 100.0
         self.lcd_angular.display(self.angular_vel)
         self.publish_cmd_vel()
 
     def update_mode(self, mode):
+        """Select one of Soft/Medium/Aggressive, setting max velocity ROS params."""
         if mode == "Soft":
             text = "Impacto: Baja aceleración/velocidad. Seguro para áreas concurridas."
             if not self.btn_soft.isSelected():
@@ -207,12 +220,14 @@ class RobotVelocityController(QWidget):
         print(f"Mode changed to: {mode}")
 
     def update_timeout(self, text):
+        """Persist the selected stuck-detection timeout (seconds)."""
         print(f"Stuck Timeout updated to: {text}")
         self._settings.setValue("stuckTimeout", int(text))
 
         # Add logic here to update the robot's navigation parameter
 
     def update_tolerance(self, value):
+        """Update the path-change tolerance from a slider value (0-100 -> 0.00-1.00 m)."""
         self.PATH_TOLERANCE = value / 100
         self.lcd_tolerance.display(self.PATH_TOLERANCE)
         print(f"Path Tolerance updated to: {self.PATH_TOLERANCE} m")
@@ -222,15 +237,18 @@ class RobotVelocityController(QWidget):
         # Add logic here to update the robot's navigation parameter
 
     def init_tolerance(self, value):
+        """Initialize the tolerance slider/display from a stored value."""
         num = int(float(value) * 100)
         self.slider_tolerance.setValue(num)
         self.update_tolerance(num)
 
     def stop_robot(self):
+        """Unused stop handler (references sliders that aren't built in ``init_ui``)."""
         self.slider_linear.setValue(0)
         self.slider_angular.setValue(0)
 
     def publish_cmd_vel(self):
+        """Unused cmd_vel publish stub (only logs; never called by any slider)."""
         print(
             f"Publishing -> Linear: {self.linear_vel:.2f} m/s | Angular: {self.angular_vel:.2f} rad/s"
         )

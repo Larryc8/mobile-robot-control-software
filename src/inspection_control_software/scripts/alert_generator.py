@@ -1,3 +1,4 @@
+"""Builds and persists inspection alerts (message + robot pose + camera snapshot)."""
 import logging
 import os
 from datetime import date, datetime, time
@@ -15,6 +16,10 @@ from utils.thread_manager import ThreadQueueManager
 
 
 class AlertGenerator:
+    """Tracks the robot's current pose and latest camera frame, and saves
+    alerts (with a snapshot image) to the database via a queued background
+    thread (:class:`~utils.thread_manager.ThreadQueueManager`)."""
+
     def __init__(self) -> None:
         self.sub_pose = rospy.Subscriber(
             "/amcl_pose", PoseWithCovarianceStamped, self.callback_pose
@@ -26,9 +31,12 @@ class AlertGenerator:
         self._thread_manager = ThreadQueueManager()
 
     def callback_pose(self, data):
+        """ROS subscriber callback: track the robot's current AMCL pose."""
         self.current_pose = data.pose.pose
 
     def image_callback(self, msg):
+        """ROS subscriber callback: keep the latest camera frame and its
+        would-be alert-image filename ready for :meth:`throw_alert`."""
         try:
             # Convert ROS Image message to OpenCV image
             self.output_dir = "./alert_images"
@@ -44,6 +52,8 @@ class AlertGenerator:
             rospy.logerr(f"Could not convert image: {e}")
 
     def throw_alert(self, message, status, patrol_id, checkpoint_id, map_filepath):
+        """Save the current camera frame to disk and queue a database save
+        for a new alert row referencing it."""
         now = datetime.now()
         print("ALERTAAAAA!")
 
@@ -74,6 +84,8 @@ class AlertGenerator:
         # self.database.start()
 
     def database_task_finished(self, x, y):
+        """Unused completion callback (never connected; ``save_alerts`` goes
+        through the thread queue manager instead)."""
         print(f"{__name__} alerts save {x}")
         self.database.quit()
         self.database.wait()

@@ -1,3 +1,4 @@
+"""Toast notification helper built on top of ``pyqttoast``."""
 from enum import Enum
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QTransform, QFontMetrics
@@ -5,6 +6,8 @@ from pyqttoast import Toast, ToastPreset, ToastPosition
 
 
 class NotificationType(Enum):
+    """Canned ``(title, message, preset)`` notifications, used via ``Notification(type=...)``."""
+
     LIDAR_ERROR = ('No hay dstos del LiDar', 'Reise la configuracion del robot', ToastPreset.ERROR)
 #     MAP_LOAD_ERROR
 #     MAP_CREATION_ERROR
@@ -15,6 +18,9 @@ class NotificationType(Enum):
 
 
 class Notification(Toast):
+    """Pre-styled top-centered toast; pass either ``title``/``msg``/``preset``
+    directly or a canned ``type`` from :class:`NotificationType`."""
+
     def __init__(self, parent, title: str='', msg: str= '', preset=None, duration=4000, type: NotificationType = None) -> None:
         font = 'Helvetica'
         super().__init__(parent)

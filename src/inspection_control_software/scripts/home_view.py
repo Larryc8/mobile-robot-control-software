@@ -1,3 +1,19 @@
+"""Home tab UI: map/camera visualization, mode selection and patrol scheduling.
+
+This is the main screen of the app ("Home" tab), assembled by
+:class:`HomePanel` from three panels:
+
+- :class:`VisualizationPanel`: RViz map view / robot camera / drainage image
+  carousel, map load/create/save flow, interactive markers for checkpoints,
+  battery indicator and the robot action log.
+- :class:`SelectModePanel`: switches between Auto (AMCL + move_base) and
+  Manual (teleop) operation modes, plus one-shot localization.
+- :class:`PatrolsPanel` (+ :class:`PatrolsContainer`, :class:`Patrol`):
+  create/edit/delete/run scheduled patrols and show their live progress.
+
+:class:`BatteryIndicator` renders the live battery percentage/icon from the
+``/battery_state`` topic.
+"""
 import re
 import sys
 from datetime import datetime
@@ -102,11 +118,21 @@ from utils.patrol import (
 
 
 class StackingOptions(Enum):
+    """Which view (map or camera) should be rendered on top of the stack."""
+
     MAP_ON_TOP = 1
     CAMERA_ON_TOP = 0
 
 
 class HomePanel(QWidget):
+    """Top-level widget for the "Home" tab.
+
+    Instantiates :class:`VisualizationPanel`, :class:`SelectModePanel` and
+    :class:`PatrolsPanel`/:class:`Joypad`, and wires together the many
+    signals connecting map loading, interactive markers, patrol scheduling
+    and battery alerts between them.
+    """
+
     def __init__(self, nodes_manager=None, parent=None):
         super().__init__()
         # self.resize(900, 900)
@@ -213,6 +239,15 @@ class HomePanel(QWidget):
 
 
 class VisualizationPanel(QWidget):
+    """Map/camera visualization and map lifecycle (load/create/save) panel.
+
+    Stacks RViz (``rview.MyViz``), the robot camera and a drainage image
+    carousel in one ``QStackedLayout``, and drives the create-map /
+    load-map / save-map flows through :class:`~config_model.NodesManager`.
+    Also hosts interactive markers for checkpoints and forwards alerts to
+    on-screen toast notifications.
+    """
+
     update_points = pyqtSignal(dict)
     map_loaded = pyqtSignal(str)
     map_change = pyqtSignal(bool)
@@ -502,6 +537,7 @@ class VisualizationPanel(QWidget):
         self.timer.start(2000)
 
     def on_battery_alert(self, message):
+        """Battery-alert hook (currently a no-op; UI update is commented out)."""
         pass
         # if message:
         #     self.visualization_panel_static_message.setText(message)
@@ -510,7 +546,8 @@ class VisualizationPanel(QWidget):
         #     self.visualization_panel_static_message.hide()
 
     def on_mount(self):
-
+        """One-shot timer callback meant to drive a first-run tutorial
+        (currently returns early, disabling the tutorial)."""
         followTutorial = self.settings.value("followTutorial")
         if True:
             return
@@ -543,9 +580,11 @@ class VisualizationPanel(QWidget):
                 self.timer.start(1000)
 
     def tutorial(self):
+        """Unused tutorial hook (no-op)."""
         pass
 
     def enable_components(self, enable):
+        """Show/hide the calibration-in-progress banner (disables patrol menu)."""
         if not enable:
             self.visualization_panel_static_message.show()
             self.visualization_panel_static_message.setText(
@@ -555,6 +594,8 @@ class VisualizationPanel(QWidget):
             self.visualization_panel_static_message.hide()
 
     def handleMarkerActionTriggered(self, action, marker):
+        """React to an interactive-marker action; ``HELLO`` shows the
+        marker's reference image in the drainage carousel."""
         if action == MarkerActionTriggered.HELLO:
             self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
             self.stacklayout.setCurrentIndex(2)
@@ -569,22 +610,27 @@ class VisualizationPanel(QWidget):
             pass
 
     def toggleStackPolicy(self):
+        """Cycle the (currently unused) stack-policy flag between 0 and 1."""
         self._stack_policy = (self._stack_policy + 1) % 2
 
     def toggleLayoutType(self):
+        """Switch the view stack between showing all widgets overlaid or one at a time."""
         if self.layout_type_btn.toggle():
             self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackAll)
         else:
             self.stacklayout.setStackingMode(QStackedLayout.StackingMode.StackOne)
 
     def handleActionSelected(self, action3):
+        """Toggle "follow robot" camera mode in RViz."""
         self.robot_focus_btn.toggle_selected()
         self.setFollowRobot(self.robot_focus_btn.isSelected())
 
     def show_log(self):
+        """Switch the stacked view to the drainage/log image carousel."""
         self.stacklayout.setCurrentIndex(2)
 
     def handleAlertGeneration(self, message, status):
+        """Show a toast notification styled by the alert's severity."""
         if status == AlertStatus.ERROR:
             ntf = Notification(
                 title="Ha ocurrido una alerta",
@@ -610,6 +656,7 @@ class VisualizationPanel(QWidget):
         ntf.show()
 
     def handleViewActionSelected(self, index):
+        """Bring the map or the camera to the front of the overlaid stack."""
         self.robotcamera.setMaximumSize(2000, 1000)
         self.rviz.setMaximumSize(2000, 1000)
 
@@ -633,6 +680,7 @@ class VisualizationPanel(QWidget):
             return
 
     def toggleCameraMapView(self):
+        """Swap which of map/camera is the large principal view vs. the small overlay."""
         if self.mapAsPrincipalView:
             self.stacklayout.setCurrentIndex(1)
             self.robotcamera.raise_()
@@ -654,6 +702,7 @@ class VisualizationPanel(QWidget):
             self.robotcamera.setMaximumSize(2000, 1000)
 
     def setView(self, index):
+        """Bring ``index`` to the front (large) and shrink the other stacked widget."""
         i = self.stacklayout.currentIndex()
         self.stacklayout.setCurrentIndex(index)
 
@@ -670,12 +719,14 @@ class VisualizationPanel(QWidget):
 
     # def resizeEvent(self, event):
     def paintEvent(self, event):
+        """Keep the current stacked widget raised above the others on every repaint."""
         currentWidget = self.stacklayout.currentWidget()
         currentWidget.raise_()
         currentWidget.update()
         super().paintEvent(event)
 
     def toggleCreaeteSaveMap(self):
+        """Toggle the create-map button between starting map creation and saving it."""
         if self.isCreateMap:
             if self.handleCreateMap():
                 self.create_map_btn.toggle()
@@ -684,15 +735,18 @@ class VisualizationPanel(QWidget):
                 self.create_map_btn.toggle()
 
     def setFollowRobot(self, x):
+        """Toggle RViz's camera-follows-robot setting."""
         self.rviz.setUp("followrobot", x)
         # if not x:
         #     self.rviz.setUp("scale", 60)
         #     self.rviz.setUp("globalframe", "map")
 
     def handleSaveInDatabase(self, data):
+        """Forward a save-to-database request up to the parent panel."""
         self.save_in_database.emit(data)
 
     def add_recent_file(self, file):
+        """Append ``file`` to the recent-maps list, keeping at most 4 entries."""
         if len(self.map_recent_files) > 3:
             self.map_recent_files.pop(0)
             self.map_recent_files.append(file)
@@ -703,6 +757,7 @@ class VisualizationPanel(QWidget):
         # self.user_configs.update_value("recent_map_files", self.map_recent_files)
 
     def setup_recent_files(self, files):
+        """Rebuild the "recent files" menu (currently a no-op stub)."""
         print(files)
         # for file_path in files:
         #     print(file_path)
@@ -713,10 +768,14 @@ class VisualizationPanel(QWidget):
         # return files
 
     def open_recent_file(self, file):
+        """Load a map picked from the recent-files menu."""
         self.handleLoadMap(file)
         pass
 
     def handleLoadMap(self, file=None):
+        """Drive the full map-loading flow: guard against Auto mode / an
+        in-progress map creation / an already loaded map, prompt for a
+        file if none was given, then start the ``map_server`` node for it."""
         if self.currentOperationMode == operationMode.AUTO:
             dg = CustomDialog(
                 self.parent,
@@ -829,6 +888,7 @@ class VisualizationPanel(QWidget):
             print(error)
 
     def saveMapHandler(self) -> bool:
+        """Prompt for a filename and save the currently built map via ``NodesManager``."""
         if not self.nodes_manager.nodeIsRunning("turtlebot3_slam_gmapping"):
             ntf = Notification(
                 title="Fallo en la creación del mapa",
@@ -875,6 +935,7 @@ class VisualizationPanel(QWidget):
         return True
 
     def setMapOperationState(self):
+        """Reset the current user operation to IDLE after finishing a map operation."""
         icon = QApplication.style().standardIcon(QStyle.SP_MediaPlay)
         self.isCreateMap = True
         # self.nodes_manager.stopNodes(['turtlebot3_slam_gmapping'])
@@ -884,10 +945,13 @@ class VisualizationPanel(QWidget):
         self.set_reference_btn.setEnabled(False)
 
     def handleSavePoints(self, points):
+        """Forward newly placed checkpoints up to the patrol panel."""
         self.update_points.emit(points)
         pass
 
     def handleCreateMap(self) -> bool:
+        """Start the gmapping SLAM node to begin building a new map
+        (requires Manual mode and a live ``/scan`` publisher)."""
         if not self.currentOperationMode == operationMode.MANUAL:
             ntf = Notification(
                 title="Solo se puede crear mapas en modo manual",
@@ -925,6 +989,7 @@ class VisualizationPanel(QWidget):
         return True
 
     def show_points_window(self, checked):
+        """Show the checkpoints/points window."""
         # self.parent.w = None
         # if self.parent.pointsWindow is None:
         # self.parent.pointsWindow = ImageViewer()
@@ -934,10 +999,12 @@ class VisualizationPanel(QWidget):
         # self.parent.pointsWindow.save_points()
 
     def show_dreinage_window(self, checked):
+        """Show the drainage reference-photos window (currently a no-op stub)."""
         # self.drainage_checkpoints_win.show()
         pass
 
     def update_operation_mode(self, mode):
+        """Track the active operation mode and reset map state when switching to Auto."""
         self.currentOperationMode = mode
         if mode == operationMode.AUTO:
             # self.setCreatMapState
@@ -946,6 +1013,13 @@ class VisualizationPanel(QWidget):
 
 
 class SelectModePanel(QGroupBox):
+    """Auto/Manual/Localize mode switcher.
+
+    Guards each transition with the right ROS node checks (``/scan``,
+    ``/map_metadata``) and starts/stops ``amcl``/``move_base`` accordingly,
+    emitting ``set_operation_mode`` so other panels can react.
+    """
+
     set_operation_mode = pyqtSignal(operationMode)
     cancel_user_operation = pyqtSignal(userOperation)
 
@@ -1012,6 +1086,7 @@ class SelectModePanel(QGroupBox):
         # self.localize_button.hide()
 
     def handleChangeMode(self, mode):
+        """Dispatch to :meth:`handleAutoMode`/:meth:`handleManualMode` for ``mode``."""
         self.global_state_holder.visualization_panel.rviz.setUp("reset")
 
         if mode == operationMode.AUTO:
@@ -1022,9 +1097,12 @@ class SelectModePanel(QGroupBox):
             return
 
     def checkMap(self, map_filepath):
+        """Remember the currently loaded map file (needed to enable Auto mode)."""
         self.map = map_filepath
 
     def handleAutoMode(self):
+        """Switch to Auto mode: guard against map-creation-in-progress and
+        missing lidar/map, then start ``amcl``/``move_base``."""
         if self.global_state_holder.currentUserOperation == userOperation.CREATEMAP:
             dg = CustomDialog(
                 self.parent,
@@ -1087,6 +1165,7 @@ class SelectModePanel(QGroupBox):
         ntf.show()
 
     def handleManualMode(self):
+        """Switch to Manual mode, cancelling any running patrol first (with confirmation)."""
         patroslRunning = (
             self.patrol_panel.patrols_container.patrols_scheduler.patrolIsRunning
         )
@@ -1121,6 +1200,7 @@ class SelectModePanel(QGroupBox):
         ntf.show()
 
     def handleLocalization(self):
+        """Restart just the ``amcl`` node to (re)localize the robot on the current map."""
         if not self.nodes_manager.topicHasPublisher("/scan"):
             # dlg = QMessageBox(self)
             # dlg.setWindowTitle("I have a question!")
@@ -1150,6 +1230,7 @@ class SelectModePanel(QGroupBox):
         self.nodes_manager.startNodes(self.nodes_manager.initNodes(self.nodes[:1]))
 
     def enable(self, object, state):
+        """Enable/disable one named sub-control (currently only "localization")."""
         if object == "localization":
             self.localize_button.setEnabled(state)
 
@@ -1158,6 +1239,14 @@ class SelectModePanel(QGroupBox):
 
 
 class PatrolsPanel(QGroupBox):
+    """"Cree, edite y programe Patrullajes" panel.
+
+    Holds the create/delete/start-stop controls and pagination for the
+    patrol list, delegating scheduling logic to
+    :class:`~patrols_scheduler.PatrolsEscheduler` and rendering to
+    :class:`PatrolsContainer`.
+    """
+
     set_stored_database_points = pyqtSignal(dict)
 
     def __init__(self, nodes_manager=None, parent=None) -> None:
@@ -1287,6 +1376,7 @@ class PatrolsPanel(QGroupBox):
         self.setLayout(self.layout)
 
     def enable_components(self, enable) -> None:
+        """Enable/disable every patrol control (used during calibration)."""
         self.start_patrols_btn.setEnabled(enable)
         self.delete_btn.setEnabled(enable)
         self.create_btn.setEnabled(enable)
@@ -1296,9 +1386,11 @@ class PatrolsPanel(QGroupBox):
         print("patrols calibration", enable)
 
     def handleLoadStoredPoints(self, data):
+        """Forward checkpoints loaded from the database up to listeners."""
         self.set_stored_database_points.emit(data)
 
     def get_current_patrols(self, patrols):
+        """Update the total-pages label from the current patrol count."""
         n = len(patrols.keys())
         if int(n % self.max_pag_count_elements):
             additinal_page = 1
@@ -1309,6 +1401,7 @@ class PatrolsPanel(QGroupBox):
         )
 
     def add_patrol(self, check):
+        """Open the :class:`~patrol_menu.PatrolsMenu` popup to create a new patrol."""
         now = QTime.currentTime()
         hour = now.hour()
         minute = now.minute()
@@ -1332,6 +1425,8 @@ class PatrolsPanel(QGroupBox):
         # pass
 
     def alert(self, x):
+        """Warn the user that a new/edited patrol won't take effect until
+        the scheduler is restarted, if one is currently running."""
         if self.patrols_scheduler.patrolIsRunning:
             dg = CustomDialog(
                 self.parent,
@@ -1342,12 +1437,15 @@ class PatrolsPanel(QGroupBox):
             dg.exec_()
 
     def toggleStartStop(self):
+        """Start or stop the whole patrol schedule depending on current state."""
         if self.isStart:
             self.start_patrols()
             return
         self.stop_any_patrol()
 
     def start_patrols(self):
+        """Validate preconditions (amcl/move_base running, points and
+        patrols exist, nothing already running) then start scheduling."""
         if not self.nodes_manager.nodeIsRunning("amcl"):
             ntf = Notification(
                 parent=self.parent,
@@ -1413,6 +1511,8 @@ class PatrolsPanel(QGroupBox):
         ntf.show()
 
     def start_any_patrol(self, patrolid=None):
+        """Flip the start button to "stop" and, if no single patrol id was
+        given, start the full scheduler."""
         icon_stop = QApplication.style().standardIcon(QStyle.SP_MediaStop)
         self.start_patrols_btn.setIcon(icon_stop)
         self.start_patrols_btn.setText("Parar")
@@ -1423,6 +1523,7 @@ class PatrolsPanel(QGroupBox):
         pass
 
     def stop_any_patrol(self, c=None):
+        """Cancel the running patrol task and flip the start button back to "start"."""
         # self.patrols_container
         # self.start_patrols_btn.setEnabled(True)
         # self.create_btn.setEnabled(True)
@@ -1445,6 +1546,7 @@ class PatrolsPanel(QGroupBox):
         ntf.show()
 
     def delete_patrols(self):
+        """Delete the checked patrols, warning if the scheduler is running."""
         toDelete = self.patrols_container.get_selected_patrolsid()
         self.patrols_scheduler.delete_patrols(toDelete)
         if self.patrols_scheduler.patrolIsRunning:
@@ -1460,12 +1562,14 @@ class PatrolsPanel(QGroupBox):
         # self.patrol_indexing.setText(f'{pag_index}/{max_pag}')
 
     def handleSinglepatrolExec(self, x=None):
+        """Hook for single-patrol execution (currently a no-op stub)."""
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
         pass
 
     def on_patrol_finished(self, message):
+        """Show a toast for the scheduler's outcome and reset the start button."""
         # self.start_patrols_btn.setEnabled(False)
         # self.create_btn.setEnabled(False)
         # self.delete_btn.setEnabled(False)
@@ -1513,17 +1617,20 @@ class PatrolsPanel(QGroupBox):
             dg.exec_()
 
     def set_next_page(self):
+        """Move the patrol list one page forward."""
         max_pag, pag_index = self.patrols_container.move_page_index(1)
         self.current_index_label.setText(f"{1 + pag_index}")
         # print('nex page fuc', a)
         self.patrols_scheduler.get_current_patrols()
 
     def set_previous_page(self):
+        """Move the patrol list one page back."""
         max_pag, pag_index = self.patrols_container.move_page_index(-1)
         self.current_index_label.setText(f"{1 + pag_index}")
         self.patrols_scheduler.get_current_patrols()
 
     def update_patrols_indexing_label(self, patrols):
+        """Refresh the "page X/Y" label (currently unused/disconnected)."""
         max_pag_count, pag_index = self.patrols_container.move_page_index(0)
         if max_pag_count == 0:
             self.current_index_label.setText(f"{1}/{1}")
@@ -1536,12 +1643,16 @@ class PatrolsPanel(QGroupBox):
         pass
 
     def update_points(self, points):
+        """Pass the latest checkpoint set down to the patrols scheduler."""
         self.patrols_scheduler.setPointsToVisit(points)
         # print("from patrolpanel "ToDelete, points)
         pass
 
 
 class PatrolsContainer(QWidget):
+    """Renders the current page of :class:`Patrol` widgets and keeps them
+    wired to the scheduler's progress/weekday/running-patrol signals."""
+
     exec_single_patrol = pyqtSignal(str)
 
     def __init__(
@@ -1576,6 +1687,7 @@ class PatrolsContainer(QWidget):
         self.setLayout(self.layout)
 
     def update_patrols(self, patrols_data: dict):
+        """Rebuild the visible :class:`Patrol` widgets for the current page."""
         [w.setParent(None) for w in self.patrols_widgets]
         [self.layout.removeWidget(w) for w in self.patrols_widgets]
         self.patrols_widgets = []
@@ -1627,11 +1739,13 @@ class PatrolsContainer(QWidget):
         self.update()
 
     def handleWeekDayChanged(self, current_weekday):
+        """Stamp every tracked patrol with the newly current weekday."""
         for id, patrol in self.patrols_scheduler.patrols_data.items():
             patrol["current_weekday"] = current_weekday
         # pass
 
     def handlePatrolDelayed(self, patrolid):
+        """Mark a patrol as delayed and show its "retrasado" label."""
         if self.patrols_scheduler.patrols_data.get(patrolid):
             self.patrols_scheduler.patrols_data.get(patrolid)["delayed"] = True
         for patrol in self.patrols_widgets:
@@ -1639,6 +1753,7 @@ class PatrolsContainer(QWidget):
                 patrol.patrol_delayed_label.show()
 
     def update_running_patrol(self, id):
+        """Track which patrol is running and wire its progress updates."""
         print("ESTOY CORRIENDO ", id)
         self.running_patrol = id
         for patrol in self.patrols_widgets:
@@ -1657,9 +1772,11 @@ class PatrolsContainer(QWidget):
             #     )
 
     def handleSavePointsInDatabase(self, points_to_save):
+        """Forward a batch of checkpoints to the scheduler for persistence."""
         self.patrols_scheduler.handleSavePointsInDatabase(points_to_save)
 
     def update_patrol_model(self, id, points_left, total_points, patrol_status):
+        """Record a patrol's progress/status into ``patrols_data``."""
         print(
             "PATROLD UPDATE patrolContainer",
             id,
@@ -1673,6 +1790,8 @@ class PatrolsContainer(QWidget):
             )
 
     def move_page_index(self, move):
+        """Shift the current page by ``move`` pages (clamped to valid range)
+        and return ``(max_pages_count, pageindex)``."""
         self.pageindex = self.pageindex + move
         patrols_items = list(self.patrols_data.items())
 
@@ -1694,9 +1813,11 @@ class PatrolsContainer(QWidget):
         return (max_pages_count, self.pageindex)
 
     def get_selected_patrolsid(self):
+        """Return the ids of all currently checked patrols."""
         return [patrol.selected for patrol in self.patrols_widgets if patrol.selected]
 
     def handleSinglepatrolExec(self, patrolid):
+        """Wire progress signals for ``patrolid`` and force its execution."""
         for patrol in self.patrols_widgets:
             if str(patrol.id) == str(patrolid):
                 self.patrols_scheduler.points_scheduler.patrol_progress.connect(
@@ -1708,16 +1829,22 @@ class PatrolsContainer(QWidget):
         self.patrols_scheduler.start_single_patrol_scheduling(patrolid)
 
     def handleSinglePatrolActive(self, patrolid=None):
+        """Forward which patrol became active for single-patrol execution."""
         self.exec_single_patrol.emit(str(patrolid))
 
     def patrol_finished(self):
+        """Unused completion hook (no-op)."""
         pass
 
     def add_patrol(self, patrol):
+        """Unused add-patrol hook (no-op; patrols are added via :meth:`update_patrols`)."""
         pass
 
 
 class Patrol(QGroupBox):
+    """One patrol card: schedule/progress labels, a selection checkbox and a
+    menu to edit or force-execute it."""
+
     enable_single_patrol_exec = pyqtSignal(str)
 
     def __init__(
@@ -1847,6 +1974,7 @@ class Patrol(QGroupBox):
         self.setLayout(self.layout)
 
     def handleWeekDayChanged(self, current_weekday=None):
+        """Recompute and show the "starts in N day(s)" schedule label."""
         # self.schedule_label.hide()
         self.schedule_label.show()
         weekdays = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
@@ -1890,6 +2018,7 @@ class Patrol(QGroupBox):
         # print('WEEKDay Changed', self.patrols_scheduler.patrols_data)
 
     def getDatetime(self, time):
+        """Parse an ``HHMM`` string into an ``(hour, minute)`` int tuple."""
         patrol_time = list(time)
         hour = "".join(patrol_time[:2])
         minute = "".join(patrol_time[2:])
@@ -1897,6 +2026,7 @@ class Patrol(QGroupBox):
         return int(hour), int(minute)
 
     def edit_patrol_task(self):
+        """Open the :class:`~patrol_menu.PatrolsMenu` popup pre-filled for this patrol."""
         self.popup = PatrolsMenu(
             self.parent,
             selected_days=self.days,
@@ -1909,11 +2039,13 @@ class Patrol(QGroupBox):
         self.popup.show_popup()
 
     def edit_patrol(self):
+        """Menu action: warn if needed, then open the edit popup."""
         # print("Option 1 selected")
         self.show_edit_alert()
         self.edit_patrol_task()
 
     def show_edit_alert(self):
+        """Warn that editing won't take effect until the scheduler restarts."""
         if self.patrols_scheduler.patrolIsRunning:
             dg = CustomDialog(
                 self.parent,
@@ -1924,6 +2056,8 @@ class Patrol(QGroupBox):
             dg.exec_()
 
     def force_execution(self):
+        """Menu action: force-run this patrol now, confirming it will
+        preempt any other running patrol."""
         if self.patrols_scheduler.patrolIsRunning:
             dg = CustomDialog(
                 self.parent,
@@ -1952,6 +2086,7 @@ class Patrol(QGroupBox):
         print("force executio  selected from Patrol")
 
     def select(self):
+        """Sync the checked/selected visual state with the checkbox."""
         self.checked = self.checkbox.isChecked()
         if self.checked:
             self.setStyleSheet(patrol_selected_style)
@@ -1960,6 +2095,7 @@ class Patrol(QGroupBox):
 
     # @pyqtSlot(str, int, int)
     def update_patrol_progress(self, id, patrols_left, total_patrols, patrol_status):
+        """Update this card's progress bar/labels if the update is for this patrol."""
         if str(id) == str(self.id):
             print(
                 "Hola soy un Patrol estoy RUNNUing",
@@ -1985,12 +2121,14 @@ class Patrol(QGroupBox):
 
     @property
     def selected(self):
+        """This patrol's id if checked, else ``None``."""
         if self.checked:
             return self.id
         else:
             return None
 
     def animate_show(self):
+        """Unused entrance animation (width + fade-in) for this card."""
         anim = QPropertyAnimation(self, b"maximumWidth")
         anim.setDuration(200 + 100 * self.delay)
         anim.setStartValue(300)
@@ -2013,6 +2151,9 @@ class Patrol(QGroupBox):
 
 
 class BatteryIndicator(QWidget):
+    """Subscribes to ``/battery_state`` and renders a live icon/percentage,
+    emitting ``battery_alert`` once when the level first drops critical."""
+
     battery_alert = pyqtSignal(str)
 
     def __init__(self):
@@ -2055,6 +2196,8 @@ class BatteryIndicator(QWidget):
         self.current_level = 100
 
     def map2percent(self, val):
+        """Map a raw battery reading to a percentage (currently identity; the
+        min/max rescale below is unreachable dead code)."""
         return val
         max = 1.1
         min = 0.99
@@ -2062,6 +2205,7 @@ class BatteryIndicator(QWidget):
         return ((val - min) / h) * 100
 
     def battery_callback(self, msg):
+        """ROS subscriber callback: update the stored battery percentage from a ``BatteryState`` msg."""
         self.percentage = self.map2percent(msg.percentage)
         # self.percentage = (self.percentage // 10) * 10
         self.percentage = (self.percentage) * 100
@@ -2069,6 +2213,8 @@ class BatteryIndicator(QWidget):
         rospy.loginfo(f"Battery percentage: {self.percentage:.1f}%")
 
     def update_battery_state(self):
+        """Timer tick: refresh the icon/label and color by battery level,
+        triggering the one-shot critical-battery dialog/alert below 20%."""
         # 1. Round percentage to the nearest 10 for icon selection (e.g., 87% -> 80 or 90)
         # Assuming you have icons for 0, 10, 20... 100
         icon_level = int(round(self.percentage / 10.0)) * 10
@@ -2119,6 +2265,7 @@ class BatteryIndicator(QWidget):
             self.battery_alert.emit("")
 
     def show_critical_dialog(self):
+        """Show the one-shot critical-battery confirmation dialog."""
         dg = CustomDialog(
             self,
             "Bateria en valor critico",

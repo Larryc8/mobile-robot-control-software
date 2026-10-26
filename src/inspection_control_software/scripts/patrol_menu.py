@@ -1,3 +1,4 @@
+"""Popup form for creating/editing a scheduled patrol's days and time."""
 from input_textdialog import CustomDialog
 from PyQt5.QtCore import (
     QEasingCurve,
@@ -40,6 +41,12 @@ from styles.labels import (
 
 
 class PatrolsMenu(QMainWindow):
+    """Frameless popup to pick a patrol's weekdays and time and save it.
+
+    Emits ``update_date`` with ``{patrolid: {days, time, state,
+    current_weekday}}`` on save.
+    """
+
     update_date = pyqtSignal(dict)
 
     def __init__(
@@ -100,6 +107,7 @@ class PatrolsMenu(QMainWindow):
         self.central_widget.setLayout(layout)
 
     def show_popup(self):
+        """Position the popup near the parent window and show it."""
         # popup_x = self.parent.x() + (self.parent.width() - self.width()) // 2
         # popup_y = self.parent.y() + (self.parent.height() - self.height()) // 2
         popup_x = self.parent.x() + (self.parent.width() - self.width() - 60)
@@ -109,9 +117,11 @@ class PatrolsMenu(QMainWindow):
         self.show()
 
     def close_popup(self):
+        """Hide the popup."""
         self.hide()
 
     def save(self):
+        """Validate at least one day is selected, then emit ``update_date``."""
         time = self.time.getTime()
         days = self.days_labels.get_selected_days()
         # print('patrol menu', days)
@@ -141,6 +151,8 @@ class PatrolsMenu(QMainWindow):
 
 
 class TimeSelect(QGroupBox):
+    """Hour/minute pickers (24h format) for a patrol's scheduled time."""
+
     def __init__(self) -> None:
         super().__init__("Seleccione la hora de los patrullas (Formato 24 horas)")
         self.hours = QTimeEdit(self)
@@ -191,6 +203,7 @@ class TimeSelect(QGroupBox):
         self.minutes_label.setStyleSheet(muted_mini_label_style)
 
     def setTime(self, time: str):
+        """Set the pickers from an ``HHMM`` string."""
         x = [digit for digit in time]
         hours_value = "".join(x[:2])
         minutes_value = "".join(x[2:])
@@ -198,6 +211,7 @@ class TimeSelect(QGroupBox):
         self.minutes.setTime(QTime.fromString(minutes_value, "mm"))
 
     def getTime(self):
+        """Return the current selection as an ``HHMM`` string."""
         hours = self.hours.time()
         minutes = self.minutes.time()
         time_str = f"{hours.toString('HH')}{minutes.toString('mm')}"
@@ -205,6 +219,8 @@ class TimeSelect(QGroupBox):
 
 
 class DaySelect(QGroupBox):
+    """Row of toggleable :class:`DayLabel` weekday chips."""
+
     days_shortname = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
 
     def __init__(self, selected_days) -> None:
@@ -228,10 +244,13 @@ class DaySelect(QGroupBox):
         self.setLayout(self.layout)
 
     def get_selected_days(self):
+        """Return the short names of the currently selected days (``None`` filtered out by callers)."""
         return [label.value() for label in self.days_labels]
 
 
 class DayLabel(QLabel):
+    """Single clickable weekday chip; toggles its selected style on click."""
+
     def __init__(self, text):
         super().__init__(text)
         self.isSelected = True
@@ -240,6 +259,7 @@ class DayLabel(QLabel):
         self.text = text
 
     def mousePressEvent(self, event):
+        """Toggle this day's selected state and restyle."""
         if event.button() == Qt.LeftButton:
             if self.isSelected:
                 self.setStyleSheet(border_label_style)
@@ -253,6 +273,7 @@ class DayLabel(QLabel):
             super().mousePressEvent(event)
 
     def value(self):
+        """Return this day's short name if selected, else ``None``."""
         if self.state:
             return self.text
         else:

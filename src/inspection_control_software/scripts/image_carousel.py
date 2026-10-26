@@ -1,3 +1,11 @@
+"""Paginated viewer for drainage/checkpoint reference photos.
+
+``ImageCarousel`` can display either in-memory buffered captures (image +
+pose tuples) or stored checkpoint photos loaded by file path, paginated by
+``MAX_THUMBNAILS`` per page. Most of the original thumbnail-grid UI is
+currently commented out; only a single large preview + exit button is
+wired into the layout.
+"""
 import os
 import sys
 
@@ -42,6 +50,8 @@ thumnail_base_style = """
 
 
 class CustomLabel(QWidget):
+    """Clickable thumbnail with an image and a status caption beneath it."""
+
     clicked = pyqtSignal(int)
 
     def __init__(self, text, index):
@@ -66,15 +76,24 @@ class CustomLabel(QWidget):
         self.setLayout(layout)
 
     def mouseReleaseEvent(self, event):
+        """Emit ``clicked`` with this thumbnail's index."""
         print(f"{__name__} hola ")
         self.clicked.emit(self.index)
 
     def mouseDoubleClickEvent(self, event):
+        """Log a double-click (no action wired up)."""
         if event.button() == Qt.LeftButton:
             print("clicked one carousel")
 
 
 class ImageCarousel(QGroupBox):
+    """Displays buffered or stored checkpoint photos one page at a time.
+
+    Supports two data sources: in-memory buffer tuples ``(image, path,
+    pose, ...)`` captured live, or stored ``(id, filepath)`` pairs loaded
+    from the database; ``use_filepath`` tracks which mode is active.
+    """
+
     on_exit_view = pyqtSignal(bool)
     def __init__(self, buffer):
         super().__init__()
@@ -162,12 +181,15 @@ class ImageCarousel(QGroupBox):
         self.show_empty_image()
 
     def exit_view(self):
+        """Signal that the carousel should be dismissed."""
         self.on_exit_view.emit(True)
 
     def create_data_model(self) -> None:
+        """Unused hook for building the id->status map (no-op)."""
         pass
 
     def update_thumbnail(self, index):
+        """Highlight the clicked thumbnail and show its full image (unused: no thumbnail widgets are built)."""
         for thumbnail in self.images_thumbnail:
             thumbnail.setStyleSheet("border: 2px solid gray;")
 
@@ -176,6 +198,8 @@ class ImageCarousel(QGroupBox):
         self.select_image(index)
 
     def get_user_operation(self, use_operation):
+        """Adjust carousel mode when the global user operation changes
+        (show the discard button in CreateMap, switch to filepath mode in LoadMap)."""
         if use_operation == userOperation.CREATEMAP:
             self.delete_button.show()
             return
@@ -188,6 +212,7 @@ class ImageCarousel(QGroupBox):
         self.delete_button.hide()
 
     def update_dreinage_info(self, current_point_id, next_point_id, point_state):
+        """Mark a checkpoint as checked once its patrol progress reaches the given state."""
         if point_state in [2, 3]:
             x = [
                 label for label in self.images_thumbnail if label.id == current_point_id
@@ -199,6 +224,7 @@ class ImageCarousel(QGroupBox):
                 x[0].status_label.setText(checkpointEndState.CHECKED.value)
 
     def reset_dreinage_status(self, x=None, y=None):
+        """Reset every checkpoint's status back to pending (new patrol run)."""
         for thumbnail in self.images_thumbnail:
             thumbnail.status_label.setText(checkpointEndState.PENDING.value)
 
@@ -206,6 +232,7 @@ class ImageCarousel(QGroupBox):
             self.data_model[key] = checkpointEndState.PENDING.value
 
     def load_stored_points(self, stored_points):
+        """Replace the buffer with checkpoint photos loaded from the database."""
         while len(self.buffer_data):
             self.buffer_data.pop()
 
@@ -225,6 +252,7 @@ class ImageCarousel(QGroupBox):
             )
 
     def set_main_image(self, image_path):
+        """Display a single image by file path, filling the main label."""
         # self.use_filepath = False
         # self.display_current_image()
         # self.__image_path = image_path
@@ -236,6 +264,7 @@ class ImageCarousel(QGroupBox):
         print(f"set_main_image: {image_path}")
 
     def show_empty_image(self):
+        """Show a blank placeholder image with a "no images" message."""
         # Create a blank pixmap
         empty_pixmap = QPixmap(600, 400)
         empty_pixmap.fill(Qt.white)
@@ -244,6 +273,7 @@ class ImageCarousel(QGroupBox):
         self.image_label.setAlignment(Qt.AlignCenter)
 
     def discard_buffered_data(self):
+        """Remove the currently shown buffered capture and refresh the page."""
         if self.current_index < len(self.buffer_data):
             self.buffer_data.pop(self.current_index)
         self.display_all_images(
@@ -254,6 +284,7 @@ class ImageCarousel(QGroupBox):
         )
 
     def load_images(self, images: list = []):
+        """Switch to buffer mode and refresh the current page's thumbnails."""
         self.use_filepath = False
         self.display_current_image()
         self.display_all_images(
@@ -265,6 +296,9 @@ class ImageCarousel(QGroupBox):
         pass
 
     def display_all_images(self, data_array, use_filepath):
+        """Render a page of up to ``MAX_THUMBNAILS`` thumbnails, from either
+        stored filepaths or in-memory OpenCV frames, filling unused slots
+        with a placeholder."""
         self.data_container = data_array
         self.use_filepath = use_filepath
 
@@ -315,6 +349,7 @@ class ImageCarousel(QGroupBox):
                 label.label.setAlignment(Qt.AlignCenter)
 
     def display_current_image(self):
+        """Render just the single image at ``current_index`` into the main label."""
         if len(self.data_container) == 0:
             return
 
@@ -350,6 +385,7 @@ class ImageCarousel(QGroupBox):
         self.image_label.setPixmap(scaled_pixmap)
 
     def show_next_image(self):
+        """Advance to the next page of thumbnails, wrapping around."""
         print(f"buffer dat len {len(self.buffer_data)}")
         if self.buffer_data is None:
             return
@@ -378,6 +414,7 @@ class ImageCarousel(QGroupBox):
         )
 
     def show_previous_image(self):
+        """Go back to the previous page of thumbnails, wrapping around."""
         if self.buffer_data is None:
             return
 
@@ -404,6 +441,7 @@ class ImageCarousel(QGroupBox):
         )
 
     def select_image(self, index):
+        """Jump to and display a specific buffer index."""
         if self.buffer_data is None:
             return
 
@@ -411,6 +449,7 @@ class ImageCarousel(QGroupBox):
         self.display_current_image()
 
     def resizeEvent(self, event):
+        """Rescale the displayed image when the widget is resized."""
         # Redisplay the current image when window is resized
         self.display_current_image()
         super().resizeEvent(event)
